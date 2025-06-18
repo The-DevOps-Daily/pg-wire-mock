@@ -371,12 +371,7 @@ For a detailed list of planned features, see the GitHub issues.
 
 ## Contributing
 
-Contributions are welcome! Here's how you can help:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add your changes
-4. Submit a pull request
+Contributions are welcome! Please check out the [Contributing Guide](CONTRIBUTING.md) for guidelines about how to proceed.
 
 ## Learning the Protocol
 
