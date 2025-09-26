@@ -1,0 +1,23 @@
+# These owners will be the default owners for everything in the repo
+
+- @The-DevOps-Daily/maintainers
+
+# Protocol implementation files
+
+/src/protocol/ @The-DevOps-Daily/protocol-experts
+
+# Server implementation
+
+/src/server/ @The-DevOps-Daily/core-maintainers
+
+# Configuration files
+
+/src/config/ @The-DevOps-Daily/core-maintainers
+
+# Documentation files
+
+\*.md @The-DevOps-Daily/docs-team
+
+# GitHub related files
+
+/.github/ @The-DevOps-Daily/admin
