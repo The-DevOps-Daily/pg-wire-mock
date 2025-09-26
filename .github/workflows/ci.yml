@@ -1,26 +1,24 @@
 name: CI
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Use Node.js 
-      uses: actions/setup-node@v3
-      with:
-        node-version: 16
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Run linting
-      run: npm run lint
+      - uses: actions/checkout@v3
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run linting
+        run: npm run lint
 
   test:
     runs-on: ubuntu-latest
@@ -29,47 +27,25 @@ jobs:
         node-version: [14.x, 16.x, 18.x, 20.x]
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Run tests
-      run: npm run test:coverage
-    - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        fail_ci_if_error: false
-    
+      - uses: actions/checkout@v3
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm run test:coverage
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
   build:
     runs-on: ubuntu-latest
 
-    steps:
-    - uses: actions/checkout@v3
-    - name: Use Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: 18
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Verify server starts correctly
-      run: |
-        node server.js --quiet &
-        PID=$!
-        sleep 3
-        kill $PID
-    
-    - name: Build Docker image
-      run: docker build -t pg-wire-mock:test .
-  
-  security:
-    runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v3
       - name: Use Node.js
@@ -79,22 +55,42 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      
+      - name: Verify server starts correctly
+        run: |
+          node server.js --quiet &
+          PID=$!
+          sleep 3
+          kill $PID
+
+      - name: Build Docker image
+        run: docker build -t pg-wire-mock:test .
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+
       - name: Run npm audit
         run: npm audit --audit-level=high
-      
+
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/node@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: --severity-threshold=medium
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Verify server starts correctly
-      run: |
-        npm run start:quiet &
-        PID=$!
-        sleep 3
-        kill $PID
+
+      - name: Verify server starts correctly
+        run: |
+          npm run start:quiet &
+          PID=$!
+          sleep 3
+          kill $PID
