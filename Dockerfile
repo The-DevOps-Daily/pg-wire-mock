@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 # Skip husky install during Docker build
 ENV HUSKY=0
-RUN npm ci --only=production
+RUN npm ci --only=production --ignore-scripts
 
 # Bundle app source
 COPY . .
