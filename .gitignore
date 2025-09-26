@@ -29,6 +29,21 @@ coverage
 .grunt
 
 # Bower dependency directory (https://bower.io/)
+
+# IDE & Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw*
+
+# OS files
+.DS_Store
+Thumbs.db
 bower_components
 
 # node-waf configuration
