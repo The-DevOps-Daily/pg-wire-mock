@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub issue and PR templates
 - Security policy
 - Dependabot configuration
+- PostgreSQL Wire Protocol documentation
 
 ## [1.0.0] - Initial Release
 
