@@ -8,14 +8,10 @@ const {
   SSL_REQUEST_CODE,
   CANCEL_REQUEST_CODE,
   MESSAGE_TYPES,
-  ERROR_CODES
+  ERROR_CODES,
 } = require('./constants');
 
-const {
-  parseParameters,
-  getMessageType,
-  validateMessage
-} = require('./utils');
+const { parseParameters, getMessageType } = require('./utils');
 
 const {
   sendAuthenticationOK,
@@ -25,13 +21,10 @@ const {
   sendErrorResponse,
   sendParseComplete,
   sendBindComplete,
-  sendRowDescription
+  sendRowDescription,
 } = require('./messageBuilders');
 
-const {
-  executeQueryString,
-  executeQuery
-} = require('../handlers/queryHandlers');
+const { executeQueryString, executeQuery } = require('../handlers/queryHandlers');
 
 /**
  * Main message processing entry point
@@ -64,14 +57,14 @@ function processStartupMessage(buffer, socket, connState) {
   }
 
   const length = buffer.readInt32BE(0);
-  
+
   // Need complete message
   if (buffer.length < length) {
     return 0;
   }
 
   const protocolVersion = buffer.readInt32BE(4);
-  
+
   console.log(`Startup message - Length: ${length}, Protocol: ${protocolVersion}`);
 
   try {
@@ -80,7 +73,7 @@ function processStartupMessage(buffer, socket, connState) {
       return handleSSLRequest(socket);
     }
 
-    // Handle cancel request  
+    // Handle cancel request
     if (protocolVersion === CANCEL_REQUEST_CODE) {
       return handleCancelRequest(buffer, socket, length);
     }
@@ -91,7 +84,6 @@ function processStartupMessage(buffer, socket, connState) {
     }
 
     throw new Error(`Unsupported protocol version: ${protocolVersion}`);
-    
   } catch (error) {
     console.error('Error processing startup message:', error);
     sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, error.message);
@@ -116,7 +108,7 @@ function processRegularMessage(buffer, socket, connState) {
 
   const messageType = getMessageType(buffer);
   const length = buffer.readInt32BE(1);
-  
+
   // Need complete message
   if (buffer.length < length + 1) {
     return 0;
@@ -128,48 +120,56 @@ function processRegularMessage(buffer, socket, connState) {
     switch (messageType) {
       case MESSAGE_TYPES.QUERY: // 'Q' - Simple Query
         return processSimpleQuery(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.TERMINATE: // 'X' - Terminate
         return handleTerminate(socket, connState, length);
-        
+
       case MESSAGE_TYPES.PARSE: // 'P' - Parse (Extended Query)
         return processParse(buffer, socket, connState);
-        
-      case MESSAGE_TYPES.BIND: // 'B' - Bind (Extended Query)  
+
+      case MESSAGE_TYPES.BIND: // 'B' - Bind (Extended Query)
         return processBind(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.DESCRIBE: // 'D' - Describe
         return processDescribe(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.EXECUTE: // 'E' - Execute
         return processExecute(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.SYNC: // 'S' - Sync
         return processSync(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.PASSWORD_MESSAGE: // 'p' - Password Message
         return processPasswordMessage(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.COPY_DATA: // 'd' - Copy Data
         return processCopyData(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.COPY_DONE: // 'c' - Copy Done
         return processCopyDone(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.COPY_FAIL: // 'f' - Copy Fail
         return processCopyFail(buffer, socket, connState);
-        
+
       case MESSAGE_TYPES.FUNCTION_CALL: // 'F' - Function Call
         return processFunctionCall(buffer, socket, connState);
-        
+
       default:
         console.warn(`Unknown message type: ${messageType}`);
-        sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, `Unknown message type: ${messageType}`);
+        sendErrorResponse(
+          socket,
+          ERROR_CODES.PROTOCOL_VIOLATION,
+          `Unknown message type: ${messageType}`,
+        );
         return length + 1;
     }
   } catch (error) {
     console.error(`Error processing ${messageType} message:`, error);
-    sendErrorResponse(socket, ERROR_CODES.INTERNAL_ERROR, `Message processing error: ${error.message}`);
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.INTERNAL_ERROR,
+      `Message processing error: ${error.message}`,
+    );
     return length + 1;
   }
 }
@@ -184,7 +184,7 @@ function processRegularMessage(buffer, socket, connState) {
  * @returns {number} Bytes processed
  */
 function handleSSLRequest(socket) {
-  console.log("SSL request received - rejecting");
+  console.log('SSL request received - rejecting');
   socket.write(Buffer.from('N')); // Reject SSL
   return 8; // SSL request is always 8 bytes
 }
@@ -197,15 +197,16 @@ function handleSSLRequest(socket) {
  * @returns {number} Bytes processed
  */
 function handleCancelRequest(buffer, socket, length) {
-  if (length >= 16) { // Should have PID and secret
+  if (length >= 16) {
+    // Should have PID and secret
     const pid = buffer.readInt32BE(8);
     const secret = buffer.readInt32BE(12);
     console.log(`Cancel request received for PID: ${pid}, Secret: ${secret}`);
     // In a real implementation, we'd find and cancel the query
   } else {
-    console.log("Malformed cancel request received");
+    console.log('Malformed cancel request received');
   }
-  
+
   socket.end(); // Cancel requests close the connection
   return length;
 }
@@ -221,7 +222,7 @@ function handleCancelRequest(buffer, socket, length) {
 function handleStartupPacket(buffer, socket, connState, length) {
   // Parse parameters from startup packet
   const parameters = parseParameters(buffer, 8, length);
-  
+
   // Set connection parameters
   for (const [key, value] of parameters) {
     connState.setParameter(key, value);
@@ -235,7 +236,7 @@ function handleStartupPacket(buffer, socket, connState, length) {
   sendParameterStatus(socket, connState);
   sendBackendKeyData(socket, connState);
   sendReadyForQuery(socket, connState);
-  
+
   return length;
 }
 
@@ -252,11 +253,11 @@ function handleStartupPacket(buffer, socket, connState, length) {
  */
 function processSimpleQuery(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
-  
+
   // Extract query string (remove message type, length, and null terminator)
   const queryBuffer = buffer.slice(5, length);
   const query = queryBuffer.toString('utf8').replace(/\0$/, '').trim();
-  
+
   console.log(`Executing simple query: ${query}`);
 
   // Increment query counter
@@ -296,46 +297,47 @@ function handleTerminate(socket, connState, length) {
  */
 function processParse(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
-  
+
   try {
     // Basic Parse implementation - extract statement name and query
     let offset = 5; // Skip message type and length
-    
+
     // Read statement name (null-terminated)
     const stmtNameStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     const statementName = buffer.slice(stmtNameStart, offset).toString('utf8');
     offset++; // Skip null terminator
-    
+
     // Read query string (null-terminated)
     const queryStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     const query = buffer.slice(queryStart, offset).toString('utf8');
     offset++; // Skip null terminator
-    
+
     // Read parameter count
     const paramCount = buffer.readInt16BE(offset);
     offset += 2;
-    
+
     // Read parameter types (if any)
     const paramTypes = [];
     for (let i = 0; i < paramCount; i++) {
       paramTypes.push(buffer.readInt32BE(offset));
       offset += 4;
     }
-    
-    console.log(`Parse: statement="${statementName || '(unnamed)'}", query="${query}", params=${paramCount}`);
-    
+
+    console.log(
+      `Parse: statement="${statementName || '(unnamed)'}", query="${query}", params=${paramCount}`,
+    );
+
     // Store the prepared statement
     connState.addPreparedStatement(statementName, {
       query,
       paramTypes,
-      paramCount
+      paramCount,
     });
-    
+
     sendParseComplete(socket);
     return length + 1;
-    
   } catch (error) {
     console.error('Error parsing Parse message:', error);
     sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Parse message format');
@@ -352,42 +354,47 @@ function processParse(buffer, socket, connState) {
  */
 function processBind(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
-  
+
   try {
     // Basic Bind implementation
     let offset = 5; // Skip message type and length
-    
+
     // Read portal name
     const portalStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     const portalName = buffer.slice(portalStart, offset).toString('utf8');
     offset++; // Skip null terminator
-    
+
     // Read statement name
     const stmtStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     const statementName = buffer.slice(stmtStart, offset).toString('utf8');
     offset++; // Skip null terminator
-    
-    console.log(`Bind: portal="${portalName || '(unnamed)'}", statement="${statementName || '(unnamed)'}"`);
-    
+
+    console.log(
+      `Bind: portal="${portalName || '(unnamed)'}", statement="${statementName || '(unnamed)'}"`,
+    );
+
     // Get the prepared statement
     const statement = connState.getPreparedStatement(statementName);
     if (!statement) {
-      sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Prepared statement "${statementName}" does not exist`);
+      sendErrorResponse(
+        socket,
+        ERROR_CODES.UNDEFINED_FUNCTION,
+        `Prepared statement "${statementName}" does not exist`,
+      );
       return length + 1;
     }
-    
+
     // Store the portal (simplified - not parsing parameters and formats)
     connState.addPortal(portalName, {
       statement: statementName,
       query: statement.query,
-      boundAt: new Date()
+      boundAt: new Date(),
     });
-    
+
     sendBindComplete(socket);
     return length + 1;
-    
   } catch (error) {
     console.error('Error parsing Bind message:', error);
     sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Bind message format');
@@ -404,47 +411,58 @@ function processBind(buffer, socket, connState) {
  */
 function processDescribe(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
-  
+
   try {
     const describeType = String.fromCharCode(buffer[5]); // 'S' or 'P'
     let offset = 6;
-    
+
     // Read name
     const nameStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     const name = buffer.slice(nameStart, offset).toString('utf8');
-    
+
     console.log(`Describe: type=${describeType}, name="${name || '(unnamed)'}"`);
-    
+
     if (describeType === 'S') {
       // Describe statement - send parameter description and row description
       const statement = connState.getPreparedStatement(name);
       if (statement) {
         // For simplicity, just send a basic row description
-        sendRowDescription(socket, [{ 
-          name: "result", 
-          dataTypeOID: 25, 
-          dataTypeSize: -1 
-        }]);
+        sendRowDescription(socket, [
+          {
+            name: 'result',
+            dataTypeOID: 25,
+            dataTypeSize: -1,
+          },
+        ]);
       } else {
-        sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Prepared statement "${name}" does not exist`);
+        sendErrorResponse(
+          socket,
+          ERROR_CODES.UNDEFINED_FUNCTION,
+          `Prepared statement "${name}" does not exist`,
+        );
       }
     } else if (describeType === 'P') {
       // Describe portal - send row description
       const portal = connState.getPortal(name);
       if (portal) {
-        sendRowDescription(socket, [{ 
-          name: "result", 
-          dataTypeOID: 25, 
-          dataTypeSize: -1 
-        }]);
+        sendRowDescription(socket, [
+          {
+            name: 'result',
+            dataTypeOID: 25,
+            dataTypeSize: -1,
+          },
+        ]);
       } else {
-        sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Portal "${name}" does not exist`);
+        sendErrorResponse(
+          socket,
+          ERROR_CODES.UNDEFINED_FUNCTION,
+          `Portal "${name}" does not exist`,
+        );
       }
     }
-    
+
     return length + 1;
-    
   } catch (error) {
     console.error('Error parsing Describe message:', error);
     sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Describe message format');
@@ -461,34 +479,37 @@ function processDescribe(buffer, socket, connState) {
  */
 function processExecute(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
-  
+
   try {
     let offset = 5; // Skip message type and length
-    
+
     // Read portal name
     const portalStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     const portalName = buffer.slice(portalStart, offset).toString('utf8');
     offset++; // Skip null terminator
-    
+
     // Read row limit
     const rowLimit = buffer.readInt32BE(offset);
-    
+
     console.log(`Execute: portal="${portalName || '(unnamed)'}", limit=${rowLimit}`);
-    
+
     // Get the portal
     const portal = connState.getPortal(portalName);
     if (!portal) {
-      sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Portal "${portalName}" does not exist`);
+      sendErrorResponse(
+        socket,
+        ERROR_CODES.UNDEFINED_FUNCTION,
+        `Portal "${portalName}" does not exist`,
+      );
       return length + 1;
     }
-    
+
     // Execute the query from the portal
     connState.incrementQueryCount();
     executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState);
-    
+
     return length + 1;
-    
   } catch (error) {
     console.error('Error parsing Execute message:', error);
     sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Execute message format');
@@ -505,12 +526,12 @@ function processExecute(buffer, socket, connState) {
  */
 function processSync(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
-  
+
   console.log('Sync: Transaction sync point');
-  
+
   // Clear unnamed prepared statements and portals
   connState.clearUnnamed();
-  
+
   sendReadyForQuery(socket, connState);
   return length + 1;
 }
@@ -528,19 +549,19 @@ function processSync(buffer, socket, connState) {
  */
 function processPasswordMessage(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
-  
-  // Extract password (null-terminated)
-  const password = buffer.slice(5, length).toString('utf8').replace(/\0$/, '');
-  
+
+  // Extract password (null-terminated) - not used in this mock implementation
+  // const password = buffer.slice(5, length).toString('utf8').replace(/\0$/, '');
+
   console.log(`Password message received for user: ${connState.getCurrentUser()}`);
-  
+
   // In a real implementation, we'd validate the password
   // For now, just accept any password
   sendAuthenticationOK(socket);
   sendParameterStatus(socket, connState);
   sendBackendKeyData(socket, connState);
   sendReadyForQuery(socket, connState);
-  
+
   return length + 1;
 }
 
@@ -551,17 +572,17 @@ function processPasswordMessage(buffer, socket, connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed
  */
-function processCopyData(buffer, socket, connState) {
+function processCopyData(buffer, _socket, _connState) {
   const length = buffer.readInt32BE(1);
-  
+
   // Extract copy data
   const data = buffer.slice(5, length + 1);
-  
+
   console.log(`Copy data received: ${data.length} bytes`);
-  
+
   // In a real implementation, we'd process the copy data
   // For now, just acknowledge receipt
-  
+
   return length + 1;
 }
 
@@ -572,16 +593,16 @@ function processCopyData(buffer, socket, connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed
  */
-function processCopyDone(buffer, socket, connState) {
+function processCopyDone(buffer, socket, _connState) {
   const length = buffer.readInt32BE(1);
-  
+
   console.log('Copy done received');
-  
+
   // In a real implementation, we'd finalize the copy operation
   // For now, just send command complete
   const { sendCommandComplete } = require('./messageBuilders');
   sendCommandComplete(socket, 'COPY 0');
-  
+
   return length + 1;
 }
 
@@ -592,17 +613,17 @@ function processCopyDone(buffer, socket, connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed
  */
-function processCopyFail(buffer, socket, connState) {
+function processCopyFail(buffer, socket, _connState) {
   const length = buffer.readInt32BE(1);
-  
+
   // Extract error message
   const errorMessage = buffer.slice(5, length).toString('utf8').replace(/\0$/, '');
-  
+
   console.log(`Copy failed: ${errorMessage}`);
-  
+
   // Send error response
   sendErrorResponse(socket, ERROR_CODES.DATA_EXCEPTION, `COPY failed: ${errorMessage}`);
-  
+
   return length + 1;
 }
 
@@ -613,14 +634,18 @@ function processCopyFail(buffer, socket, connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed
  */
-function processFunctionCall(buffer, socket, connState) {
+function processFunctionCall(buffer, socket, _connState) {
   const length = buffer.readInt32BE(1);
-  
+
   console.log('Function call received (not implemented)');
-  
+
   // Send error - function call not supported
-  sendErrorResponse(socket, ERROR_CODES.FEATURE_NOT_SUPPORTED, 'Function call protocol not supported');
-  
+  sendErrorResponse(
+    socket,
+    ERROR_CODES.FEATURE_NOT_SUPPORTED,
+    'Function call protocol not supported',
+  );
+
   return length + 1;
 }
 
@@ -642,5 +667,5 @@ module.exports = {
   handleSSLRequest,
   handleCancelRequest,
   handleStartupPacket,
-  handleTerminate
+  handleTerminate,
 };

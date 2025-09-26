@@ -14,15 +14,15 @@ function readCString(buffer, offset) {
   while (offset < buffer.length && buffer[offset] !== 0) {
     offset++;
   }
-  
+
   if (offset >= buffer.length) {
     throw new Error('Unterminated C string in buffer');
   }
-  
+
   const value = buffer.slice(start, offset).toString('utf8');
   return {
     value,
-    newOffset: offset + 1 // Skip the null terminator
+    newOffset: offset + 1, // Skip the null terminator
   };
 }
 
@@ -50,15 +50,16 @@ function writeCString(str, encoding = 'utf8') {
 function parseParameters(buffer, startOffset, endOffset) {
   const parameters = new Map();
   let offset = startOffset;
-  
-  while (offset < endOffset - 1) { // -1 to account for final null terminator
+
+  while (offset < endOffset - 1) {
+    // -1 to account for final null terminator
     try {
       const key = readCString(buffer, offset);
       offset = key.newOffset;
-      
+
       const value = readCString(buffer, offset);
       offset = value.newOffset;
-      
+
       if (key.value && value.value !== undefined) {
         parameters.set(key.value, value.value);
       }
@@ -67,7 +68,7 @@ function parseParameters(buffer, startOffset, endOffset) {
       break;
     }
   }
-  
+
   return parameters;
 }
 
@@ -81,7 +82,7 @@ function createMessage(messageType, payload = Buffer.alloc(0)) {
   const header = Buffer.alloc(5);
   header[0] = messageType.charCodeAt(0);
   header.writeInt32BE(4 + payload.length, 1); // Length includes the length field itself
-  
+
   return Buffer.concat([header, payload]);
 }
 
@@ -92,7 +93,7 @@ function createMessage(messageType, payload = Buffer.alloc(0)) {
  */
 function createPayload(...components) {
   const buffers = [];
-  
+
   for (const component of components) {
     if (Buffer.isBuffer(component)) {
       buffers.push(component);
@@ -106,7 +107,7 @@ function createPayload(...components) {
       throw new Error(`Unsupported component type: ${typeof component}`);
     }
   }
-  
+
   return Buffer.concat(buffers);
 }
 
@@ -118,18 +119,18 @@ function createPayload(...components) {
  */
 function validateMessage(buffer, hasHeader = true) {
   const headerSize = hasHeader ? 5 : 4; // 1 byte type + 4 bytes length, or just 4 bytes length
-  
+
   if (buffer.length < headerSize) {
     return { isComplete: false, messageLength: 0 };
   }
-  
+
   const lengthOffset = hasHeader ? 1 : 0;
   const messageLength = buffer.readInt32BE(lengthOffset);
   const totalLength = hasHeader ? messageLength + 1 : messageLength; // +1 for message type byte
-  
+
   return {
     isComplete: buffer.length >= totalLength,
-    messageLength: totalLength
+    messageLength: totalLength,
   };
 }
 
@@ -154,17 +155,17 @@ function getMessageType(buffer) {
  */
 function calculateMD5Hash(password, username, salt) {
   const crypto = require('crypto');
-  
+
   // First hash: md5(password + username)
   const firstHash = crypto.createHash('md5');
   firstHash.update(password + username);
   const pwdHash = firstHash.digest('hex');
-  
+
   // Second hash: md5(firstHash + salt)
   const secondHash = crypto.createHash('md5');
   secondHash.update(pwdHash);
   secondHash.update(salt);
-  
+
   return 'md5' + secondHash.digest('hex');
 }
 
@@ -185,7 +186,7 @@ function generateBackendSecret() {
  */
 function formatCommandTag(command, rowCount = null) {
   const upperCommand = command.toUpperCase();
-  
+
   if (rowCount !== null && rowCount !== undefined) {
     // Commands that include row count
     if (['INSERT', 'UPDATE', 'DELETE', 'SELECT', 'MOVE', 'FETCH', 'COPY'].includes(upperCommand)) {
@@ -195,7 +196,7 @@ function formatCommandTag(command, rowCount = null) {
       return `${upperCommand} ${rowCount}`;
     }
   }
-  
+
   // Commands without row count
   return upperCommand;
 }
@@ -207,9 +208,11 @@ function formatCommandTag(command, rowCount = null) {
  */
 function isValidProtocolVersion(version) {
   const { PROTOCOL_VERSION_3_0, SSL_REQUEST_CODE, CANCEL_REQUEST_CODE } = require('./constants');
-  return version === PROTOCOL_VERSION_3_0 || 
-         version === SSL_REQUEST_CODE || 
-         version === CANCEL_REQUEST_CODE;
+  return (
+    version === PROTOCOL_VERSION_3_0 ||
+    version === SSL_REQUEST_CODE ||
+    version === CANCEL_REQUEST_CODE
+  );
 }
 
 /**
@@ -231,7 +234,7 @@ function parseQueryStatements(query) {
  */
 function createErrorFields(fields) {
   const buffers = [];
-  
+
   for (const [fieldCode, fieldValue] of Object.entries(fields)) {
     if (fieldValue) {
       const fieldBuffer = Buffer.alloc(1 + Buffer.byteLength(fieldValue) + 1);
@@ -241,10 +244,10 @@ function createErrorFields(fields) {
       buffers.push(fieldBuffer);
     }
   }
-  
+
   // Add final null terminator for the entire message
   buffers.push(Buffer.from([0]));
-  
+
   return Buffer.concat(buffers);
 }
 
@@ -261,5 +264,5 @@ module.exports = {
   formatCommandTag,
   isValidProtocolVersion,
   parseQueryStatements,
-  createErrorFields
+  createErrorFields,
 };

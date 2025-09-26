@@ -3,14 +3,9 @@
  * Handles client connection state, authentication, parameters, and transaction status
  */
 
-const {
-  TRANSACTION_STATUS,
-  PROTOCOL_VERSION_3_0
-} = require('../protocol/constants');
+const { TRANSACTION_STATUS, PROTOCOL_VERSION_3_0 } = require('../protocol/constants');
 
-const {
-  generateBackendSecret
-} = require('../protocol/utils');
+const { generateBackendSecret } = require('../protocol/utils');
 
 /**
  * Represents the state of a PostgreSQL client connection
@@ -20,25 +15,25 @@ class ConnectionState {
     // Authentication state
     this.authenticated = false;
     this.protocolVersion = null;
-    
+
     // Connection parameters from startup packet
     this.parameters = new Map();
-    
+
     // Transaction state
     this.transactionStatus = TRANSACTION_STATUS.IDLE;
-    
+
     // Backend identification for cancellation
     this.backendPid = process.pid;
     this.backendSecret = generateBackendSecret();
-    
+
     // Connection metadata
     this.connected = true;
     this.connectionTime = new Date();
-    
+
     // Extended query protocol state
     this.preparedStatements = new Map();
     this.portals = new Map();
-    
+
     // Connection statistics
     this.queriesExecuted = 0;
     this.lastActivityTime = new Date();
@@ -85,7 +80,7 @@ class ConnectionState {
   }
 
   /**
-   * Gets the current database from connection parameters  
+   * Gets the current database from connection parameters
    * @returns {string} Database name
    */
   getCurrentDatabase() {
@@ -166,7 +161,7 @@ class ConnectionState {
   addPreparedStatement(name, statement) {
     this.preparedStatements.set(name, {
       ...statement,
-      createdAt: new Date()
+      createdAt: new Date(),
     });
     this.updateActivity();
     console.log(`Added prepared statement: ${name || '(unnamed)'}`);
@@ -203,7 +198,7 @@ class ConnectionState {
   addPortal(name, portal) {
     this.portals.set(name, {
       ...portal,
-      createdAt: new Date()
+      createdAt: new Date(),
     });
     this.updateActivity();
     console.log(`Added portal: ${name || '(unnamed)'}`);
@@ -278,7 +273,10 @@ class ConnectionState {
     this.connected = false;
     this.preparedStatements.clear();
     this.portals.clear();
-    console.log(`Connection closed after ${this.getConnectionDuration()}ms, ${this.queriesExecuted} queries executed`);
+    console.log(
+      `Connection closed after ${this.getConnectionDuration()}ms,
+      ${this.queriesExecuted} queries executed`,
+    );
   }
 
   /**
@@ -301,7 +299,7 @@ class ConnectionState {
       queriesExecuted: this.queriesExecuted,
       preparedStatements: this.preparedStatements.size,
       portals: this.portals.size,
-      connected: this.connected
+      connected: this.connected,
     };
   }
 
@@ -311,9 +309,11 @@ class ConnectionState {
    */
   toString() {
     const summary = this.getSummary();
-    return `Connection[${summary.user}@${summary.database}:${summary.backendPid}] ` +
-           `Status:${summary.transactionStatus} Queries:${summary.queriesExecuted} ` +
-           `Duration:${Math.round(summary.connectionDuration/1000)}s`;
+    return (
+      `Connection[${summary.user}@${summary.database}:${summary.backendPid}] ` +
+      `Status:${summary.transactionStatus} Queries:${summary.queriesExecuted} ` +
+      `Duration:${Math.round(summary.connectionDuration / 1000)}s`
+    );
   }
 }
 
@@ -328,7 +328,7 @@ class ConnectionManager {
 
   /**
    * Creates a new connection state
-   * @param {string} connectionId - Unique connection identifier  
+   * @param {string} connectionId - Unique connection identifier
    * @returns {ConnectionState} New connection state
    */
   createConnection(connectionId = null) {
@@ -383,7 +383,8 @@ class ConnectionManager {
    * @param {number} maxIdleTime - Max idle time in milliseconds
    * @returns {number} Number of connections closed
    */
-  cleanupIdleConnections(maxIdleTime = 300000) { // 5 minutes default
+  cleanupIdleConnections(maxIdleTime = 300000) {
+    // 5 minutes default
     let closedCount = 0;
     for (const [id, conn] of this.connections.entries()) {
       if (conn.getIdleTime() > maxIdleTime) {
@@ -410,13 +411,15 @@ class ConnectionManager {
       transactionConnections: connections.filter(c => c.isInTransaction()).length,
       failedTransactionConnections: connections.filter(c => c.isInFailedTransaction()).length,
       totalQueries: connections.reduce((sum, c) => sum + c.queriesExecuted, 0),
-      averageConnectionDuration: connections.length > 0 ? 
-        connections.reduce((sum, c) => sum + c.getConnectionDuration(), 0) / connections.length : 0
+      averageConnectionDuration:
+        connections.length > 0
+          ? connections.reduce((sum, c) => sum + c.getConnectionDuration(), 0) / connections.length
+          : 0,
     };
   }
 }
 
 module.exports = {
   ConnectionState,
-  ConnectionManager
+  ConnectionManager,
 };

@@ -35,7 +35,7 @@ class ServerManager {
       connectionTimeout: 300000, // 5 minutes
       enableLogging: true,
       logLevel: 'info',
-      ...config
+      ...config,
     };
 
     this.server = null;
@@ -52,7 +52,7 @@ class ServerManager {
       queriesExecuted: 0,
       errors: 0,
       bytesReceived: 0,
-      bytesSent: 0
+      bytesSent: 0,
     };
 
     // Cleanup interval
@@ -72,12 +72,12 @@ class ServerManager {
       try {
         this.server = new Net.Server();
         this.setupServerEventHandlers();
-        
+
         this.server.listen(this.config.port, this.config.host, () => {
           this.isRunning = true;
           this.startTime = new Date();
-          
-          this.log('info', `PostgreSQL Wire Protocol Mock Server started`);
+
+          this.log('info', 'PostgreSQL Wire Protocol Mock Server started');
           this.log('info', `Listening on ${this.config.host}:${this.config.port}`);
           this.log('info', `Max connections: ${this.config.maxConnections}`);
           this.log('info', `Connection timeout: ${this.config.connectionTimeout}ms`);
@@ -90,11 +90,10 @@ class ServerManager {
           resolve();
         });
 
-        this.server.on('error', (error) => {
+        this.server.on('error', error => {
           this.isRunning = false;
           reject(error);
         });
-
       } catch (error) {
         this.isRunning = false;
         reject(error);
@@ -111,7 +110,7 @@ class ServerManager {
       return;
     }
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       // Clear cleanup interval
       if (this.cleanupInterval) {
         clearInterval(this.cleanupInterval);
@@ -119,7 +118,7 @@ class ServerManager {
       }
 
       // Close all connections
-      for (const [connectionId, connectionData] of this.connections) {
+      for (const [connectionId] of this.connections) {
         this.closeConnection(connectionId, 'Server shutdown');
       }
 
@@ -127,10 +126,10 @@ class ServerManager {
       this.server.close(() => {
         this.isRunning = false;
         const uptime = Date.now() - this.startTime.getTime();
-        
+
         this.log('info', `Server stopped after ${Math.round(uptime / 1000)}s uptime`);
         this.log('info', `Final stats: ${JSON.stringify(this.getStats(), null, 2)}`);
-        
+
         resolve();
       });
     });
@@ -141,11 +140,11 @@ class ServerManager {
    * @private
    */
   setupServerEventHandlers() {
-    this.server.on('connection', (socket) => {
+    this.server.on('connection', socket => {
       this.handleNewConnection(socket);
     });
 
-    this.server.on('error', (error) => {
+    this.server.on('error', error => {
       this.stats.errors++;
       this.log('error', `Server error: ${error.message}`);
     });
@@ -161,7 +160,7 @@ class ServerManager {
     });
 
     process.on('SIGINT', () => {
-      this.log('info', 'Received SIGINT, shutting down gracefully');  
+      this.log('info', 'Received SIGINT, shutting down gracefully');
       this.stop().then(() => process.exit(0));
     });
   }
@@ -175,14 +174,17 @@ class ServerManager {
     // Check connection limit
     if (this.connections.size >= this.config.maxConnections) {
       this.stats.connectionsRejected++;
-      this.log('warn', `Connection rejected: max connections (${this.config.maxConnections}) reached`);
+      this.log(
+        'warn',
+        `Connection rejected: max connections (${this.config.maxConnections}) reached`,
+      );
       socket.end();
       return;
     }
 
     const connectionId = `conn_${++this.connectionCount}`;
     const connState = new ConnectionState();
-    
+
     const connectionData = {
       id: connectionId,
       socket: socket,
@@ -191,13 +193,16 @@ class ServerManager {
       remoteAddress: socket.remoteAddress,
       remotePort: socket.remotePort,
       connectedAt: new Date(),
-      lastActivity: new Date()
+      lastActivity: new Date(),
     };
 
     this.connections.set(connectionId, connectionData);
     this.stats.connectionsAccepted++;
 
-    this.log('info', `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`);
+    this.log(
+      'info',
+      `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`,
+    );
 
     // Set connection timeout
     socket.setTimeout(this.config.connectionTimeout);
@@ -212,17 +217,16 @@ class ServerManager {
    * @private
    */
   setupConnectionEventHandlers(connectionId, connectionData) {
-    const { socket, connState } = connectionData;
+    const { socket } = connectionData;
 
     // Handle incoming data
-    socket.on('data', (chunk) => {
+    socket.on('data', chunk => {
       try {
         this.stats.bytesReceived += chunk.length;
         connectionData.lastActivity = new Date();
         connectionData.buffer = Buffer.concat([connectionData.buffer, chunk]);
-        
+
         this.processMessages(connectionId, connectionData);
-        
       } catch (error) {
         this.stats.errors++;
         this.log('error', `Error processing data for ${connectionId}: ${error.message}`);
@@ -237,7 +241,7 @@ class ServerManager {
     });
 
     // Handle connection errors
-    socket.on('error', (error) => {
+    socket.on('error', error => {
       this.stats.errors++;
       this.log('error', `Connection ${connectionId} error: ${error.message}`);
       this.closeConnection(connectionId, `Socket error: ${error.message}`);
@@ -250,7 +254,7 @@ class ServerManager {
     });
 
     // Handle connection close
-    socket.on('close', (hadError) => {
+    socket.on('close', hadError => {
       if (hadError) {
         this.log('warn', `Connection ${connectionId} closed with error`);
       }
@@ -266,38 +270,41 @@ class ServerManager {
    */
   processMessages(connectionId, connectionData) {
     const { socket, connState } = connectionData;
-    
+
     while (connectionData.buffer.length > 0) {
       try {
         const processed = processMessage(connectionData.buffer, socket, connState);
-        
+
         if (processed === 0) {
           break; // Need more data
         }
-        
+
         this.stats.messagesProcessed++;
         connectionData.buffer = connectionData.buffer.slice(processed);
-        
+
         // Update query count if this was a query
         if (connState.queriesExecuted > (connectionData.lastQueryCount || 0)) {
           this.stats.queriesExecuted++;
           connectionData.lastQueryCount = connState.queriesExecuted;
         }
-        
       } catch (error) {
         this.stats.errors++;
         this.log('error', `Message processing error for ${connectionId}: ${error.message}`);
-        
+
         // Send error response if possible
         const { sendErrorResponse } = require('../protocol/messageBuilders');
         const { ERROR_CODES } = require('../protocol/constants');
-        
+
         try {
-          sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, `Protocol error: ${error.message}`);
+          sendErrorResponse(
+            socket,
+            ERROR_CODES.PROTOCOL_VIOLATION,
+            `Protocol error: ${error.message}`,
+          );
         } catch (sendError) {
           this.log('error', `Failed to send error response: ${sendError.message}`);
         }
-        
+
         this.closeConnection(connectionId, 'Protocol error');
         break;
       }
@@ -318,8 +325,11 @@ class ServerManager {
 
     const { socket, connState } = connectionData;
     const duration = Date.now() - connectionData.connectedAt.getTime();
-    
-    this.log('info', `Closing connection ${connectionId}: ${reason} (duration: ${Math.round(duration/1000)}s)`);
+
+    this.log(
+      'info',
+      `Closing connection ${connectionId}: ${reason} (duration: ${Math.round(duration / 1000)}s)`,
+    );
 
     try {
       connState.close();
@@ -341,7 +351,7 @@ class ServerManager {
 
     for (const [connectionId, connectionData] of this.connections) {
       const idleTime = now - connectionData.lastActivity.getTime();
-      
+
       if (idleTime > this.config.connectionTimeout) {
         this.closeConnection(connectionId, 'Idle timeout');
         cleanedUp++;
@@ -359,7 +369,7 @@ class ServerManager {
    */
   getStats() {
     const uptime = this.startTime ? Date.now() - this.startTime.getTime() : 0;
-    
+
     return {
       ...this.stats,
       activeConnections: this.connections.size,
@@ -368,8 +378,8 @@ class ServerManager {
       config: {
         port: this.config.port,
         host: this.config.host,
-        maxConnections: this.config.maxConnections
-      }
+        maxConnections: this.config.maxConnections,
+      },
     };
   }
 
@@ -388,7 +398,7 @@ class ServerManager {
       database: conn.connState.getCurrentDatabase(),
       queriesExecuted: conn.connState.queriesExecuted,
       transactionStatus: conn.connState.transactionStatus,
-      authenticated: conn.connState.authenticated
+      authenticated: conn.connState.authenticated,
     }));
   }
 
@@ -418,11 +428,11 @@ class ServerManager {
    */
   log(level, message) {
     if (!this.config.enableLogging) return;
-    
+
     const levels = { error: 0, warn: 1, info: 2, debug: 3 };
     const configLevel = levels[this.config.logLevel] || 2;
     const messageLevel = levels[level] || 2;
-    
+
     if (messageLevel <= configLevel) {
       const timestamp = new Date().toISOString();
       console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
@@ -447,5 +457,5 @@ class ServerManager {
 }
 
 module.exports = {
-  ServerManager
+  ServerManager,
 };
