@@ -6,6 +6,8 @@ WORKDIR /app
 
 # Install app dependencies
 COPY package*.json ./
+# Skip husky install during Docker build
+ENV HUSKY=0
 RUN npm ci --only=production
 
 # Bundle app source
