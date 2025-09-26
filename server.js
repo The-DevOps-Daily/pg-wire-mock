@@ -1,289 +1,254 @@
-// Include Nodejs' net module.
-const Net = require("net");
-const crypto = require("crypto");
+#!/usr/bin/env node
 
-// Import protocol constants and utilities
-const {
-  PROTOCOL_VERSION_3_0,
-  SSL_REQUEST_CODE,
-  CANCEL_REQUEST_CODE,
-  MESSAGE_TYPES,
-  TRANSACTION_STATUS,
-  DATA_TYPES,
-  DEFAULT_SERVER_PARAMETERS,
-  ERROR_CODES
-} = require("./src/protocol/constants");
+/**
+ * PostgreSQL Wire Protocol Mock Server
+ * 
+ * A mock PostgreSQL server that implements the PostgreSQL wire protocol for 
+ * learning, testing, and development purposes. This server can handle basic
+ * SQL queries and responds with mock data while maintaining protocol compliance.
+ * 
+ * Features:
+ * - Full PostgreSQL wire protocol v3.0 support
+ * - Authentication flow (without actual password validation)
+ * - Simple and extended query protocols
+ * - Transaction management (BEGIN/COMMIT/ROLLBACK)
+ * - Multiple query types (SELECT, SHOW, INSERT, UPDATE, DELETE, etc.)
+ * - Connection state management
+ * - Prepared statements and portals
+ * - Error handling with proper SQLSTATE codes
+ * - Connection statistics and monitoring
+ * 
+ * Architecture:
+ * - src/server/serverManager.js - TCP server and connection management
+ * - src/protocol/messageProcessors.js - Protocol message handling
+ * - src/protocol/messageBuilders.js - Protocol message construction  
+ * - src/handlers/queryHandlers.js - SQL query processing
+ * - src/connection/connectionState.js - Connection state management
+ * - src/protocol/constants.js - Protocol constants and types
+ * - src/protocol/utils.js - Protocol utility functions
+ * 
+ * Usage:
+ *   node server.js [options]
+ *   npm start
+ * 
+ * Environment Variables:
+ *   PG_MOCK_PORT - Port to listen on (default: 5432)
+ *   PG_MOCK_HOST - Host to bind to (default: localhost) 
+ *   PG_MOCK_MAX_CONNECTIONS - Max concurrent connections (default: 100)
+ *   PG_MOCK_LOG_LEVEL - Log level: error, warn, info, debug (default: info)
+ * 
+ * Connect with psql:
+ *   psql -h localhost -p 5432 -U postgres
+ * 
+ * @author The DevOps Daily
+ * @license MIT
+ */
 
-const {
-  parseParameters,
-  createMessage,
-  createPayload,
-  validateMessage,
-  getMessageType,
-  generateBackendSecret,
-  formatCommandTag,
-  isValidProtocolVersion,
-  parseQueryStatements,
-  createErrorFields
-} = require("./src/protocol/utils");
+const { ServerManager } = require('./src/server/serverManager');
 
-// Import message builders
-const {
-  sendAuthenticationOK,
-  sendParameterStatus,
-  sendBackendKeyData,
-  sendReadyForQuery,
-  sendRowDescription,
-  sendDataRow,
-  sendCommandComplete,
-  sendEmptyQueryResponse,
-  sendErrorResponse,
-  sendParseComplete,
-  sendBindComplete
-} = require("./src/protocol/messageBuilders");
+/**
+ * Parse command line arguments and environment variables
+ * @returns {Object} Parsed configuration
+ */
+function parseConfig() {
+  const config = {
+    port: parseInt(process.env.PG_MOCK_PORT) || 5432,
+    host: process.env.PG_MOCK_HOST || 'localhost',
+    maxConnections: parseInt(process.env.PG_MOCK_MAX_CONNECTIONS) || 100,
+    connectionTimeout: parseInt(process.env.PG_MOCK_CONNECTION_TIMEOUT) || 300000,
+    enableLogging: process.env.PG_MOCK_ENABLE_LOGGING !== 'false',
+    logLevel: process.env.PG_MOCK_LOG_LEVEL || 'info'
+  };
 
-// Import query handlers
-const {
-  executeQueryString,
-  executeQuery
-} = require("./src/handlers/queryHandlers");
+  // Parse command line arguments
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    switch (arg) {
+      case '--port':
+      case '-p':
+        config.port = parseInt(args[++i]) || config.port;
+        break;
+      case '--host':
+      case '-h':
+        config.host = args[++i] || config.host;
+        break;
+      case '--max-connections':
+        config.maxConnections = parseInt(args[++i]) || config.maxConnections;
+        break;
+      case '--log-level':
+        config.logLevel = args[++i] || config.logLevel;
+        break;
+      case '--quiet':
+      case '-q':
+        config.enableLogging = false;
+        break;
+      case '--help':
+        printUsage();
+        process.exit(0);
+        break;
+      case '--version':
+        console.log('PostgreSQL Wire Protocol Mock Server v1.0.0');
+        process.exit(0);
+        break;
+      default:
+        if (arg.startsWith('-')) {
+          console.error(`Unknown option: ${arg}`);
+          printUsage();
+          process.exit(1);
+        }
+    }
+  }
 
-// Import connection state management
-const {
-  ConnectionState
-} = require("./src/connection/connectionState");
+  return config;
+}
 
-// The port on which the server is listening.
-const port = 5432;
+/**
+ * Prints usage information
+ */
+function printUsage() {
+  console.log(`
+PostgreSQL Wire Protocol Mock Server
 
-// Create a new TCP server.
-const server = new Net.Server();
+Usage: node server.js [options]
 
+Options:
+  -p, --port <port>              Port to listen on (default: 5432)
+  -h, --host <host>              Host to bind to (default: localhost)
+  --max-connections <num>        Max concurrent connections (default: 100)
+  --log-level <level>            Log level: error, warn, info, debug (default: info)
+  -q, --quiet                    Disable logging
+  --help                         Show this help message
+  --version                      Show version information
 
-// The server listens to a socket for a client to make a connection request.
-server.listen(port, function () {
-  console.log(
-    `PostgreSQL Wire Protocol Mock Server listening on localhost:${port}`
-  );
-});
+Environment Variables:
+  PG_MOCK_PORT                   Port to listen on
+  PG_MOCK_HOST                   Host to bind to
+  PG_MOCK_MAX_CONNECTIONS        Max concurrent connections
+  PG_MOCK_CONNECTION_TIMEOUT     Connection timeout in ms
+  PG_MOCK_LOG_LEVEL              Log level
+  PG_MOCK_ENABLE_LOGGING         Enable logging (true/false)
 
-// When a client requests a connection with the server, the server creates a new socket dedicated to that client.
-server.on("connection", function (socket) {
-  const connState = new ConnectionState();
-  console.log(`New connection established from: ${socket.remoteAddress}`);
-  
-  let buffer = Buffer.alloc(0);
+Examples:
+  node server.js                              # Start with defaults
+  node server.js --port 5433                  # Start on port 5433
+  node server.js --host 0.0.0.0 --port 5432  # Listen on all interfaces
+  node server.js --quiet                      # Start without logging
 
-  // Handle incoming data
-  socket.on("data", function (chunk) {
-    buffer = Buffer.concat([buffer, chunk]);
+Connect with psql:
+  psql -h localhost -p 5432 -U postgres
+
+For more information, visit: https://github.com/The-DevOps-Daily/pg-wire-mock
+`);
+}
+
+/**
+ * Main application entry point
+ */
+async function main() {
+  let server = null;
+
+  try {
+    // Parse configuration
+    const config = parseConfig();
     
-    try {
-      while (buffer.length > 0) {
-        const processed = processMessage(buffer, socket, connState);
-        if (processed === 0) break; // Need more data
-        buffer = buffer.slice(processed);
+    // Create and configure server manager
+    server = new ServerManager(config);
+    
+    // Display startup banner
+    if (config.enableLogging) {
+      console.log('');
+      console.log('╔════════════════════════════════════════════════════════════╗');
+      console.log('║              PostgreSQL Wire Protocol Mock Server          ║');
+      console.log('║                                                            ║');
+      console.log('║  A learning tool for PostgreSQL wire protocol development  ║');
+      console.log('║  https://github.com/The-DevOps-Daily/pg-wire-mock          ║');
+      console.log('╚════════════════════════════════════════════════════════════╝');
+      console.log('');
+    }
+    
+    // Start the server
+    await server.start();
+    
+    // Display connection information
+    if (config.enableLogging) {
+      console.log('');
+      console.log('🚀 Server is ready to accept connections!');
+      console.log('');
+      console.log('Connect with psql:');
+      console.log(`  psql -h ${config.host} -p ${config.port} -U postgres`);
+      console.log('');
+      console.log('Try these example queries:');
+      console.log('  SELECT 1;');
+      console.log('  SELECT VERSION();');
+      console.log('  SHOW DOCS;');
+      console.log('  SELECT NOW();');
+      console.log('  BEGIN; SELECT 42; COMMIT;');
+      console.log('');
+      console.log('Press Ctrl+C to stop the server');
+      console.log('');
+    }
+
+    // Set up periodic stats logging (every 5 minutes)
+    if (config.enableLogging && config.logLevel === 'debug') {
+      setInterval(() => {
+        const stats = server.getStats();
+        console.log(`[DEBUG] Server stats: ${JSON.stringify(stats, null, 2)}`);
+      }, 300000);
+    }
+
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
+    
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${config?.port || 5432} is already in use. Try a different port with --port <port>`);
+    } else if (error.code === 'EACCES') {
+      console.error(`Permission denied. Try running with sudo or use a port >= 1024`);
+    }
+    
+    process.exit(1);
+  }
+
+  // Handle graceful shutdown
+  const shutdown = async (signal) => {
+    console.log(`\n[INFO] Received ${signal}, shutting down gracefully...`);
+    
+    if (server) {
+      try {
+        await server.stop();
+        console.log('[INFO] Server stopped successfully');
+      } catch (error) {
+        console.error('[ERROR] Error during shutdown:', error.message);
       }
-    } catch (error) {
-      console.error("Error processing message:", error);
-      sendErrorResponse(socket, "08P01", `Protocol error: ${error.message}`);
-      socket.end();
+    }
+    
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    console.error('[ERROR] Uncaught exception:', error);
+    if (server) {
+      server.stop().finally(() => process.exit(1));
+    } else {
+      process.exit(1);
     }
   });
 
-  socket.on("end", function () {
-    console.log("Client disconnected");
-    connState.close();
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('[ERROR] Unhandled rejection at:', promise, 'reason:', reason);
   });
+}
 
-  socket.on("error", function (err) {
-    console.log(`Socket Error: ${err}`);
-    connState.close();
+// Start the application
+if (require.main === module) {
+  main().catch(error => {
+    console.error('Application failed to start:', error);
+    process.exit(1);
   });
-});
-
-function processMessage(buffer, socket, connState) {
-  if (!connState.authenticated) {
-    return processStartupMessage(buffer, socket, connState);
-  } else {
-    return processRegularMessage(buffer, socket, connState);
-  }
 }
 
-function processStartupMessage(buffer, socket, connState) {
-  if (buffer.length < 8) return 0; // Need at least length + protocol version
-
-  const length = buffer.readInt32BE(0);
-  if (buffer.length < length) return 0; // Need complete message
-
-  const protocolVersion = buffer.readInt32BE(4);
-  
-  console.log(`Startup message - Length: ${length}, Protocol: ${protocolVersion}`);
-
-  // Handle SSL request
-  if (protocolVersion === SSL_REQUEST_CODE) {
-    console.log("SSL request received - rejecting");
-    socket.write(Buffer.from('N')); // Reject SSL
-    return length;
-  }
-
-  // Handle cancel request  
-  if (protocolVersion === CANCEL_REQUEST_CODE) {
-    console.log("Cancel request received");
-    // In a real implementation, we'd handle cancellation here
-    socket.end();
-    return length;
-  }
-
-  // Handle regular startup packet
-  if (protocolVersion === PROTOCOL_VERSION_3_0) {
-    // Parse parameters from startup packet using utility function
-    const parameters = parseParameters(buffer, 8, length);
-    
-    // Set connection parameters
-    for (const [key, value] of parameters) {
-      connState.setParameter(key, value);
-    }
-
-    // Authenticate the connection
-    connState.authenticate(protocolVersion);
-
-    // Send authentication sequence
-    sendAuthenticationOK(socket);
-    sendParameterStatus(socket, connState);
-    sendBackendKeyData(socket, connState);
-    sendReadyForQuery(socket, connState);
-    
-    return length;
-  }
-
-  throw new Error(`Unsupported protocol version: ${protocolVersion}`);
-}
-
-function processRegularMessage(buffer, socket, connState) {
-  if (buffer.length < 5) return 0; // Need at least tag + length
-
-  const messageType = getMessageType(buffer);
-  const length = buffer.readInt32BE(1);
-  
-  if (buffer.length < length + 1) return 0; // Need complete message
-
-  console.log(`Received message type '${messageType}', length: ${length}`);
-
-  switch (messageType) {
-    case MESSAGE_TYPES.QUERY: // Simple Query
-      return processSimpleQuery(buffer, socket, connState);
-    case MESSAGE_TYPES.TERMINATE: // Terminate
-      console.log("Client requested termination");
-      socket.end();
-      return length + 1;
-    case MESSAGE_TYPES.PARSE: // Parse (Extended Query)
-      return processParse(buffer, socket, connState);
-    case MESSAGE_TYPES.BIND: // Bind (Extended Query)  
-      return processBind(buffer, socket, connState);
-    case MESSAGE_TYPES.DESCRIBE: // Describe
-      return processDescribe(buffer, socket, connState);
-    case MESSAGE_TYPES.EXECUTE: // Execute
-      return processExecute(buffer, socket, connState);
-    case MESSAGE_TYPES.SYNC: // Sync
-      return processSync(buffer, socket, connState);
-    default:
-      console.log(`Unknown message type: ${messageType}`);
-      sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, `Unknown message type: ${messageType}`);
-      return length + 1;
-  }
-}
-
-function processSimpleQuery(buffer, socket, connState) {
-  const length = buffer.readInt32BE(1);
-  
-  // Extract query string (remove message type, length, and null terminator)
-  const queryBuffer = buffer.slice(5, length);
-  const query = queryBuffer.toString('utf8').replace(/\0$/, '').trim();
-  
-  console.log(`Executing simple query: ${query}`);
-
-  // Increment query counter
-  connState.incrementQueryCount();
-
-  // Execute the query string (handles multiple statements)
-  executeQueryString(query, socket, connState);
-
-  sendReadyForQuery(socket, connState);
-  return length + 1;
-}
-function handleQuery(query) {
-  console.log(`Processing query: ${query}`);
-  
-  // Basic query handling
-  switch (query) {
-    case "SELECT 1":
-    case "SELECT 1;":
-      return {
-        columns: [{ name: "?column?", dataTypeOID: DATA_TYPES.INT4, dataTypeSize: 4 }],
-        rows: [["1"]],
-        command: "SELECT",
-        rowCount: 1
-      };
-    
-    case "SHOW DOCS":
-    case "SHOW DOCS;":
-      return {
-        columns: [{ name: "docs", dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 }],
-        rows: [["https://www.postgresql.org/docs/"]],
-        command: "SHOW",
-        rowCount: 1
-      };
-
-    case "SELECT VERSION()":
-    case "SELECT VERSION();":
-      return {
-        columns: [{ name: "version", dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 }],
-        rows: [["PostgreSQL Wire Protocol Mock Server 1.0"]],
-        command: "SELECT",
-        rowCount: 1
-      };
-
-    case "BEGIN":
-    case "BEGIN;":
-      return { command: "BEGIN" };
-
-    case "COMMIT":
-    case "COMMIT;":
-      return { command: "COMMIT" };
-
-    case "ROLLBACK":
-    case "ROLLBACK;":
-      return { command: "ROLLBACK" };
-
-    default:
-      // Default response for unknown queries
-      return {
-        columns: [{ name: "message", dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 }],
-        rows: [["Hello from PostgreSQL Wire Protocol Mock Server!"]],
-        command: "SELECT",
-        rowCount: 1
-      };
-  }
-}
-
-function processDescribe(buffer, socket, connState) {
-  const length = buffer.readInt32BE(1);
-  // For simplicity, send a basic row description
-  sendRowDescription(socket, [{ name: "result", dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 }]);
-  return length + 1;
-}
-
-function processExecute(buffer, socket, connState) {
-  const length = buffer.readInt32BE(1);
-  // Basic execution - send some data using query handler
-  connState.incrementQueryCount();
-  executeQuery("SELECT 'Extended query result'", socket, connState);
-  return length + 1;
-}
-
-function processSync(buffer, socket, connState) {
-  const length = buffer.readInt32BE(1);
-  sendReadyForQuery(socket, connState);
-  return length + 1;
-}
+module.exports = { main, parseConfig };

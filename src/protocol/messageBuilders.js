@@ -37,9 +37,14 @@ function sendAuthenticationOK(socket) {
  * @param {ConnectionState} connState - Connection state object
  */
 function sendParameterStatus(socket, connState) {
+  // Get server configuration
+  const { createServerParameters } = require('../config/serverConfig');
+  const { loadConfig } = require('../config/serverConfig');
+  const config = loadConfig();
+
   // Create parameters object with defaults and user overrides
-  const parameters = { ...DEFAULT_SERVER_PARAMETERS };
-  
+  const parameters = createServerParameters(config);
+
   // Override with user-specific parameters
   if (connState.parameters.has('application_name')) {
     parameters.application_name = connState.parameters.get('application_name');

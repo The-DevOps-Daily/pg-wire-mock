@@ -1,422 +1,646 @@
 /**
- * PostgreSQL Wire Protocol Connection State Management
- * Handles client connection state, authentication, parameters, and transaction status
+ * PostgreSQL Wire Protocol Message Processors
+ * Functions for processing incoming protocol messages and coordinating responses
  */
 
 const {
-  TRANSACTION_STATUS,
-  PROTOCOL_VERSION_3_0
-} = require('../protocol/constants');
+  PROTOCOL_VERSION_3_0,
+  SSL_REQUEST_CODE,
+  CANCEL_REQUEST_CODE,
+  MESSAGE_TYPES,
+  ERROR_CODES
+} = require('./constants');
 
 const {
-  generateBackendSecret
-} = require('../protocol/utils');
+  parseParameters,
+  getMessageType,
+  validateMessage
+} = require('./utils');
+
+const {
+  sendAuthenticationOK,
+  sendParameterStatus,
+  sendBackendKeyData,
+  sendReadyForQuery,
+  sendErrorResponse,
+  sendParseComplete,
+  sendBindComplete,
+  sendRowDescription
+} = require('./messageBuilders');
+
+const {
+  executeQueryString,
+  executeQuery
+} = require('../handlers/queryHandlers');
 
 /**
- * Represents the state of a PostgreSQL client connection
+ * Main message processing entry point
+ * Routes messages based on connection authentication status
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed (0 if need more data)
  */
-class ConnectionState {
-  constructor() {
-    // Authentication state
-    this.authenticated = false;
-    this.protocolVersion = null;
-    
-    // Connection parameters from startup packet
-    this.parameters = new Map();
-    
-    // Transaction state
-    this.transactionStatus = TRANSACTION_STATUS.IDLE;
-    
-    // Backend identification for cancellation
-    this.backendPid = process.pid;
-    this.backendSecret = generateBackendSecret();
-    
-    // Connection metadata
-    this.connected = true;
-    this.connectionTime = new Date();
-    
-    // Extended query protocol state
-    this.preparedStatements = new Map();
-    this.portals = new Map();
-    
-    // Connection statistics
-    this.queriesExecuted = 0;
-    this.lastActivityTime = new Date();
-  }
-
-  /**
-   * Marks the connection as authenticated with protocol version
-   * @param {number} protocolVersion - PostgreSQL protocol version
-   */
-  authenticate(protocolVersion = PROTOCOL_VERSION_3_0) {
-    this.authenticated = true;
-    this.protocolVersion = protocolVersion;
-    this.updateActivity();
-    console.log(`Connection authenticated with protocol version ${protocolVersion}`);
-  }
-
-  /**
-   * Sets a connection parameter
-   * @param {string} name - Parameter name
-   * @param {string} value - Parameter value
-   */
-  setParameter(name, value) {
-    this.parameters.set(name, value);
-    this.updateActivity();
-    console.log(`Set connection parameter: ${name} = ${value}`);
-  }
-
-  /**
-   * Gets a connection parameter
-   * @param {string} name - Parameter name
-   * @param {string} defaultValue - Default value if parameter not set
-   * @returns {string} Parameter value
-   */
-  getParameter(name, defaultValue = null) {
-    return this.parameters.get(name) || defaultValue;
-  }
-
-  /**
-   * Gets the current user from connection parameters
-   * @returns {string} Username
-   */
-  getCurrentUser() {
-    return this.getParameter('user', 'postgres');
-  }
-
-  /**
-   * Gets the current database from connection parameters  
-   * @returns {string} Database name
-   */
-  getCurrentDatabase() {
-    return this.getParameter('database', 'postgres');
-  }
-
-  /**
-   * Gets the application name from connection parameters
-   * @returns {string} Application name
-   */
-  getApplicationName() {
-    return this.getParameter('application_name', '');
-  }
-
-  /**
-   * Updates transaction status
-   * @param {string} status - New transaction status (I, T, E)
-   */
-  setTransactionStatus(status) {
-    if (Object.values(TRANSACTION_STATUS).includes(status)) {
-      this.transactionStatus = status;
-      this.updateActivity();
-      console.log(`Transaction status changed to: ${status}`);
-    } else {
-      console.warn(`Invalid transaction status: ${status}`);
-    }
-  }
-
-  /**
-   * Checks if connection is in a transaction
-   * @returns {boolean} True if in transaction
-   */
-  isInTransaction() {
-    return this.transactionStatus === TRANSACTION_STATUS.IN_TRANSACTION;
-  }
-
-  /**
-   * Checks if connection is in a failed transaction
-   * @returns {boolean} True if in failed transaction
-   */
-  isInFailedTransaction() {
-    return this.transactionStatus === TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
-  }
-
-  /**
-   * Begins a new transaction
-   */
-  beginTransaction() {
-    this.setTransactionStatus(TRANSACTION_STATUS.IN_TRANSACTION);
-  }
-
-  /**
-   * Commits the current transaction
-   */
-  commitTransaction() {
-    this.setTransactionStatus(TRANSACTION_STATUS.IDLE);
-  }
-
-  /**
-   * Rolls back the current transaction
-   */
-  rollbackTransaction() {
-    this.setTransactionStatus(TRANSACTION_STATUS.IDLE);
-  }
-
-  /**
-   * Marks transaction as failed
-   */
-  failTransaction() {
-    this.setTransactionStatus(TRANSACTION_STATUS.IN_FAILED_TRANSACTION);
-  }
-
-  /**
-   * Adds a prepared statement to the connection
-   * @param {string} name - Statement name (empty string for unnamed)
-   * @param {Object} statement - Prepared statement object
-   */
-  addPreparedStatement(name, statement) {
-    this.preparedStatements.set(name, {
-      ...statement,
-      createdAt: new Date()
-    });
-    this.updateActivity();
-    console.log(`Added prepared statement: ${name || '(unnamed)'}`);
-  }
-
-  /**
-   * Gets a prepared statement
-   * @param {string} name - Statement name
-   * @returns {Object|null} Prepared statement or null
-   */
-  getPreparedStatement(name) {
-    return this.preparedStatements.get(name) || null;
-  }
-
-  /**
-   * Removes a prepared statement
-   * @param {string} name - Statement name
-   * @returns {boolean} True if statement was removed
-   */
-  removePreparedStatement(name) {
-    const removed = this.preparedStatements.delete(name);
-    if (removed) {
-      this.updateActivity();
-      console.log(`Removed prepared statement: ${name || '(unnamed)'}`);
-    }
-    return removed;
-  }
-
-  /**
-   * Adds a portal to the connection
-   * @param {string} name - Portal name (empty string for unnamed)
-   * @param {Object} portal - Portal object
-   */
-  addPortal(name, portal) {
-    this.portals.set(name, {
-      ...portal,
-      createdAt: new Date()
-    });
-    this.updateActivity();
-    console.log(`Added portal: ${name || '(unnamed)'}`);
-  }
-
-  /**
-   * Gets a portal
-   * @param {string} name - Portal name
-   * @returns {Object|null} Portal or null
-   */
-  getPortal(name) {
-    return this.portals.get(name) || null;
-  }
-
-  /**
-   * Removes a portal
-   * @param {string} name - Portal name
-   * @returns {boolean} True if portal was removed
-   */
-  removePortal(name) {
-    const removed = this.portals.delete(name);
-    if (removed) {
-      this.updateActivity();
-      console.log(`Removed portal: ${name || '(unnamed)'}`);
-    }
-    return removed;
-  }
-
-  /**
-   * Clears all unnamed prepared statements and portals
-   */
-  clearUnnamed() {
-    this.removePreparedStatement('');
-    this.removePortal('');
-  }
-
-  /**
-   * Increments the query counter
-   */
-  incrementQueryCount() {
-    this.queriesExecuted++;
-    this.updateActivity();
-  }
-
-  /**
-   * Updates the last activity timestamp
-   */
-  updateActivity() {
-    this.lastActivityTime = new Date();
-  }
-
-  /**
-   * Gets connection duration in milliseconds
-   * @returns {number} Duration in ms
-   */
-  getConnectionDuration() {
-    return Date.now() - this.connectionTime.getTime();
-  }
-
-  /**
-   * Gets time since last activity in milliseconds
-   * @returns {number} Idle time in ms
-   */
-  getIdleTime() {
-    return Date.now() - this.lastActivityTime.getTime();
-  }
-
-  /**
-   * Closes the connection and cleans up resources
-   */
-  close() {
-    this.connected = false;
-    this.preparedStatements.clear();
-    this.portals.clear();
-    console.log(`Connection closed after ${this.getConnectionDuration()}ms, ${this.queriesExecuted} queries executed`);
-  }
-
-  /**
-   * Gets connection summary information
-   * @returns {Object} Connection summary
-   */
-  getSummary() {
-    return {
-      authenticated: this.authenticated,
-      protocolVersion: this.protocolVersion,
-      user: this.getCurrentUser(),
-      database: this.getCurrentDatabase(),
-      applicationName: this.getApplicationName(),
-      transactionStatus: this.transactionStatus,
-      isInTransaction: this.isInTransaction(),
-      isInFailedTransaction: this.isInFailedTransaction(),
-      backendPid: this.backendPid,
-      connectionDuration: this.getConnectionDuration(),
-      idleTime: this.getIdleTime(),
-      queriesExecuted: this.queriesExecuted,
-      preparedStatements: this.preparedStatements.size,
-      portals: this.portals.size,
-      connected: this.connected
-    };
-  }
-
-  /**
-   * Gets connection info for logging
-   * @returns {string} Formatted connection info
-   */
-  toString() {
-    const summary = this.getSummary();
-    return `Connection[${summary.user}@${summary.database}:${summary.backendPid}] ` +
-           `Status:${summary.transactionStatus} Queries:${summary.queriesExecuted} ` +
-           `Duration:${Math.round(summary.connectionDuration/1000)}s`;
+function processMessage(buffer, socket, connState) {
+  if (!connState.authenticated) {
+    return processStartupMessage(buffer, socket, connState);
+  } else {
+    return processRegularMessage(buffer, socket, connState);
   }
 }
 
 /**
- * Connection state factory and utilities
+ * Processes startup messages before authentication
+ * Handles protocol negotiation, SSL requests, and initial authentication
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed (0 if need more data)
  */
-class ConnectionManager {
-  constructor() {
-    this.connections = new Map();
-    this.connectionCount = 0;
+function processStartupMessage(buffer, socket, connState) {
+  // Need at least 8 bytes for length + protocol version
+  if (buffer.length < 8) {
+    return 0;
   }
 
-  /**
-   * Creates a new connection state
-   * @param {string} connectionId - Unique connection identifier  
-   * @returns {ConnectionState} New connection state
-   */
-  createConnection(connectionId = null) {
-    const id = connectionId || `conn_${++this.connectionCount}`;
-    const connState = new ConnectionState();
-    this.connections.set(id, connState);
-    console.log(`Created new connection: ${id}`);
-    return connState;
+  const length = buffer.readInt32BE(0);
+  
+  // Need complete message
+  if (buffer.length < length) {
+    return 0;
   }
 
-  /**
-   * Gets a connection by ID
-   * @param {string} connectionId - Connection identifier
-   * @returns {ConnectionState|null} Connection state or null
-   */
-  getConnection(connectionId) {
-    return this.connections.get(connectionId) || null;
-  }
+  const protocolVersion = buffer.readInt32BE(4);
+  
+  console.log(`Startup message - Length: ${length}, Protocol: ${protocolVersion}`);
 
-  /**
-   * Removes a connection
-   * @param {string} connectionId - Connection identifier
-   * @returns {boolean} True if connection was removed
-   */
-  removeConnection(connectionId) {
-    const conn = this.connections.get(connectionId);
-    if (conn) {
-      conn.close();
-      return this.connections.delete(connectionId);
+  try {
+    // Handle SSL request
+    if (protocolVersion === SSL_REQUEST_CODE) {
+      return handleSSLRequest(socket);
     }
-    return false;
+
+    // Handle cancel request  
+    if (protocolVersion === CANCEL_REQUEST_CODE) {
+      return handleCancelRequest(buffer, socket, length);
+    }
+
+    // Handle regular startup packet
+    if (protocolVersion === PROTOCOL_VERSION_3_0) {
+      return handleStartupPacket(buffer, socket, connState, length);
+    }
+
+    throw new Error(`Unsupported protocol version: ${protocolVersion}`);
+    
+  } catch (error) {
+    console.error('Error processing startup message:', error);
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, error.message);
+    socket.end();
+    return length;
+  }
+}
+
+/**
+ * Processes regular protocol messages after authentication
+ * Routes to specific message handlers based on message type
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed (0 if need more data)
+ */
+function processRegularMessage(buffer, socket, connState) {
+  // Need at least 5 bytes for message type + length
+  if (buffer.length < 5) {
+    return 0;
   }
 
-  /**
-   * Gets all active connections
-   * @returns {Array<ConnectionState>} Array of connection states
-   */
-  getAllConnections() {
-    return Array.from(this.connections.values());
+  const messageType = getMessageType(buffer);
+  const length = buffer.readInt32BE(1);
+  
+  // Need complete message
+  if (buffer.length < length + 1) {
+    return 0;
   }
 
-  /**
-   * Gets connection count
-   * @returns {number} Number of active connections
-   */
-  getConnectionCount() {
-    return this.connections.size;
+  console.log(`Processing message type '${messageType}', length: ${length}`);
+
+  try {
+    switch (messageType) {
+      case MESSAGE_TYPES.QUERY: // 'Q' - Simple Query
+        return processSimpleQuery(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.TERMINATE: // 'X' - Terminate
+        return handleTerminate(socket, connState, length);
+        
+      case MESSAGE_TYPES.PARSE: // 'P' - Parse (Extended Query)
+        return processParse(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.BIND: // 'B' - Bind (Extended Query)  
+        return processBind(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.DESCRIBE: // 'D' - Describe
+        return processDescribe(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.EXECUTE: // 'E' - Execute
+        return processExecute(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.SYNC: // 'S' - Sync
+        return processSync(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.PASSWORD_MESSAGE: // 'p' - Password Message
+        return processPasswordMessage(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.COPY_DATA: // 'd' - Copy Data
+        return processCopyData(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.COPY_DONE: // 'c' - Copy Done
+        return processCopyDone(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.COPY_FAIL: // 'f' - Copy Fail
+        return processCopyFail(buffer, socket, connState);
+        
+      case MESSAGE_TYPES.FUNCTION_CALL: // 'F' - Function Call
+        return processFunctionCall(buffer, socket, connState);
+        
+      default:
+        console.warn(`Unknown message type: ${messageType}`);
+        sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, `Unknown message type: ${messageType}`);
+        return length + 1;
+    }
+  } catch (error) {
+    console.error(`Error processing ${messageType} message:`, error);
+    sendErrorResponse(socket, ERROR_CODES.INTERNAL_ERROR, `Message processing error: ${error.message}`);
+    return length + 1;
+  }
+}
+
+/**
+ * Startup Message Handlers
+ */
+
+/**
+ * Handles SSL request messages
+ * @param {Socket} socket - Client socket
+ * @returns {number} Bytes processed
+ */
+function handleSSLRequest(socket) {
+  console.log("SSL request received - rejecting");
+  socket.write(Buffer.from('N')); // Reject SSL
+  return 8; // SSL request is always 8 bytes
+}
+
+/**
+ * Handles cancel request messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {number} length - Message length
+ * @returns {number} Bytes processed
+ */
+function handleCancelRequest(buffer, socket, length) {
+  if (length >= 16) { // Should have PID and secret
+    const pid = buffer.readInt32BE(8);
+    const secret = buffer.readInt32BE(12);
+    console.log(`Cancel request received for PID: ${pid}, Secret: ${secret}`);
+    // In a real implementation, we'd find and cancel the query
+  } else {
+    console.log("Malformed cancel request received");
+  }
+  
+  socket.end(); // Cancel requests close the connection
+  return length;
+}
+
+/**
+ * Handles regular startup packet with authentication
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @param {number} length - Message length
+ * @returns {number} Bytes processed
+ */
+function handleStartupPacket(buffer, socket, connState, length) {
+  // Parse parameters from startup packet
+  const parameters = parseParameters(buffer, 8, length);
+  
+  // Set connection parameters
+  for (const [key, value] of parameters) {
+    connState.setParameter(key, value);
   }
 
-  /**
-   * Cleans up idle connections
-   * @param {number} maxIdleTime - Max idle time in milliseconds
-   * @returns {number} Number of connections closed
-   */
-  cleanupIdleConnections(maxIdleTime = 300000) { // 5 minutes default
-    let closedCount = 0;
-    for (const [id, conn] of this.connections.entries()) {
-      if (conn.getIdleTime() > maxIdleTime) {
-        this.removeConnection(id);
-        closedCount++;
+  // Authenticate the connection
+  connState.authenticate(PROTOCOL_VERSION_3_0);
+
+  // Send authentication sequence
+  sendAuthenticationOK(socket);
+  sendParameterStatus(socket, connState);
+  sendBackendKeyData(socket, connState);
+  sendReadyForQuery(socket, connState);
+  
+  return length;
+}
+
+/**
+ * Regular Message Handlers
+ */
+
+/**
+ * Processes simple query messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processSimpleQuery(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  // Extract query string (remove message type, length, and null terminator)
+  const queryBuffer = buffer.slice(5, length);
+  const query = queryBuffer.toString('utf8').replace(/\0$/, '').trim();
+  
+  console.log(`Executing simple query: ${query}`);
+
+  // Increment query counter
+  connState.incrementQueryCount();
+
+  // Execute the query string (handles multiple statements)
+  executeQueryString(query, socket, connState);
+
+  sendReadyForQuery(socket, connState);
+  return length + 1;
+}
+
+/**
+ * Handles connection termination
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @param {number} length - Message length
+ * @returns {number} Bytes processed
+ */
+function handleTerminate(socket, connState, length) {
+  console.log(`Client ${connState.getCurrentUser()} requested termination`);
+  connState.close();
+  socket.end();
+  return length + 1;
+}
+
+/**
+ * Extended Query Protocol Handlers
+ */
+
+/**
+ * Processes Parse messages for prepared statements
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processParse(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  try {
+    // Basic Parse implementation - extract statement name and query
+    let offset = 5; // Skip message type and length
+    
+    // Read statement name (null-terminated)
+    const stmtNameStart = offset;
+    while (offset < buffer.length && buffer[offset] !== 0) offset++;
+    const statementName = buffer.slice(stmtNameStart, offset).toString('utf8');
+    offset++; // Skip null terminator
+    
+    // Read query string (null-terminated)
+    const queryStart = offset;
+    while (offset < buffer.length && buffer[offset] !== 0) offset++;
+    const query = buffer.slice(queryStart, offset).toString('utf8');
+    offset++; // Skip null terminator
+    
+    // Read parameter count
+    const paramCount = buffer.readInt16BE(offset);
+    offset += 2;
+    
+    // Read parameter types (if any)
+    const paramTypes = [];
+    for (let i = 0; i < paramCount; i++) {
+      paramTypes.push(buffer.readInt32BE(offset));
+      offset += 4;
+    }
+    
+    console.log(`Parse: statement="${statementName || '(unnamed)'}", query="${query}", params=${paramCount}`);
+    
+    // Store the prepared statement
+    connState.addPreparedStatement(statementName, {
+      query,
+      paramTypes,
+      paramCount
+    });
+    
+    sendParseComplete(socket);
+    return length + 1;
+    
+  } catch (error) {
+    console.error('Error parsing Parse message:', error);
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Parse message format');
+    return length + 1;
+  }
+}
+
+/**
+ * Processes Bind messages for portals
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processBind(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  try {
+    // Basic Bind implementation
+    let offset = 5; // Skip message type and length
+    
+    // Read portal name
+    const portalStart = offset;
+    while (offset < buffer.length && buffer[offset] !== 0) offset++;
+    const portalName = buffer.slice(portalStart, offset).toString('utf8');
+    offset++; // Skip null terminator
+    
+    // Read statement name
+    const stmtStart = offset;
+    while (offset < buffer.length && buffer[offset] !== 0) offset++;
+    const statementName = buffer.slice(stmtStart, offset).toString('utf8');
+    offset++; // Skip null terminator
+    
+    console.log(`Bind: portal="${portalName || '(unnamed)'}", statement="${statementName || '(unnamed)'}"`);
+    
+    // Get the prepared statement
+    const statement = connState.getPreparedStatement(statementName);
+    if (!statement) {
+      sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Prepared statement "${statementName}" does not exist`);
+      return length + 1;
+    }
+    
+    // Store the portal (simplified - not parsing parameters and formats)
+    connState.addPortal(portalName, {
+      statement: statementName,
+      query: statement.query,
+      boundAt: new Date()
+    });
+    
+    sendBindComplete(socket);
+    return length + 1;
+    
+  } catch (error) {
+    console.error('Error parsing Bind message:', error);
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Bind message format');
+    return length + 1;
+  }
+}
+
+/**
+ * Processes Describe messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processDescribe(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  try {
+    const describeType = String.fromCharCode(buffer[5]); // 'S' or 'P'
+    let offset = 6;
+    
+    // Read name
+    const nameStart = offset;
+    while (offset < buffer.length && buffer[offset] !== 0) offset++;
+    const name = buffer.slice(nameStart, offset).toString('utf8');
+    
+    console.log(`Describe: type=${describeType}, name="${name || '(unnamed)'}"`);
+    
+    if (describeType === 'S') {
+      // Describe statement - send parameter description and row description
+      const statement = connState.getPreparedStatement(name);
+      if (statement) {
+        // For simplicity, just send a basic row description
+        sendRowDescription(socket, [{ 
+          name: "result", 
+          dataTypeOID: 25, 
+          dataTypeSize: -1 
+        }]);
+      } else {
+        sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Prepared statement "${name}" does not exist`);
+      }
+    } else if (describeType === 'P') {
+      // Describe portal - send row description
+      const portal = connState.getPortal(name);
+      if (portal) {
+        sendRowDescription(socket, [{ 
+          name: "result", 
+          dataTypeOID: 25, 
+          dataTypeSize: -1 
+        }]);
+      } else {
+        sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Portal "${name}" does not exist`);
       }
     }
-    if (closedCount > 0) {
-      console.log(`Cleaned up ${closedCount} idle connections`);
-    }
-    return closedCount;
+    
+    return length + 1;
+    
+  } catch (error) {
+    console.error('Error parsing Describe message:', error);
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Describe message format');
+    return length + 1;
   }
+}
 
-  /**
-   * Gets manager statistics
-   * @returns {Object} Manager statistics
-   */
-  getStats() {
-    const connections = this.getAllConnections();
-    return {
-      totalConnections: this.connectionCount,
-      activeConnections: connections.length,
-      authenticatedConnections: connections.filter(c => c.authenticated).length,
-      transactionConnections: connections.filter(c => c.isInTransaction()).length,
-      failedTransactionConnections: connections.filter(c => c.isInFailedTransaction()).length,
-      totalQueries: connections.reduce((sum, c) => sum + c.queriesExecuted, 0),
-      averageConnectionDuration: connections.length > 0 ? 
-        connections.reduce((sum, c) => sum + c.getConnectionDuration(), 0) / connections.length : 0
-    };
+/**
+ * Processes Execute messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processExecute(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  try {
+    let offset = 5; // Skip message type and length
+    
+    // Read portal name
+    const portalStart = offset;
+    while (offset < buffer.length && buffer[offset] !== 0) offset++;
+    const portalName = buffer.slice(portalStart, offset).toString('utf8');
+    offset++; // Skip null terminator
+    
+    // Read row limit
+    const rowLimit = buffer.readInt32BE(offset);
+    
+    console.log(`Execute: portal="${portalName || '(unnamed)'}", limit=${rowLimit}`);
+    
+    // Get the portal
+    const portal = connState.getPortal(portalName);
+    if (!portal) {
+      sendErrorResponse(socket, ERROR_CODES.UNDEFINED_FUNCTION, `Portal "${portalName}" does not exist`);
+      return length + 1;
+    }
+    
+    // Execute the query from the portal
+    connState.incrementQueryCount();
+    executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState);
+    
+    return length + 1;
+    
+  } catch (error) {
+    console.error('Error parsing Execute message:', error);
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Execute message format');
+    return length + 1;
   }
+}
+
+/**
+ * Processes Sync messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processSync(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  console.log('Sync: Transaction sync point');
+  
+  // Clear unnamed prepared statements and portals
+  connState.clearUnnamed();
+  
+  sendReadyForQuery(socket, connState);
+  return length + 1;
+}
+
+/**
+ * Additional Protocol Handlers
+ */
+
+/**
+ * Processes Password messages (for authentication)
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processPasswordMessage(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  // Extract password (null-terminated)
+  const password = buffer.slice(5, length).toString('utf8').replace(/\0$/, '');
+  
+  console.log(`Password message received for user: ${connState.getCurrentUser()}`);
+  
+  // In a real implementation, we'd validate the password
+  // For now, just accept any password
+  sendAuthenticationOK(socket);
+  sendParameterStatus(socket, connState);
+  sendBackendKeyData(socket, connState);
+  sendReadyForQuery(socket, connState);
+  
+  return length + 1;
+}
+
+/**
+ * Processes COPY Data messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processCopyData(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  // Extract copy data
+  const data = buffer.slice(5, length + 1);
+  
+  console.log(`Copy data received: ${data.length} bytes`);
+  
+  // In a real implementation, we'd process the copy data
+  // For now, just acknowledge receipt
+  
+  return length + 1;
+}
+
+/**
+ * Processes COPY Done messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processCopyDone(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  console.log('Copy done received');
+  
+  // In a real implementation, we'd finalize the copy operation
+  // For now, just send command complete
+  const { sendCommandComplete } = require('./messageBuilders');
+  sendCommandComplete(socket, 'COPY 0');
+  
+  return length + 1;
+}
+
+/**
+ * Processes COPY Fail messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processCopyFail(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  // Extract error message
+  const errorMessage = buffer.slice(5, length).toString('utf8').replace(/\0$/, '');
+  
+  console.log(`Copy failed: ${errorMessage}`);
+  
+  // Send error response
+  sendErrorResponse(socket, ERROR_CODES.DATA_EXCEPTION, `COPY failed: ${errorMessage}`);
+  
+  return length + 1;
+}
+
+/**
+ * Processes Function Call messages
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processFunctionCall(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+  
+  console.log('Function call received (not implemented)');
+  
+  // Send error - function call not supported
+  sendErrorResponse(socket, ERROR_CODES.FEATURE_NOT_SUPPORTED, 'Function call protocol not supported');
+  
+  return length + 1;
 }
 
 module.exports = {
-  ConnectionState,
-  ConnectionManager
+  processMessage,
+  processStartupMessage,
+  processRegularMessage,
+  processSimpleQuery,
+  processParse,
+  processBind,
+  processDescribe,
+  processExecute,
+  processSync,
+  processPasswordMessage,
+  processCopyData,
+  processCopyDone,
+  processCopyFail,
+  processFunctionCall,
+  handleSSLRequest,
+  handleCancelRequest,
+  handleStartupPacket,
+  handleTerminate
 };

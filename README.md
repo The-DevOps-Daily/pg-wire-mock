@@ -1,393 +1,286 @@
 # pg-wire-mock
 
-A mock PostgreSQL server that speaks just enough of the wire protocol to connect with `psql`. Built for learning and experimenting with the PostgreSQL wire protocol.
+A comprehensive mock PostgreSQL server that implements the PostgreSQL wire protocol for learning, testing, and development purposes.
 
-## Quick Introduction to the PostgreSQL Wire Protocol
+## 🌟 Features
 
-PostgreSQL uses a custom message-based protocol for communication between clients and the server. This protocol is supported over TCP/IP and also over Unix-domain sockets. The current version of the protocol is 3.0.
+- **Complete PostgreSQL Wire Protocol v3.0 Support**
+  - Authentication flow with parameter negotiation
+  - Simple and extended query protocols  
+  - Transaction management (BEGIN/COMMIT/ROLLBACK)
+  - Prepared statements and portals
+  - Error handling with proper SQLSTATE codes
 
-This project implements a minimal subset of the protocol, allowing you to experiment with it and learn how it works by building a mock server that can communicate with standard PostgreSQL clients like `psql`.
+- **Comprehensive Query Support**
+  - SELECT queries with various functions
+  - SHOW commands for server information  
+  - DDL commands (CREATE/DROP - mock responses)
+  - DML commands (INSERT/UPDATE/DELETE - mock responses)
+  - Transaction control statements
 
-## Introduction
+- **Production-Ready Architecture**
+  - Modular, well-organized codebase
+  - Connection management and pooling
+  - Configurable logging and monitoring
+  - Statistics and performance tracking
+  - Graceful shutdown handling
 
-PostgreSQL is a powerful, open-source relational database management system (RDBMS) that is widely used for handling large amounts of data efficiently. The PostgreSQL wire protocol is the communication language between PostgreSQL clients and servers.
+## 🚀 Quick Start
 
-In this repository, we'll explore the wire protocol in detail by building a mock implementation. We'll be using the `psql` command-line utility to interact with our mock server, observing how queries are transmitted over the network and how results are returned.
+### Installation
 
-## Frontend/Backend Protocol
+```bash
+# Clone the repository
+git clone https://github.com/The-DevOps-Daily/pg-wire-mock.git
+cd pg-wire-mock
 
-The protocol that clients and servers use to communicate is called the "Frontend/Backend Protocol."
+# Install dependencies (none required for basic usage!)
+npm install
 
-A typical message in the PostgreSQL message-based protocol follows this structure:
+# Start the server
+npm start
+```
+
+### Using the Server
+
+```bash
+# Start with default settings (port 5432)
+npm start
+
+# Start on a different port
+npm run start:port  # Uses port 5433
+
+# Start with debug logging
+npm run dev
+
+# Start quietly (no logging)
+npm run start:quiet
+
+# Start listening on all interfaces
+npm run start:all
+```
+
+### Connect with psql
+
+```bash
+psql -h localhost -p 5432 -U postgres
+```
+
+### Try Some Queries
+
+```sql
+-- Basic queries
+SELECT 1;
+SELECT VERSION();
+SELECT NOW();
+SELECT CURRENT_USER;
+
+-- Server information
+SHOW DOCS;
+SHOW SERVER_VERSION;
+SHOW TIMEZONE;
+
+-- Transaction management
+BEGIN;
+SELECT 42;
+COMMIT;
+```
+
+## 📖 Architecture
+
+The server is built with a clean, modular architecture:
 
 ```
-char tag | int32 len | payload
+pg-wire-mock/
+├── server.js                           # Main entry point and CLI
+├── src/
+│   ├── server/
+│   │   └── serverManager.js            # TCP server and connection management
+│   ├── protocol/
+│   │   ├── messageProcessors.js        # Protocol message handling
+│   │   ├── messageBuilders.js          # Protocol message construction
+│   │   ├── constants.js                # Protocol constants and types
+│   │   └── utils.js                    # Protocol utilities
+│   ├── handlers/
+│   │   └── queryHandlers.js            # SQL query processing
+│   ├── connection/
+│   │   └── connectionState.js          # Connection state management
+│   └── config/
+│       └── serverConfig.js             # Configuration management
+├── package.json
+├── CONTRIBUTING.md
+├── LICENSE
+└── README.md
 ```
 
-- The first byte is the message type (a single character)
-- Followed by a 4-byte message length
-- Followed by the payload data
+### Key Components
 
-### Common Message Types
+- **ServerManager**: TCP server lifecycle, connection management, statistics
+- **Message Processors**: Handle incoming protocol messages
+- **Message Builders**: Construct outgoing protocol responses  
+- **Query Handlers**: Process SQL queries and generate results
+- **Connection State**: Track connection parameters and transaction state
+- **Configuration**: Centralized configuration with environment variable support
 
-Here are some of the most common message types:
+## ⚙️ Configuration
 
-- 'R': Authentication
-- 'Q': Query
-- 'X': Terminate
-- 'Z': Ready for Query
-- 'P': Parse
-- 'B': Bind
-- 'E': Error
-- 'C': Command Complete
-- 'D': Data Row
-- 'T': Row Description
-- 'N': Notice Response
+### Command Line Options
 
-For a detailed description of all message types, see the [PostgreSQL wire protocol documentation](https://www.postgresql.org/docs/current/protocol-flow.html).
+```bash
+node server.js [options]
 
-## Authentication Flow
+Options:
+  -p, --port <port>              Port to listen on (default: 5432)
+  -h, --host <host>              Host to bind to (default: localhost)
+  --max-connections <num>        Max concurrent connections (default: 100)
+  --log-level <level>            Log level: error, warn, info, debug (default: info)
+  -q, --quiet                    Disable logging
+  --help                         Show help message
+  --version                      Show version information
+```
 
-The authentication flow between the client and server is as follows:
+### Environment Variables
 
-![Postgres protocol - auth flow](https://user-images.githubusercontent.com/21223421/178289606-4a0d4601-b14d-410c-887c-efa235755d55.png)
+```bash
+# Server settings
+export PG_MOCK_PORT=5432
+export PG_MOCK_HOST=localhost
+export PG_MOCK_MAX_CONNECTIONS=100
+export PG_MOCK_CONNECTION_TIMEOUT=300000
 
-If authentication is required, the server sends an `AuthenticationRequest`. There are several authentication types that can be requested, including plain-text passwords and MD5-encrypted passwords.
+# Logging settings
+export PG_MOCK_ENABLE_LOGGING=true
+export PG_MOCK_LOG_LEVEL=info
 
-Once authentication is complete (or if no auth is necessary), the server sends an `AuthenticationOK` message.
+# Database settings
+export PG_MOCK_SERVER_VERSION="13.0 (Mock)"
+export PG_MOCK_DEFAULT_DATABASE=postgres
+export PG_MOCK_DEFAULT_USER=postgres
+export PG_MOCK_DEFAULT_TIMEZONE=UTC
+```
 
-### Authentication Request Packet
+View current configuration:
+```bash
+npm run config
+```
 
-The authentication request packet consists of the following fields:
+## 🔧 Development
 
-| | | | |
-|-|-|-|-|
-| 'R' | int32 len | int32 method | optional other |
+### Project Structure
 
-Using Wireshark to inspect an `AuthenticationRequest` packet:
+The codebase follows a clean architecture pattern:
 
-![Authentication request inspected with WireShark](https://user-images.githubusercontent.com/21223421/178292228-ff6ab5cd-db4b-42c7-b4cb-055d70e463af.png)
+1. **Presentation Layer** (`server.js`): CLI interface and application entry point
+2. **Infrastructure Layer** (`src/server/`): TCP server management  
+3. **Protocol Layer** (`src/protocol/`): PostgreSQL wire protocol implementation
+4. **Application Layer** (`src/handlers/`): Business logic for query processing
+5. **Domain Layer** (`src/connection/`): Connection state and lifecycle management
+6. **Configuration Layer** (`src/config/`): Application configuration
 
-### Implementation in JavaScript
+### Adding New Features
 
-To mimic the authentication flow in Node.js:
+1. **New Query Types**: Add handlers in `src/handlers/queryHandlers.js`
+2. **New Protocol Messages**: Add processors in `src/protocol/messageProcessors.js` and builders in `src/protocol/messageBuilders.js`
+3. **New Configuration**: Update `src/config/serverConfig.js`
+4. **New Connection Features**: Extend `src/connection/connectionState.js`
+
+### Code Quality
+
+- **Modular Design**: Each module has a single responsibility
+- **Comprehensive Documentation**: JSDoc comments throughout
+- **Error Handling**: Proper error responses with SQLSTATE codes
+- **Logging**: Configurable logging with structured output
+- **Configuration**: Environment-based configuration with validation
+
+## 📊 Monitoring and Statistics
+
+The server provides detailed statistics and monitoring:
 
 ```javascript
-function authOk() {
-  let buf = Buffer.from("R");
-  buf = Buffer.concat([buf, Buffer.from([0, 0, 0, 8])]);
-  buf = Buffer.concat([buf, Buffer.from([0, 0, 0, 0])]);
-  buf = readyForQuery(buf);
-  return buf;
-}
+// Access server statistics (when running programmatically)
+const stats = server.getStats();
+console.log(stats);
+// {
+//   connectionsAccepted: 42,
+//   messagesProcessed: 156,
+//   queriesExecuted: 89,
+//   uptime: 3600000,
+//   activeConnections: 3
+// }
 ```
 
-## Simple Query Flow
+## 🐞 Debugging
 
-A standard query cycle starts with the client sending a `Query` message to the server. The query flow is as follows:
+Enable debug logging to see detailed protocol information:
 
-1. The client sends an SQL command (starting with 'Q')
-2. The server replies with `RowDescription` ('T') detailing the result structure
-3. The server sends `DataRow` ('D') messages for each row in the result
-4. Finally, the server sends `CommandComplete` ('C') and `ReadyForQuery` ('Z')
+```bash
+# Start with debug logging
+npm run dev
 
-Here's a visual representation of the query flow:
-
-![Postgres protocol - simple query flow](https://user-images.githubusercontent.com/21223421/178294158-ac9d8591-7224-4480-8a3d-024e2cd80782.png)
-
-Let's examine each message type in detail:
-
-### Query Message ('Q')
-
-The Query message structure:
-
-```
-'Q' | int32 len | char[len] query
+# Or set environment variable
+PG_MOCK_LOG_LEVEL=debug npm start
 ```
 
-In Wireshark, a query packet looks like:
+Debug logging shows:
+- Individual protocol messages
+- Connection state changes
+- Query processing steps
+- Buffer management details
+- Performance statistics
 
-![Postgres protocol simple query packet](https://user-images.githubusercontent.com/21223421/178294620-8f46d06f-9791-4e68-b78b-7d6ae26c7394.png)
+## 📚 Learning the Protocol
 
-To parse a Query message in Node.js:
+This project is an excellent way to understand the PostgreSQL wire protocol:
 
-```javascript
-function QueryParser(query) {
-  // Check if the query packet starts with 'Q'
-  if (chunk[0] === "Q".charCodeAt(0)) {
-    // Remove the binary prefix 'Q' and the length bytes from the query:
-    query = query.toString("utf8").substring(5);
-    // Remove the last byte from the query:
-    query = query.substring(0, query.length - 1);
-    return query.trim().toUpperCase();
-  }
-}
-```
+1. **Start Simple**: Run the server and connect with psql
+2. **Enable Debug Logging**: See exactly what messages are exchanged
+3. **Try Different Queries**: Observe how different SQL commands are handled
+4. **Examine the Code**: Follow a query from TCP socket to SQL response
+5. **Use Wireshark**: Capture packets to see the binary protocol
 
-Handling different queries:
+### Useful Resources
 
-```javascript
-function HandleQuery(query) {
-  switch (query) {
-    case "SELECT 1;":
-      values = ["1"];
-      return values;
-    case "SHOW DOCS;":
-      values = ["https://postgresql.org/docs"];
-      return values;
-    default:
-      values = ["Hello, world!"];
-      return values;
-  }
-}
-```
+- [PostgreSQL Wire Protocol Documentation](https://www.postgresql.org/docs/current/protocol.html)
+- [Protocol Flow Diagrams](https://www.postgresql.org/docs/current/protocol-flow.html)
+- [Message Format Reference](https://www.postgresql.org/docs/current/protocol-message-formats.html)
 
-### RowDescription Message ('T')
+## 🤝 Contributing
 
-The `RowDescription` message describes the structure of the result set:
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-```
-'T' | int32 len | int16 numfields | str col | int32 tableoid | int16 colno | int32 typeoid | int16 typelen | int32 typmod | int16 format
-```
+### Development Workflow
 
-For each field, it includes:
-- Column name
-- Table object ID
-- Column number
-- Data type object ID
-- Data type size
-- Type modifier
-- Format code (text/binary)
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes following the existing architecture
+4. Test with various PostgreSQL clients
+5. Submit a pull request
 
-In Wireshark:
+### Areas for Contribution
 
-![Postgres RowDescription packet inspected with Wireshark](https://user-images.githubusercontent.com/21223421/178294947-1adab49f-75bb-436d-9cc8-7ae17aca210b.png)
+- Additional SQL query types and functions
+- Enhanced protocol message support
+- Performance optimizations
+- Test coverage improvements
+- Documentation enhancements
+- Bug fixes and edge case handling
 
-Implementation in Node.js:
-
-```javascript
-function RowDescription(fields) {
-  rowDescriptionType = Buffer.from("T");
-  emptyLenght = Buffer.from([-1, -1, -1, -1]); // -1 means that the length of the message is not known yet.
-
-  buf = Buffer.from([0, fields.length]);
-  for (let i = 0; i < fields.length; i++) {
-    buf = Buffer.concat([buf, Buffer.from(fields[i].name)]);
-    buf = Buffer.concat([buf, Buffer.from([0])]);
-    buf = Buffer.concat([buf, Buffer.from([0, 0, 0, fields[i].tableOID])]);
-    buf = Buffer.concat([
-      buf,
-      Buffer.from([0, fields[i].tableAttributeNumber]),
-    ]);
-    buf = Buffer.concat([buf, Buffer.from([0, 0, 0, fields[i].dataTypeOID])]);
-    buf = Buffer.concat([
-      buf,
-      Buffer.from([fields[i].dataTypeSize, fields[i].dataTypeSize]),
-    ]);
-    buf = Buffer.concat([
-      buf,
-      Buffer.from([-1, -1, -1, fields[i].typeModifier]),
-    ]);
-    buf = Buffer.concat([buf, Buffer.from([0, fields[i].format])]);
-  }
-  final = Buffer.concat([
-    rowDescriptionType,
-    Buffer.from([0, 0, 0, buf.length + rowDescriptionType.length + 3]),
-  ]);
-  final = Buffer.concat([final, buf]);
-
-  return final;
-}
-```
-
-### DataRow Message ('D')
-
-The `DataRow` message contains the actual data for a single row:
-
-```
-'D' | int32 len | int16 numfields | int32 fieldlen | char[fieldlen] data ...
-```
-
-In Wireshark:
-
-![Postgres protocol data row packet inspected](https://user-images.githubusercontent.com/21223421/178295136-cbe1223b-8ca4-4e6b-9316-0375d12ce456.png)
-
-### CommandComplete Message ('C')
-
-The `CommandComplete` message indicates that the query is complete:
-
-```
-'C' | int32 len | str tag
-```
-
-In Wireshark:
-
-![Postgres protocol command complete packet inspected](https://user-images.githubusercontent.com/21223421/178295697-e627a9cd-074c-47b7-abb5-dbbb70d0442f.png)
-
-Implementation in Node.js:
-
-```javascript
-function CommandComplete(buf) {
-  buf = Buffer.concat([buf, Buffer.from("C")]);
-  buf = Buffer.concat([buf, Buffer.from([0, 0, 0, 13])]);
-  buf = Buffer.concat([buf, Buffer.from("SELECT 1")]);
-  buf = Buffer.concat([buf, Buffer.from([0])]);
-  return buf;
-}
-```
-
-### ReadyForQuery Message ('Z')
-
-The `ReadyForQuery` message indicates that the server is ready for another query:
-
-```
-'Z' | int32 len | 'I' or 'T' or 'E'
-```
-
-The status byte indicates:
-- 'I': Idle (not in a transaction)
-- 'T': In a transaction
-- 'E': In a failed transaction
-
-In Wireshark:
-
-![Postgres protocol ready for query packet inspected](https://user-images.githubusercontent.com/21223421/178295926-3ef33f78-796f-4850-b866-dea4d3b66b45.png)
-
-Implementation in Node.js:
-
-```javascript
-function readyForQuery(ready) {
-  ready = Buffer.concat([ready, Buffer.from("Z")]);
-  ready = Buffer.concat([ready, Buffer.from([0, 0, 0, 5])]);
-  ready = Buffer.concat([ready, Buffer.from("I")]);
-  return ready;
-}
-```
-
-## Complete Server Example
-
-Here's a simple implementation of a mock PostgreSQL server using Node.js:
-
-```javascript
-const Net = require("net");
-
-// The port on which the server is listening.
-const port = 5432;
-
-// Create a new TCP server.
-const server = new Net.Server();
-
-// The server listens to a socket for a client to make a connection request.
-server.listen(port, function () {
-  console.log(
-    `Server listening for connection requests on socket localhost:${port}`
-  );
-});
-
-// When a client requests a connection with the server, the server creates a new socket dedicated to that client.
-server.on("connection", function (socket) {
-  console.log("A new connection has been established.");
-  // Send an authentication OK message to the client
-  buf = authOk();
-  socket.write(buf);
-
-  // Basic query flow
-  socket.on("data", function (chunk) {
-    // If starts with 'Q', it's a query:
-    if (chunk[0] === "Q".charCodeAt(0)) {
-      // Values for the RowDescription message:
-      const fields = [
-        { name: "Output", tableOID: 0, tableAttributeNumber: 0, dataTypeOID: 25, dataTypeSize: -1, typeModifier: -1, format: 0 },
-      ];
-
-      // Prepare the RowDescription message:
-      let buf = RowDescription(fields);
-
-      // Parse the query to string:
-      let query = QueryParser(chunk);
-
-      // Case statement to check the query and return the correct response:
-      let values = HandleQuery(query)
-
-      // Prepare the DataRow message concatenated with the RowDescription message:
-      buf = Buffer.concat([buf, DataRow(values)]);
-
-      // Prepare the CommandComplete message:
-      buf = Buffer.concat([buf, CommandComplete(buf)]);
-
-      // readyForQuery concatenated with the message:
-      buf = Buffer.concat([buf, readyForQuery(buf)]);
-
-      socket.write(buf);
-    } else {
-      // Ready for Query:
-      buf = readyForQuery(buf);
-    }
-  });
-
-  socket.on("end", function () {
-    console.log("Closing connection with the client");
-  });
-
-  socket.on("error", function (err) {
-    console.log(`Error: ${err}`);
-  });
-});
-```
-
-## Getting Started
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/username/pg-wire-mock.git
-   cd pg-wire-mock
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Run the server:
-   ```bash
-   node server.js
-   ```
-
-4. Connect using `psql`:
-   ```bash
-   psql -h localhost -p 5432 -U postgres
-   ```
-
-## Project Roadmap
-
-This project aims to implement the following parts of the PostgreSQL wire protocol:
-
-- Basic authentication flow
-- Simple query handling
-- Support for prepared statements
-- Common PostgreSQL client commands
-
-For a detailed list of planned features, see the GitHub issues.
-
-## Contributing
-
-Contributions are welcome! Please check out the [Contributing Guide](CONTRIBUTING.md) for guidelines about how to proceed.
-
-## Learning the Protocol
-
-A great way to get a better understanding of the protocol is to:
-
-1. Install Wireshark and inspect the packets sent between client and server
-2. Review the [PostgreSQL protocol documentation](https://www.postgresql.org/docs/current/protocol.html)
-3. Examine the implemented messages in this repository
-
-## References
-
-- [PostgreSQL Wire Protocol Documentation](https://www.postgresql.org/docs/current/protocol-flow.html)
-- [A look at the PostgreSQL wire protocol](https://www.pgcon.org/2014/schedule/attachments/330_postgres-for-the-wire.pdf)
-- [How does PostgreSQL actually work](https://www.youtube.com/watch?v=OeKbL55OyL0)
-- [Package pgproto3 (Go implementation)](https://github.com/jackc/pgproto3/)
-
-## License
+## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- PostgreSQL community for excellent protocol documentation
+- Node.js community for robust TCP server capabilities
+- All contributors who help improve this educational tool
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/The-DevOps-Daily/pg-wire-mock/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/The-DevOps-Daily/pg-wire-mock/discussions)
+- **Documentation**: [Protocol Documentation](https://www.postgresql.org/docs/current/protocol.html)
+
+---
+
+**Happy learning!** 🎓 This project aims to make the PostgreSQL wire protocol approachable and understandable for developers, students, and database enthusiasts.
