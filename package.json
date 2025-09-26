@@ -12,10 +12,15 @@
     "start:quiet": "node server.js --quiet",
     "start:port": "node server.js --port 5433",
     "start:all": "node server.js --host 0.0.0.0 --port 5432",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "echo \"No linting configured\"",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "format": "prettier --write 'src/**/*.js' 'server.js'",
     "docs": "node -e \"console.log(require('./src/config/serverConfig').getConfigDocumentation())\"",
-    "config": "node -e \"const cfg = require('./src/config/serverConfig').loadConfig(); console.log(JSON.stringify(cfg, null, 2))\""
+    "config": "node -e \"const cfg = require('./src/config/serverConfig').loadConfig(); console.log(JSON.stringify(cfg, null, 2))\"",
+    "prepare": "husky install"
   },
   "keywords": [
     "postgresql",
@@ -40,5 +45,14 @@
   "bugs": {
     "url": "https://github.com/The-DevOps-Daily/pg-wire-mock/issues"
   },
-  "homepage": "https://github.com/The-DevOps-Daily/pg-wire-mock#readme"
+  "homepage": "https://github.com/The-DevOps-Daily/pg-wire-mock#readme",
+  "devDependencies": {
+    "@commitlint/cli": "^18.0.0",
+    "@commitlint/config-conventional": "^18.0.0",
+    "eslint": "^8.51.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.3",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.0.1"
+  }
 }
