@@ -48,23 +48,17 @@ const {
   executeQuery
 } = require("./src/handlers/queryHandlers");
 
+// Import connection state management
+const {
+  ConnectionState
+} = require("./src/connection/connectionState");
+
 // The port on which the server is listening.
 const port = 5432;
 
 // Create a new TCP server.
 const server = new Net.Server();
 
-// Connection state tracking
-class ConnectionState {
-  constructor() {
-    this.authenticated = false;
-    this.protocolVersion = null;
-    this.parameters = new Map();
-    this.transactionStatus = TRANSACTION_STATUS.IDLE;
-    this.backendPid = process.pid;
-    this.backendSecret = generateBackendSecret();
-  }
-}
 
 // The server listens to a socket for a client to make a connection request.
 server.listen(port, function () {
@@ -75,9 +69,9 @@ server.listen(port, function () {
 
 // When a client requests a connection with the server, the server creates a new socket dedicated to that client.
 server.on("connection", function (socket) {
-  console.log("New connection established from:", socket.remoteAddress);
-  
   const connState = new ConnectionState();
+  console.log(`New connection established from: ${socket.remoteAddress}`);
+  
   let buffer = Buffer.alloc(0);
 
   // Handle incoming data
@@ -99,10 +93,12 @@ server.on("connection", function (socket) {
 
   socket.on("end", function () {
     console.log("Client disconnected");
+    connState.close();
   });
 
   socket.on("error", function (err) {
     console.log(`Socket Error: ${err}`);
+    connState.close();
   });
 });
 
@@ -141,15 +137,16 @@ function processStartupMessage(buffer, socket, connState) {
 
   // Handle regular startup packet
   if (protocolVersion === PROTOCOL_VERSION_3_0) {
-    connState.protocolVersion = protocolVersion;
-    
     // Parse parameters from startup packet using utility function
-    connState.parameters = parseParameters(buffer, 8, length);
+    const parameters = parseParameters(buffer, 8, length);
     
-    // Log parsed parameters
-    for (const [key, value] of connState.parameters) {
-      console.log(`Startup parameter: ${key} = ${value}`);
+    // Set connection parameters
+    for (const [key, value] of parameters) {
+      connState.setParameter(key, value);
     }
+
+    // Authenticate the connection
+    connState.authenticate(protocolVersion);
 
     // Send authentication sequence
     sendAuthenticationOK(socket);
@@ -157,7 +154,6 @@ function processStartupMessage(buffer, socket, connState) {
     sendBackendKeyData(socket, connState);
     sendReadyForQuery(socket, connState);
     
-    connState.authenticated = true;
     return length;
   }
 
@@ -207,14 +203,15 @@ function processSimpleQuery(buffer, socket, connState) {
   
   console.log(`Executing simple query: ${query}`);
 
+  // Increment query counter
+  connState.incrementQueryCount();
+
   // Execute the query string (handles multiple statements)
   executeQueryString(query, socket, connState);
 
   sendReadyForQuery(socket, connState);
   return length + 1;
 }
-
-
 function handleQuery(query) {
   console.log(`Processing query: ${query}`);
   
@@ -270,8 +267,6 @@ function handleQuery(query) {
   }
 }
 
-
-
 function processDescribe(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
   // For simplicity, send a basic row description
@@ -282,6 +277,7 @@ function processDescribe(buffer, socket, connState) {
 function processExecute(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
   // Basic execution - send some data using query handler
+  connState.incrementQueryCount();
   executeQuery("SELECT 'Extended query result'", socket, connState);
   return length + 1;
 }
