@@ -3,19 +3,9 @@
  * Functions for building and sending protocol messages to clients
  */
 
-const {
-  MESSAGE_TYPES,
-  DATA_TYPES,
-  DEFAULT_SERVER_PARAMETERS,
-  ERROR_SEVERITY
-} = require('./constants');
+const { MESSAGE_TYPES, DATA_TYPES, ERROR_SEVERITY } = require('./constants');
 
-const {
-  createMessage,
-  createPayload,
-  createErrorFields,
-  writeCString
-} = require('./utils');
+const { createMessage, createPayload, createErrorFields, writeCString } = require('./utils');
 
 /**
  * Authentication and Connection Messages
@@ -28,7 +18,7 @@ const {
 function sendAuthenticationOK(socket) {
   const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, createPayload(0));
   socket.write(message);
-  console.log("Sent AuthenticationOK");
+  console.log('Sent AuthenticationOK');
 }
 
 /**
@@ -57,7 +47,7 @@ function sendParameterStatus(socket, connState) {
     const message = createMessage(MESSAGE_TYPES.PARAMETER_STATUS, createPayload(name, value));
     socket.write(message);
   }
-  console.log("Sent ParameterStatus messages");
+  console.log('Sent ParameterStatus messages');
 }
 
 /**
@@ -69,7 +59,9 @@ function sendBackendKeyData(socket, connState) {
   const payload = createPayload(connState.backendPid, connState.backendSecret);
   const message = createMessage(MESSAGE_TYPES.BACKEND_KEY_DATA, payload);
   socket.write(message);
-  console.log(`Sent BackendKeyData (PID: ${connState.backendPid}, Secret: ${connState.backendSecret})`);
+  console.log(
+    `Sent BackendKeyData (PID: ${connState.backendPid}, Secret: ${connState.backendSecret})`,
+  );
 }
 
 /**
@@ -96,30 +88,35 @@ function sendReadyForQuery(socket, connState) {
 function sendRowDescription(socket, columns) {
   let payload = Buffer.alloc(2);
   payload.writeInt16BE(columns.length, 0); // Number of fields
-  
+
   const columnBuffers = [];
-  
+
   for (const col of columns) {
     const nameBuffer = writeCString(col.name || 'column');
-    
+
     // Create field metadata buffer (18 bytes after name)
     const metadataBuffer = Buffer.alloc(18);
     let offset = 0;
-    
-    metadataBuffer.writeInt32BE(col.tableOID || 0, offset); offset += 4;        // Table OID
-    metadataBuffer.writeInt16BE(col.tableAttributeNumber || 0, offset); offset += 2; // Column number
-    metadataBuffer.writeInt32BE(col.dataTypeOID || DATA_TYPES.TEXT, offset); offset += 4; // Data type OID
-    metadataBuffer.writeInt16BE(col.dataTypeSize || -1, offset); offset += 2;   // Data type size
-    metadataBuffer.writeInt32BE(col.typeModifier || -1, offset); offset += 4;   // Type modifier
-    metadataBuffer.writeInt16BE(col.format || 0, offset);       // Format (0=text, 1=binary)
-    
+
+    metadataBuffer.writeInt32BE(col.tableOID || 0, offset);
+    offset += 4; // Table OID
+    metadataBuffer.writeInt16BE(col.tableAttributeNumber || 0, offset);
+    offset += 2; // Column number
+    metadataBuffer.writeInt32BE(col.dataTypeOID || DATA_TYPES.TEXT, offset);
+    offset += 4; // Data type OID
+    metadataBuffer.writeInt16BE(col.dataTypeSize || -1, offset);
+    offset += 2; // Data type size
+    metadataBuffer.writeInt32BE(col.typeModifier || -1, offset);
+    offset += 4; // Type modifier
+    metadataBuffer.writeInt16BE(col.format || 0, offset); // Format (0=text, 1=binary)
+
     columnBuffers.push(Buffer.concat([nameBuffer, metadataBuffer]));
   }
 
   payload = Buffer.concat([payload, ...columnBuffers]);
   const message = createMessage(MESSAGE_TYPES.ROW_DESCRIPTION, payload);
   socket.write(message);
-  
+
   console.log(`Sent RowDescription for ${columns.length} columns`);
 }
 
@@ -153,7 +150,7 @@ function sendDataRow(socket, values) {
   payload = Buffer.concat([payload, ...valueBuffers]);
   const message = createMessage(MESSAGE_TYPES.DATA_ROW, payload);
   socket.write(message);
-  
+
   console.log(`Sent DataRow with ${values.length} values`);
 }
 
@@ -175,7 +172,7 @@ function sendCommandComplete(socket, tag) {
 function sendEmptyQueryResponse(socket) {
   const message = createMessage(MESSAGE_TYPES.EMPTY_QUERY_RESPONSE);
   socket.write(message);
-  console.log("Sent EmptyQueryResponse");
+  console.log('Sent EmptyQueryResponse');
 }
 
 /**
@@ -188,20 +185,67 @@ function sendEmptyQueryResponse(socket) {
  * @param {string} code - SQLSTATE error code
  * @param {string} message - Error message
  * @param {Object} additionalFields - Additional error fields (optional)
+ * @param {Object} options - Additional options for error handling
+ * @param {string} options.severity - Error severity (default: ERROR)
+ * @param {string} options.detail - Detailed error explanation
+ * @param {string} options.hint - Suggestion for fixing the error
+ * @param {string} options.position - Position in query string where error occurred
+ * @param {string} options.internalPosition - Position in internal query
+ * @param {string} options.internalQuery - Text of internal query
+ * @param {string} options.context - Context in which error occurred
+ * @param {string} options.schema - Schema name
+ * @param {string} options.table - Table name
+ * @param {string} options.column - Column name
+ * @param {string} options.dataType - Data type name
+ * @param {string} options.constraint - Constraint name
+ * @param {string} options.file - Source file where error was raised
+ * @param {string} options.line - Line number in source file
+ * @param {string} options.routine - Routine that raised error
  */
-function sendErrorResponse(socket, code, message, additionalFields = {}) {
+function sendErrorResponse(socket, code, message, additionalFields = {}, options = {}) {
+  // Start with the required error fields
   const errorFields = {
-    'S': ERROR_SEVERITY.ERROR,
-    'C': code,
-    'M': message,
-    ...additionalFields
+    S: options.severity || ERROR_SEVERITY.ERROR,
+    C: code,
+    M: message,
+    ...additionalFields,
   };
-  
+
+  // Add optional detailed fields if provided
+  const detailedFields = [
+    { key: 'D', value: options.detail }, // Detail
+    { key: 'H', value: options.hint }, // Hint
+    { key: 'P', value: options.position }, // Position
+    { key: 'p', value: options.internalPosition }, // Internal position
+    { key: 'q', value: options.internalQuery }, // Internal query
+    { key: 'W', value: options.context }, // Where (context)
+    { key: 's', value: options.schema }, // Schema name
+    { key: 't', value: options.table }, // Table name
+    { key: 'c', value: options.column }, // Column name
+    { key: 'd', value: options.dataType }, // Data type
+    { key: 'n', value: options.constraint }, // Constraint
+    { key: 'F', value: options.file }, // File
+    { key: 'L', value: options.line }, // Line
+    { key: 'R', value: options.routine }, // Routine
+  ];
+
+  // Add fields that have values
+  detailedFields.forEach(field => {
+    if (field.value) {
+      errorFields[field.key] = field.value;
+    }
+  });
+
   const errorFieldsBuffer = createErrorFields(errorFields);
   const errorMessage = createMessage(MESSAGE_TYPES.ERROR_RESPONSE, errorFieldsBuffer);
   socket.write(errorMessage);
-  
+
   console.log(`Sent ErrorResponse: ${code} - ${message}`);
+
+  // Log additional details for debugging if present
+  if (options.detail || options.hint) {
+    console.log(`Error detail: ${options.detail || 'N/A'}, hint: ${options.hint || 'N/A'}`);
+  }
 }
 
 /**
@@ -212,15 +256,15 @@ function sendErrorResponse(socket, code, message, additionalFields = {}) {
  */
 function sendNoticeResponse(socket, message, additionalFields = {}) {
   const noticeFields = {
-    'S': ERROR_SEVERITY.NOTICE,
-    'M': message,
-    ...additionalFields
+    S: ERROR_SEVERITY.NOTICE,
+    M: message,
+    ...additionalFields,
   };
-  
+
   const noticeFieldsBuffer = createErrorFields(noticeFields);
   const noticeMessage = createMessage(MESSAGE_TYPES.NOTICE_RESPONSE, noticeFieldsBuffer);
   socket.write(noticeMessage);
-  
+
   console.log(`Sent NoticeResponse: ${message}`);
 }
 
@@ -235,7 +279,7 @@ function sendNoticeResponse(socket, message, additionalFields = {}) {
 function sendParseComplete(socket) {
   const message = createMessage(MESSAGE_TYPES.PARSE_COMPLETE);
   socket.write(message);
-  console.log("Sent ParseComplete");
+  console.log('Sent ParseComplete');
 }
 
 /**
@@ -245,7 +289,7 @@ function sendParseComplete(socket) {
 function sendBindComplete(socket) {
   const message = createMessage(MESSAGE_TYPES.BIND_COMPLETE);
   socket.write(message);
-  console.log("Sent BindComplete");
+  console.log('Sent BindComplete');
 }
 
 /**
@@ -256,13 +300,13 @@ function sendBindComplete(socket) {
 function sendParameterDescription(socket, paramTypes = []) {
   let payload = Buffer.alloc(2);
   payload.writeInt16BE(paramTypes.length, 0); // Number of parameters
-  
+
   for (const paramType of paramTypes) {
     const typeBuffer = Buffer.alloc(4);
     typeBuffer.writeInt32BE(paramType, 0);
     payload = Buffer.concat([payload, typeBuffer]);
   }
-  
+
   const message = createMessage(MESSAGE_TYPES.PARAMETER_DESCRIPTION, payload);
   socket.write(message);
   console.log(`Sent ParameterDescription for ${paramTypes.length} parameters`);
@@ -275,7 +319,7 @@ function sendParameterDescription(socket, paramTypes = []) {
 function sendNoData(socket) {
   const message = createMessage(MESSAGE_TYPES.NO_DATA);
   socket.write(message);
-  console.log("Sent NoData");
+  console.log('Sent NoData');
 }
 
 /**
@@ -285,7 +329,7 @@ function sendNoData(socket) {
 function sendPortalSuspended(socket) {
   const message = createMessage(MESSAGE_TYPES.PORTAL_SUSPENDED);
   socket.write(message);
-  console.log("Sent PortalSuspended");
+  console.log('Sent PortalSuspended');
 }
 
 /**
@@ -300,15 +344,15 @@ function sendPortalSuspended(socket) {
  */
 function sendCopyInResponse(socket, format = 0, columnFormats = []) {
   let payload = Buffer.alloc(3);
-  payload.writeInt8(format, 0);                    // Overall format
-  payload.writeInt16BE(columnFormats.length, 1);   // Number of columns
-  
+  payload.writeInt8(format, 0); // Overall format
+  payload.writeInt16BE(columnFormats.length, 1); // Number of columns
+
   for (const colFormat of columnFormats) {
     const formatBuffer = Buffer.alloc(2);
     formatBuffer.writeInt16BE(colFormat, 0);
     payload = Buffer.concat([payload, formatBuffer]);
   }
-  
+
   const message = createMessage(MESSAGE_TYPES.COPY_IN_RESPONSE, payload);
   socket.write(message);
   console.log(`Sent CopyInResponse (format: ${format}, ${columnFormats.length} columns)`);
@@ -322,15 +366,15 @@ function sendCopyInResponse(socket, format = 0, columnFormats = []) {
  */
 function sendCopyOutResponse(socket, format = 0, columnFormats = []) {
   let payload = Buffer.alloc(3);
-  payload.writeInt8(format, 0);                    // Overall format
-  payload.writeInt16BE(columnFormats.length, 1);   // Number of columns
-  
+  payload.writeInt8(format, 0); // Overall format
+  payload.writeInt16BE(columnFormats.length, 1); // Number of columns
+
   for (const colFormat of columnFormats) {
     const formatBuffer = Buffer.alloc(2);
     formatBuffer.writeInt16BE(colFormat, 0);
     payload = Buffer.concat([payload, formatBuffer]);
   }
-  
+
   const message = createMessage(MESSAGE_TYPES.COPY_OUT_RESPONSE, payload);
   socket.write(message);
   console.log(`Sent CopyOutResponse (format: ${format}, ${columnFormats.length} columns)`);
@@ -358,12 +402,12 @@ function sendCopyData(socket, data) {
  */
 function sendAuthenticationMD5Password(socket, salt) {
   const payload = Buffer.alloc(8);
-  payload.writeInt32BE(5, 0);  // MD5 authentication method
-  salt.copy(payload, 4);       // 4-byte salt
-  
+  payload.writeInt32BE(5, 0); // MD5 authentication method
+  salt.copy(payload, 4); // 4-byte salt
+
   const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, payload);
   socket.write(message);
-  console.log("Sent AuthenticationMD5Password");
+  console.log('Sent AuthenticationMD5Password');
 }
 
 /**
@@ -374,7 +418,7 @@ function sendAuthenticationCleartextPassword(socket) {
   const payload = createPayload(3); // Cleartext password method
   const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, payload);
   socket.write(message);
-  console.log("Sent AuthenticationCleartextPassword");
+  console.log('Sent AuthenticationCleartextPassword');
 }
 
 /**
@@ -391,13 +435,9 @@ function sendAuthenticationCleartextPassword(socket) {
 function sendNotificationResponse(socket, pid, channel, payload = '') {
   const pidBuffer = Buffer.alloc(4);
   pidBuffer.writeInt32BE(pid, 0);
-  
-  const messagePayload = Buffer.concat([
-    pidBuffer,
-    writeCString(channel),
-    writeCString(payload)
-  ]);
-  
+
+  const messagePayload = Buffer.concat([pidBuffer, writeCString(channel), writeCString(payload)]);
+
   const message = createMessage(MESSAGE_TYPES.NOTIFICATION_RESPONSE, messagePayload);
   socket.write(message);
   console.log(`Sent NotificationResponse: ${channel} (PID: ${pid})`);
@@ -409,33 +449,33 @@ module.exports = {
   sendParameterStatus,
   sendBackendKeyData,
   sendReadyForQuery,
-  
+
   // Query Results
   sendRowDescription,
   sendDataRow,
   sendCommandComplete,
   sendEmptyQueryResponse,
-  
+
   // Errors and Notices
   sendErrorResponse,
   sendNoticeResponse,
-  
+
   // Extended Query Protocol
   sendParseComplete,
   sendBindComplete,
   sendParameterDescription,
   sendNoData,
   sendPortalSuspended,
-  
+
   // COPY Protocol
   sendCopyInResponse,
   sendCopyOutResponse,
   sendCopyData,
-  
+
   // Authentication (Extended)
   sendAuthenticationMD5Password,
   sendAuthenticationCleartextPassword,
-  
+
   // Notifications
-  sendNotificationResponse
+  sendNotificationResponse,
 };
