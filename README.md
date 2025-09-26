@@ -5,7 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/The-DevOps-Daily/pg-wire-mock/blob/main/CONTRIBUTING.md)
 
-A comprehensive mock PostgreSQL server that implements the PostgreSQL wire protocol for learning, testing, and development purposes.
+A comprehensive mock PostgreSQL server that implements the PostgreSQL wire protocol for learning, testing, and development purposes. Built for experimenting with and understanding the PostgreSQL wire protocol.
+
+> **New!** Check out our detailed [PostgreSQL Wire Protocol Guide](PROTOCOL.md) to learn how the protocol works.
 
 ## 🌟 Features
 
