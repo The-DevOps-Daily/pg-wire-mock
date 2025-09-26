@@ -1,19 +1,24 @@
 # pg-wire-mock
 
+[![CI](https://github.com/The-DevOps-Daily/pg-wire-mock/actions/workflows/ci.yml/badge.svg)](https://github.com/The-DevOps-Daily/pg-wire-mock/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/pg-wire-mock.svg)](https://www.npmjs.com/package/pg-wire-mock)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/The-DevOps-Daily/pg-wire-mock/blob/main/CONTRIBUTING.md)
+
 A comprehensive mock PostgreSQL server that implements the PostgreSQL wire protocol for learning, testing, and development purposes.
 
 ## 🌟 Features
 
 - **Complete PostgreSQL Wire Protocol v3.0 Support**
   - Authentication flow with parameter negotiation
-  - Simple and extended query protocols  
+  - Simple and extended query protocols
   - Transaction management (BEGIN/COMMIT/ROLLBACK)
   - Prepared statements and portals
   - Error handling with proper SQLSTATE codes
 
 - **Comprehensive Query Support**
   - SELECT queries with various functions
-  - SHOW commands for server information  
+  - SHOW commands for server information
   - DDL commands (CREATE/DROP - mock responses)
   - DML commands (INSERT/UPDATE/DELETE - mock responses)
   - Transaction control statements
@@ -117,7 +122,7 @@ pg-wire-mock/
 
 - **ServerManager**: TCP server lifecycle, connection management, statistics
 - **Message Processors**: Handle incoming protocol messages
-- **Message Builders**: Construct outgoing protocol responses  
+- **Message Builders**: Construct outgoing protocol responses
 - **Query Handlers**: Process SQL queries and generate results
 - **Connection State**: Track connection parameters and transaction state
 - **Configuration**: Centralized configuration with environment variable support
@@ -160,6 +165,7 @@ export PG_MOCK_DEFAULT_TIMEZONE=UTC
 ```
 
 View current configuration:
+
 ```bash
 npm run config
 ```
@@ -171,7 +177,7 @@ npm run config
 The codebase follows a clean architecture pattern:
 
 1. **Presentation Layer** (`server.js`): CLI interface and application entry point
-2. **Infrastructure Layer** (`src/server/`): TCP server management  
+2. **Infrastructure Layer** (`src/server/`): TCP server management
 3. **Protocol Layer** (`src/protocol/`): PostgreSQL wire protocol implementation
 4. **Application Layer** (`src/handlers/`): Business logic for query processing
 5. **Domain Layer** (`src/connection/`): Connection state and lifecycle management
@@ -222,6 +228,7 @@ PG_MOCK_LOG_LEVEL=debug npm start
 ```
 
 Debug logging shows:
+
 - Individual protocol messages
 - Connection state changes
 - Query processing steps
