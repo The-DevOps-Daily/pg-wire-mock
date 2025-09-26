@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  pg-wire-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5432:5432"
+    environment:
+      - PG_MOCK_HOST=0.0.0.0
+      - PG_MOCK_LOG_LEVEL=info
+    restart: unless-stopped
