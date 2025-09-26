@@ -1,14 +1,47 @@
-// Include Nodejs' net module.
 const Net = require("net");
 const crypto = require("crypto");
 
+const {
+  PROTOCOL_VERSION_3_0,
+  SSL_REQUEST_CODE,
+  CANCEL_REQUEST_CODE,
+  MESSAGE_TYPES,
+  TRANSACTION_STATUS,
+  DATA_TYPES,
+  DEFAULT_SERVER_PARAMETERS,
+  ERROR_CODES
+} = require("./src/protocol/constants");
+
+const {
+  parseParameters,
+  createMessage,
+  createPayload,
+  validateMessage,
+  getMessageType,
+  generateBackendSecret,
+  formatCommandTag,
+  isValidProtocolVersion,
+  parseQueryStatements,
+  createErrorFields
+} = require("./src/protocol/utils");
+
+// Import message builders
+const {
+  sendAuthenticationOK,
+  sendParameterStatus,
+  sendBackendKeyData,
+  sendReadyForQuery,
+  sendRowDescription,
+  sendDataRow,
+  sendCommandComplete,
+  sendEmptyQueryResponse,
+  sendErrorResponse,
+  sendParseComplete,
+  sendBindComplete
+} = require("./src/protocol/messageBuilders");
+
 // The port on which the server is listening.
 const port = 5432;
-
-// Protocol version constants
-const PROTOCOL_VERSION_3_0 = 196608; // 3.0 in protocol format
-const SSL_REQUEST_CODE = 80877103;
-const CANCEL_REQUEST_CODE = 80877102;
 
 // Create a new TCP server.
 const server = new Net.Server();
@@ -19,9 +52,9 @@ class ConnectionState {
     this.authenticated = false;
     this.protocolVersion = null;
     this.parameters = new Map();
-    this.transactionStatus = 'I'; // I = idle, T = transaction, E = error
+    this.transactionStatus = TRANSACTION_STATUS.IDLE;
     this.backendPid = process.pid;
-    this.backendSecret = crypto.randomInt(0, 2147483647);
+    this.backendSecret = generateBackendSecret();
   }
 }
 
@@ -102,23 +135,12 @@ function processStartupMessage(buffer, socket, connState) {
   if (protocolVersion === PROTOCOL_VERSION_3_0) {
     connState.protocolVersion = protocolVersion;
     
-    // Parse parameters from startup packet
-    let offset = 8;
-    while (offset < length - 1) {
-      const keyStart = offset;
-      while (offset < length && buffer[offset] !== 0) offset++;
-      const key = buffer.slice(keyStart, offset).toString('utf8');
-      offset++; // Skip null terminator
-      
-      const valueStart = offset;
-      while (offset < length && buffer[offset] !== 0) offset++;
-      const value = buffer.slice(valueStart, offset).toString('utf8');
-      offset++; // Skip null terminator
-      
-      if (key && value) {
-        connState.parameters.set(key, value);
-        console.log(`Startup parameter: ${key} = ${value}`);
-      }
+    // Parse parameters from startup packet using utility function
+    connState.parameters = parseParameters(buffer, 8, length);
+    
+    // Log parsed parameters
+    for (const [key, value] of connState.parameters) {
+      console.log(`Startup parameter: ${key} = ${value}`);
     }
 
     // Send authentication sequence
@@ -137,7 +159,7 @@ function processStartupMessage(buffer, socket, connState) {
 function processRegularMessage(buffer, socket, connState) {
   if (buffer.length < 5) return 0; // Need at least tag + length
 
-  const messageType = String.fromCharCode(buffer[0]);
+  const messageType = getMessageType(buffer);
   const length = buffer.readInt32BE(1);
   
   if (buffer.length < length + 1) return 0; // Need complete message
@@ -145,25 +167,25 @@ function processRegularMessage(buffer, socket, connState) {
   console.log(`Received message type '${messageType}', length: ${length}`);
 
   switch (messageType) {
-    case 'Q': // Simple Query
+    case MESSAGE_TYPES.QUERY: // Simple Query
       return processSimpleQuery(buffer, socket, connState);
-    case 'X': // Terminate
+    case MESSAGE_TYPES.TERMINATE: // Terminate
       console.log("Client requested termination");
       socket.end();
       return length + 1;
-    case 'P': // Parse (Extended Query)
+    case MESSAGE_TYPES.PARSE: // Parse (Extended Query)
       return processParse(buffer, socket, connState);
-    case 'B': // Bind (Extended Query)  
+    case MESSAGE_TYPES.BIND: // Bind (Extended Query)  
       return processBind(buffer, socket, connState);
-    case 'D': // Describe
+    case MESSAGE_TYPES.DESCRIBE: // Describe
       return processDescribe(buffer, socket, connState);
-    case 'E': // Execute
+    case MESSAGE_TYPES.EXECUTE: // Execute
       return processExecute(buffer, socket, connState);
-    case 'S': // Sync
+    case MESSAGE_TYPES.SYNC: // Sync
       return processSync(buffer, socket, connState);
     default:
       console.log(`Unknown message type: ${messageType}`);
-      sendErrorResponse(socket, "08P01", `Unknown message type: ${messageType}`);
+      sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, `Unknown message type: ${messageType}`);
       return length + 1;
   }
 }
@@ -178,7 +200,7 @@ function processSimpleQuery(buffer, socket, connState) {
   console.log(`Executing simple query: ${query}`);
 
   // Handle multiple queries separated by semicolons
-  const queries = query.split(';').map(q => q.trim()).filter(q => q.length > 0);
+  const queries = parseQueryStatements(query);
   
   for (const singleQuery of queries) {
     if (singleQuery === '') {
@@ -199,7 +221,7 @@ function executeQuery(query, socket, connState) {
   
   if (results.error) {
     sendErrorResponse(socket, results.error.code, results.error.message);
-    connState.transactionStatus = 'E';
+    connState.transactionStatus = TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
     return;
   }
 
@@ -214,7 +236,7 @@ function executeQuery(query, socket, connState) {
   }
 
   // Send CommandComplete
-  sendCommandComplete(socket, results.command || "SELECT 1");
+  sendCommandComplete(socket, formatCommandTag(results.command || "SELECT", results.rowCount));
 }
 
 function handleQuery(query) {
@@ -225,25 +247,28 @@ function handleQuery(query) {
     case "SELECT 1":
     case "SELECT 1;":
       return {
-        columns: [{ name: "?column?", dataTypeOID: 23, dataTypeSize: 4 }],
+        columns: [{ name: "?column?", dataTypeOID: DATA_TYPES.INT4, dataTypeSize: 4 }],
         rows: [["1"]],
-        command: "SELECT 1"
+        command: "SELECT",
+        rowCount: 1
       };
     
     case "SHOW DOCS":
     case "SHOW DOCS;":
       return {
-        columns: [{ name: "docs", dataTypeOID: 25, dataTypeSize: -1 }],
+        columns: [{ name: "docs", dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 }],
         rows: [["https://www.postgresql.org/docs/"]],
-        command: "SHOW 1"
+        command: "SHOW",
+        rowCount: 1
       };
 
     case "SELECT VERSION()":
     case "SELECT VERSION();":
       return {
-        columns: [{ name: "version", dataTypeOID: 25, dataTypeSize: -1 }],
+        columns: [{ name: "version", dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 }],
         rows: [["PostgreSQL Wire Protocol Mock Server 1.0"]],
-        command: "SELECT 1"
+        command: "SELECT",
+        rowCount: 1
       };
 
     case "BEGIN":
@@ -261,9 +286,10 @@ function handleQuery(query) {
     default:
       // Default response for unknown queries
       return {
-        columns: [{ name: "message", dataTypeOID: 25, dataTypeSize: -1 }],
+        columns: [{ name: "message", dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 }],
         rows: [["Hello from PostgreSQL Wire Protocol Mock Server!"]],
-        command: "SELECT 1"
+        command: "SELECT",
+        rowCount: 1
       };
   }
 }
@@ -279,32 +305,20 @@ function sendAuthenticationOK(socket) {
 }
 
 function sendParameterStatus(socket, connState) {
-  const parameters = [
-    ['server_version', '13.0 (Mock)'],
-    ['server_encoding', 'UTF8'],
-    ['client_encoding', 'UTF8'],
-    ['application_name', connState.parameters.get('application_name') || ''],
-    ['is_superuser', 'off'],
-    ['session_authorization', connState.parameters.get('user') || 'postgres'],
-    ['DateStyle', 'ISO, MDY'],
-    ['IntervalStyle', 'postgres'],
-    ['TimeZone', 'UTC'],
-    ['integer_datetimes', 'on'],
-    ['standard_conforming_strings', 'on']
-  ];
+  // Create parameters object with defaults and user overrides
+  const parameters = { ...DEFAULT_SERVER_PARAMETERS };
+  
+  // Override with user-specific parameters
+  if (connState.parameters.has('application_name')) {
+    parameters.application_name = connState.parameters.get('application_name');
+  }
+  if (connState.parameters.has('user')) {
+    parameters.session_authorization = connState.parameters.get('user');
+  }
 
-  for (const [name, value] of parameters) {
-    const nameBuffer = Buffer.from(name + '\0', 'utf8');
-    const valueBuffer = Buffer.from(value + '\0', 'utf8');
-    const totalLength = 4 + nameBuffer.length + valueBuffer.length;
-    
-    const buf = Buffer.alloc(1 + 4 + nameBuffer.length + valueBuffer.length);
-    buf[0] = 'S'.charCodeAt(0);
-    buf.writeInt32BE(totalLength, 1);
-    nameBuffer.copy(buf, 5);
-    valueBuffer.copy(buf, 5 + nameBuffer.length);
-    
-    socket.write(buf);
+  for (const [name, value] of Object.entries(parameters)) {
+    const message = createMessage(MESSAGE_TYPES.PARAMETER_STATUS, createPayload(name, value));
+    socket.write(message);
   }
   console.log("Sent ParameterStatus messages");
 }
@@ -418,32 +432,14 @@ function sendEmptyQueryResponse(socket) {
 }
 
 function sendErrorResponse(socket, code, message) {
-  const fields = [
-    ['S', 'ERROR'],
-    ['C', code],
-    ['M', message]
-  ];
-
-  let totalLength = 4 + 1; // length + final null terminator
-  const fieldBuffers = [];
-
-  for (const [fieldType, fieldValue] of fields) {
-    const fieldBuffer = Buffer.from(fieldType + fieldValue + '\0', 'utf8');
-    fieldBuffers.push(fieldBuffer);
-    totalLength += fieldBuffer.length;
-  }
-
-  const headerBuf = Buffer.alloc(1 + 4);
-  headerBuf[0] = 'E'.charCodeAt(0);     // Message type
-  headerBuf.writeInt32BE(totalLength, 1); // Message length
-  socket.write(headerBuf);
-
-  for (const fieldBuf of fieldBuffers) {
-    socket.write(fieldBuf);
-  }
-
-  const finalNull = Buffer.alloc(1);
-  socket.write(finalNull);
+  const errorFields = createErrorFields({
+    'S': 'ERROR',
+    'C': code,
+    'M': message
+  });
+  
+  const errorMessage = createMessage(MESSAGE_TYPES.ERROR_RESPONSE, errorFields);
+  socket.write(errorMessage);
   
   console.log(`Sent ErrorResponse: ${code} - ${message}`);
 }
