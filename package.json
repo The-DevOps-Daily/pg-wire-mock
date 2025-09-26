@@ -3,10 +3,19 @@
   "version": "1.0.0",
   "description": "A mock PostgreSQL server that speaks the wire protocol for learning and testing",
   "main": "server.js",
+  "bin": {
+    "pg-wire-mock": "./server.js"
+  },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node server.js --log-level debug",
+    "start:quiet": "node server.js --quiet",
+    "start:port": "node server.js --port 5433",
+    "start:all": "node server.js --host 0.0.0.0 --port 5432",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "echo \"No linting configured\"",
+    "docs": "node -e \"console.log(require('./src/config/serverConfig').getConfigDocumentation())\"",
+    "config": "node -e \"const cfg = require('./src/config/serverConfig').loadConfig(); console.log(JSON.stringify(cfg, null, 2))\""
   },
   "keywords": [
     "postgresql",
@@ -14,11 +23,22 @@
     "mock",
     "server",
     "learning",
-    "database"
+    "database",
+    "protocol",
+    "tcp",
+    "sql"
   ],
   "author": "The DevOps Daily",
   "license": "MIT",
   "engines": {
     "node": ">=12.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/The-DevOps-Daily/pg-wire-mock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/The-DevOps-Daily/pg-wire-mock/issues"
+  },
+  "homepage": "https://github.com/The-DevOps-Daily/pg-wire-mock#readme"
 }
