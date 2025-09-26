@@ -1,0 +1,24 @@
+{
+  "name": "pg-wire-mock",
+  "version": "1.0.0",
+  "description": "A mock PostgreSQL server that speaks the wire protocol for learning and testing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "postgresql",
+    "wire-protocol",
+    "mock",
+    "server",
+    "learning",
+    "database"
+  ],
+  "author": "The DevOps Daily",
+  "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}
