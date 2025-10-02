@@ -124,22 +124,39 @@ function sendRowDescription(socket, columns) {
  * Sends DataRow message with field values
  * @param {Socket} socket - Client socket
  * @param {Array} values - Array of field values
+ * @param {Array} columnTypes - Array of column type information (optional)
  */
-function sendDataRow(socket, values) {
+function sendDataRow(socket, values, columnTypes = []) {
   let payload = Buffer.alloc(2);
   payload.writeInt16BE(values.length, 0); // Number of fields
 
   const valueBuffers = [];
+  const { isArrayType, encodeArrayToText } = require('./utils');
 
-  for (const value of values) {
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i];
+    const columnType = columnTypes[i];
+
     if (value === null || value === undefined) {
       // NULL value - send -1 as length
       const nullBuffer = Buffer.alloc(4);
       nullBuffer.writeInt32BE(-1, 0);
       valueBuffers.push(nullBuffer);
     } else {
-      // Regular value - send length + data
-      const valueStr = String(value);
+      // Check if this is an array type
+      let valueStr;
+      if (Array.isArray(value)) {
+        // Handle JavaScript array - encode as PostgreSQL array
+        const elementType = getElementTypeFromColumn(columnType);
+        valueStr = encodeArrayToText(value, elementType);
+      } else if (columnType && isArrayType(columnType.dataTypeOID)) {
+        // Handle string representation of array that needs to be validated
+        valueStr = String(value);
+      } else {
+        // Regular value - convert to string
+        valueStr = String(value);
+      }
+
       const valueBuffer = Buffer.from(valueStr, 'utf8');
       const lengthBuffer = Buffer.alloc(4);
       lengthBuffer.writeInt32BE(valueBuffer.length, 0);
@@ -152,6 +169,47 @@ function sendDataRow(socket, values) {
   socket.write(message);
 
   console.log(`Sent DataRow with ${values.length} values`);
+}
+
+/**
+ * Helper function to get element type from column information
+ * @param {Object} columnType - Column type information
+ * @returns {string} Element type name
+ */
+function getElementTypeFromColumn(columnType) {
+  if (!columnType || !columnType.dataTypeOID) {
+    return 'text';
+  }
+
+  const { getBaseTypeOID } = require('./utils');
+  const { DATA_TYPES: TYPES } = require('./constants');
+
+  // Get base type OID if this is an array type
+  const baseTypeOID = getBaseTypeOID(columnType.dataTypeOID) || columnType.dataTypeOID;
+
+  // Map base type OID to type name
+  const typeMapping = {
+    [TYPES.BOOL]: 'bool',
+    [TYPES.INT2]: 'int2',
+    [TYPES.INT4]: 'int4',
+    [TYPES.INT8]: 'int8',
+    [TYPES.FLOAT4]: 'float4',
+    [TYPES.FLOAT8]: 'float8',
+    [TYPES.NUMERIC]: 'numeric',
+    [TYPES.TEXT]: 'text',
+    [TYPES.VARCHAR]: 'varchar',
+    [TYPES.BPCHAR]: 'bpchar',
+    [TYPES.DATE]: 'date',
+    [TYPES.TIME]: 'time',
+    [TYPES.TIMESTAMP]: 'timestamp',
+    [TYPES.TIMESTAMPTZ]: 'timestamptz',
+    [TYPES.INTERVAL]: 'interval',
+    [TYPES.UUID]: 'uuid',
+    [TYPES.JSON]: 'json',
+    [TYPES.JSONB]: 'jsonb',
+  };
+
+  return typeMapping[baseTypeOID] || 'text';
 }
 
 /**

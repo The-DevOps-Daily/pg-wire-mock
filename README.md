@@ -17,9 +17,11 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Transaction management (BEGIN/COMMIT/ROLLBACK)
   - Prepared statements and portals
   - Error handling with proper SQLSTATE codes
+  - **PostgreSQL array type support** (NEW!) - [See Array Documentation](docs/ARRAY_SUPPORT.md)
 
 - **Comprehensive Query Support**
   - SELECT queries with various functions
+  - Array queries and operations (NEW!)
   - SHOW commands for server information
   - DDL commands (CREATE/DROP - mock responses)
   - DML commands (INSERT/UPDATE/DELETE - mock responses)
@@ -81,6 +83,12 @@ SELECT 1;
 SELECT VERSION();
 SELECT NOW();
 SELECT CURRENT_USER;
+
+-- Array queries (NEW!)
+SELECT ARRAY[1, 2, 3, 4, 5];
+SELECT '{apple,banana,cherry}';
+SELECT '{1,2,3,4,5}'::int4[];
+SELECT '{{a,b},{c,d}}'::text[][];
 
 -- Server information
 SHOW DOCS;

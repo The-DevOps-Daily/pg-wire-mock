@@ -251,6 +251,397 @@ function createErrorFields(fields) {
   return Buffer.concat(buffers);
 }
 
+/**
+ * Array Type Utilities
+ */
+
+/**
+ * Encodes a PostgreSQL array value to text format
+ * @param {Array} array - JavaScript array to encode
+ * @param {string} elementType - PostgreSQL element type name
+ * @returns {string} PostgreSQL array text representation
+ */
+function encodeArrayToText(array, elementType = 'text') {
+  if (!Array.isArray(array)) {
+    throw new Error('Input must be an array');
+  }
+
+  // Handle empty arrays
+  if (array.length === 0) {
+    return '{}';
+  }
+
+  // Handle multi-dimensional arrays
+  if (Array.isArray(array[0])) {
+    return encodeMultiDimensionalArray(array, elementType);
+  }
+
+  // Handle one-dimensional arrays
+  const encodedElements = array.map(element => encodeArrayElement(element, elementType));
+  return `{${encodedElements.join(',')}}`;
+}
+
+/**
+ * Encodes a multi-dimensional PostgreSQL array
+ * @param {Array} array - Multi-dimensional JavaScript array
+ * @param {string} elementType - PostgreSQL element type name
+ * @returns {string} PostgreSQL array text representation
+ */
+function encodeMultiDimensionalArray(array, elementType) {
+  const encodedSubArrays = array.map(subArray => {
+    if (Array.isArray(subArray)) {
+      return encodeArrayToText(subArray, elementType);
+    }
+    return encodeArrayElement(subArray, elementType);
+  });
+  return `{${encodedSubArrays.join(',')}}`;
+}
+
+/**
+ * Encodes a single array element
+ * @param {*} element - Element to encode
+ * @param {string} _elementType - PostgreSQL element type name (reserved for future use)
+ * @returns {string} Encoded element
+ */
+function encodeArrayElement(element, _elementType) {
+  if (element === null || element === undefined) {
+    return 'NULL';
+  }
+
+  const value = String(element);
+
+  // Check if the value needs quoting (contains special characters)
+  if (needsQuoting(value)) {
+    // Escape backslashes first, then quotes
+    const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `"${escaped}"`;
+  }
+
+  return value;
+}
+
+/**
+ * Determines if a value needs quoting in PostgreSQL array format
+ * @param {string} value - Value to check
+ * @returns {boolean} True if value needs quoting
+ */
+function needsQuoting(value) {
+  // Quote if contains special characters or is empty
+  return (
+    value === '' ||
+    value.includes(',') ||
+    value.includes('{') ||
+    value.includes('}') ||
+    value.includes('"') ||
+    value.includes('\\') ||
+    value.includes(' ') ||
+    value.includes('\t') ||
+    value.includes('\n') ||
+    value.includes('\r') ||
+    value.toUpperCase() === 'NULL'
+  );
+}
+
+/**
+ * Parses a PostgreSQL array text representation to JavaScript array
+ * @param {string} arrayText - PostgreSQL array text representation
+ * @param {string} elementType - PostgreSQL element type name
+ * @returns {Array} JavaScript array
+ */
+function parseArrayFromText(arrayText, elementType = 'text') {
+  if (!arrayText || arrayText.trim() === '' || arrayText.trim() === '{}') {
+    return [];
+  }
+
+  // Remove outer braces
+  const trimmed = arrayText.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+    throw new Error('Invalid array format: missing outer braces');
+  }
+
+  const content = trimmed.slice(1, -1);
+  if (content === '') {
+    return [];
+  }
+
+  return parseArrayElements(content, elementType);
+}
+
+/**
+ * Parses array elements from string content
+ * @param {string} content - Content between braces
+ * @param {string} elementType - PostgreSQL element type name
+ * @returns {Array} Array of parsed elements
+ */
+function parseArrayElements(content, elementType) {
+  const elements = [];
+  let i = 0;
+
+  while (i < content.length) {
+    // Skip whitespace
+    while (i < content.length && content[i] === ' ') {
+      i++;
+    }
+
+    if (i >= content.length) break;
+
+    let element = '';
+
+    if (content[i] === '"') {
+      // Parse quoted element
+      i++; // Skip opening quote
+
+      while (i < content.length) {
+        const char = content[i];
+        const nextChar = i + 1 < content.length ? content[i + 1] : null;
+
+        if (char === '\\' && nextChar === '"') {
+          // Escaped quote - add literal quote character
+          element += '"';
+          i += 2; // Skip both characters
+        } else if (char === '\\' && nextChar === '\\') {
+          // Escaped backslash - add literal backslash
+          element += '\\';
+          i += 2; // Skip both characters
+        } else if (char === '"') {
+          // End of quoted element
+          break;
+        } else {
+          element += char;
+          i++;
+        }
+      }
+
+      if (i < content.length && content[i] === '"') {
+        i++; // Skip closing quote
+      }
+
+      elements.push(parseArrayElement(element, elementType, true)); // true = was quoted
+
+      // Skip comma if present
+      while (i < content.length && (content[i] === ' ' || content[i] === ',')) {
+        i++;
+      }
+      continue;
+    } else if (content[i] === '{') {
+      // Parse nested array
+      let depth = 1;
+      element += content[i];
+      i++;
+
+      while (i < content.length && depth > 0) {
+        if (content[i] === '{') {
+          depth++;
+        } else if (content[i] === '}') {
+          depth--;
+        }
+        element += content[i];
+        i++;
+      }
+
+      elements.push(parseArrayFromText(element, elementType));
+
+      // Skip comma if present
+      while (i < content.length && (content[i] === ' ' || content[i] === ',')) {
+        i++;
+      }
+      continue;
+    } else {
+      // Parse unquoted element
+      while (i < content.length && content[i] !== ',' && content[i] !== '}') {
+        element += content[i];
+        i++;
+      }
+      element = element.trim();
+    }
+
+    elements.push(parseArrayElement(element, elementType, false)); // false = not quoted
+
+    // Skip comma if present
+    while (i < content.length && (content[i] === ' ' || content[i] === ',')) {
+      i++;
+    }
+  }
+
+  return elements;
+}
+
+/**
+ * Parses a single array element
+ * @param {string} element - Element string to parse
+ * @param {string} elementType - PostgreSQL element type name
+ * @param {boolean} wasQuoted - Whether the element was originally quoted (default: true for backwards compatibility)
+ * @returns {*} Parsed element value
+ */
+function parseArrayElement(element, elementType, wasQuoted = true) {
+  const trimmed = element.trim();
+
+  if (trimmed.toUpperCase() === 'NULL') {
+    return null;
+  }
+
+  // If it was quoted, we've already processed the escapes
+  // If it wasn't quoted and looks like a quoted string, process it
+  let value = trimmed;
+  if (!wasQuoted && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    const unquoted = trimmed.slice(1, -1);
+    // Properly unescape PostgreSQL array format: quotes first, then backslashes
+    value = unquoted.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  } else if (wasQuoted) {
+    // For already processed quoted elements, the value is already unescaped
+    value = trimmed;
+  }
+
+  // Type conversion based on element type
+  switch (elementType.toLowerCase()) {
+    case 'int4':
+    case 'integer':
+    case 'int':
+      return parseInt(value, 10);
+    case 'int8':
+    case 'bigint':
+      // For bigint, return as string to avoid precision loss in JavaScript
+      return value;
+    case 'int2':
+    case 'smallint':
+      return parseInt(value, 10);
+    case 'float4':
+    case 'real':
+    case 'float8':
+    case 'double precision':
+    case 'numeric':
+      return parseFloat(value);
+    case 'bool':
+    case 'boolean':
+      return value.toLowerCase() === 't' || value.toLowerCase() === 'true';
+    default:
+      return value;
+  }
+}
+
+/**
+ * Gets the array type OID for a given base type OID
+ * @param {number} baseTypeOID - Base type OID
+ * @returns {number} Array type OID
+ */
+function getArrayTypeOID(baseTypeOID) {
+  const { DATA_TYPES } = require('./constants');
+
+  // Mapping of base types to their array types
+  const typeMapping = {
+    [DATA_TYPES.BOOL]: DATA_TYPES.BOOL_ARRAY,
+    [DATA_TYPES.BYTEA]: DATA_TYPES.BYTEA_ARRAY,
+    [DATA_TYPES.CHAR]: DATA_TYPES.CHAR_ARRAY,
+    [DATA_TYPES.NAME]: DATA_TYPES.NAME_ARRAY,
+    [DATA_TYPES.INT8]: DATA_TYPES.INT8_ARRAY,
+    [DATA_TYPES.INT2]: DATA_TYPES.INT2_ARRAY,
+    [DATA_TYPES.INT2VECTOR]: DATA_TYPES.INT2VECTOR_ARRAY,
+    [DATA_TYPES.INT4]: DATA_TYPES.INT4_ARRAY,
+    [DATA_TYPES.REGPROC]: DATA_TYPES.REGPROC_ARRAY,
+    [DATA_TYPES.TEXT]: DATA_TYPES.TEXT_ARRAY,
+    [DATA_TYPES.OID]: DATA_TYPES.OID_ARRAY,
+    [DATA_TYPES.TID]: DATA_TYPES.TID_ARRAY,
+    [DATA_TYPES.XID]: DATA_TYPES.XID_ARRAY,
+    [DATA_TYPES.CID]: DATA_TYPES.CID_ARRAY,
+    [DATA_TYPES.OIDVECTOR]: DATA_TYPES.OIDVECTOR_ARRAY,
+    [DATA_TYPES.JSON]: DATA_TYPES.JSON_ARRAY,
+    [DATA_TYPES.POINT]: DATA_TYPES.POINT_ARRAY,
+    [DATA_TYPES.LSEG]: DATA_TYPES.LSEG_ARRAY,
+    [DATA_TYPES.PATH]: DATA_TYPES.PATH_ARRAY,
+    [DATA_TYPES.BOX]: DATA_TYPES.BOX_ARRAY,
+    [DATA_TYPES.POLYGON]: DATA_TYPES.POLYGON_ARRAY,
+    [DATA_TYPES.FLOAT4]: DATA_TYPES.FLOAT4_ARRAY,
+    [DATA_TYPES.FLOAT8]: DATA_TYPES.FLOAT8_ARRAY,
+    [DATA_TYPES.ABSTIME]: DATA_TYPES.ABSTIME_ARRAY,
+    [DATA_TYPES.RELTIME]: DATA_TYPES.RELTIME_ARRAY,
+    [DATA_TYPES.TINTERVAL]: DATA_TYPES.TINTERVAL_ARRAY,
+    [DATA_TYPES.BPCHAR]: DATA_TYPES.BPCHAR_ARRAY,
+    [DATA_TYPES.VARCHAR]: DATA_TYPES.VARCHAR_ARRAY,
+    [DATA_TYPES.DATE]: DATA_TYPES.DATE_ARRAY,
+    [DATA_TYPES.TIME]: DATA_TYPES.TIME_ARRAY,
+    [DATA_TYPES.TIMESTAMP]: DATA_TYPES.TIMESTAMP_ARRAY,
+    [DATA_TYPES.TIMESTAMPTZ]: DATA_TYPES.TIMESTAMPTZ_ARRAY,
+    [DATA_TYPES.INTERVAL]: DATA_TYPES.INTERVAL_ARRAY,
+    [DATA_TYPES.TIMETZ]: DATA_TYPES.TIMETZ_ARRAY,
+    [DATA_TYPES.BIT]: DATA_TYPES.BIT_ARRAY,
+    [DATA_TYPES.VARBIT]: DATA_TYPES.VARBIT_ARRAY,
+    [DATA_TYPES.NUMERIC]: DATA_TYPES.NUMERIC_ARRAY,
+    [DATA_TYPES.UUID]: DATA_TYPES.UUID_ARRAY,
+    [DATA_TYPES.JSONB]: DATA_TYPES.JSONB_ARRAY,
+    [DATA_TYPES.INET]: DATA_TYPES.INET_ARRAY,
+    [DATA_TYPES.CIDR]: DATA_TYPES.CIDR_ARRAY,
+    [DATA_TYPES.MACADDR]: DATA_TYPES.MACADDR_ARRAY,
+  };
+
+  return typeMapping[baseTypeOID] || null;
+}
+
+/**
+ * Gets the base type OID for a given array type OID
+ * @param {number} arrayTypeOID - Array type OID
+ * @returns {number} Base type OID
+ */
+function getBaseTypeOID(arrayTypeOID) {
+  const { DATA_TYPES } = require('./constants');
+
+  // Reverse mapping of array types to their base types
+  const typeMapping = {
+    [DATA_TYPES.BOOL_ARRAY]: DATA_TYPES.BOOL,
+    [DATA_TYPES.BYTEA_ARRAY]: DATA_TYPES.BYTEA,
+    [DATA_TYPES.CHAR_ARRAY]: DATA_TYPES.CHAR,
+    [DATA_TYPES.NAME_ARRAY]: DATA_TYPES.NAME,
+    [DATA_TYPES.INT8_ARRAY]: DATA_TYPES.INT8,
+    [DATA_TYPES.INT2_ARRAY]: DATA_TYPES.INT2,
+    [DATA_TYPES.INT2VECTOR_ARRAY]: DATA_TYPES.INT2VECTOR,
+    [DATA_TYPES.INT4_ARRAY]: DATA_TYPES.INT4,
+    [DATA_TYPES.REGPROC_ARRAY]: DATA_TYPES.REGPROC,
+    [DATA_TYPES.TEXT_ARRAY]: DATA_TYPES.TEXT,
+    [DATA_TYPES.OID_ARRAY]: DATA_TYPES.OID,
+    [DATA_TYPES.TID_ARRAY]: DATA_TYPES.TID,
+    [DATA_TYPES.XID_ARRAY]: DATA_TYPES.XID,
+    [DATA_TYPES.CID_ARRAY]: DATA_TYPES.CID,
+    [DATA_TYPES.OIDVECTOR_ARRAY]: DATA_TYPES.OIDVECTOR,
+    [DATA_TYPES.JSON_ARRAY]: DATA_TYPES.JSON,
+    [DATA_TYPES.POINT_ARRAY]: DATA_TYPES.POINT,
+    [DATA_TYPES.LSEG_ARRAY]: DATA_TYPES.LSEG,
+    [DATA_TYPES.PATH_ARRAY]: DATA_TYPES.PATH,
+    [DATA_TYPES.BOX_ARRAY]: DATA_TYPES.BOX,
+    [DATA_TYPES.POLYGON_ARRAY]: DATA_TYPES.POLYGON,
+    [DATA_TYPES.FLOAT4_ARRAY]: DATA_TYPES.FLOAT4,
+    [DATA_TYPES.FLOAT8_ARRAY]: DATA_TYPES.FLOAT8,
+    [DATA_TYPES.ABSTIME_ARRAY]: DATA_TYPES.ABSTIME,
+    [DATA_TYPES.RELTIME_ARRAY]: DATA_TYPES.RELTIME,
+    [DATA_TYPES.TINTERVAL_ARRAY]: DATA_TYPES.TINTERVAL,
+    [DATA_TYPES.BPCHAR_ARRAY]: DATA_TYPES.BPCHAR,
+    [DATA_TYPES.VARCHAR_ARRAY]: DATA_TYPES.VARCHAR,
+    [DATA_TYPES.DATE_ARRAY]: DATA_TYPES.DATE,
+    [DATA_TYPES.TIME_ARRAY]: DATA_TYPES.TIME,
+    [DATA_TYPES.TIMESTAMP_ARRAY]: DATA_TYPES.TIMESTAMP,
+    [DATA_TYPES.TIMESTAMPTZ_ARRAY]: DATA_TYPES.TIMESTAMPTZ,
+    [DATA_TYPES.INTERVAL_ARRAY]: DATA_TYPES.INTERVAL,
+    [DATA_TYPES.TIMETZ_ARRAY]: DATA_TYPES.TIMETZ,
+    [DATA_TYPES.BIT_ARRAY]: DATA_TYPES.BIT,
+    [DATA_TYPES.VARBIT_ARRAY]: DATA_TYPES.VARBIT,
+    [DATA_TYPES.NUMERIC_ARRAY]: DATA_TYPES.NUMERIC,
+    [DATA_TYPES.UUID_ARRAY]: DATA_TYPES.UUID,
+    [DATA_TYPES.JSONB_ARRAY]: DATA_TYPES.JSONB,
+    [DATA_TYPES.INET_ARRAY]: DATA_TYPES.INET,
+    [DATA_TYPES.CIDR_ARRAY]: DATA_TYPES.CIDR,
+    [DATA_TYPES.MACADDR_ARRAY]: DATA_TYPES.MACADDR,
+  };
+
+  return typeMapping[arrayTypeOID] || null;
+}
+
+/**
+ * Checks if a given type OID represents an array type
+ * @param {number} typeOID - Type OID to check
+ * @returns {boolean} True if the type is an array type
+ */
+function isArrayType(typeOID) {
+  return getBaseTypeOID(typeOID) !== null;
+}
+
 module.exports = {
   readCString,
   writeCString,
@@ -265,4 +656,10 @@ module.exports = {
   isValidProtocolVersion,
   parseQueryStatements,
   createErrorFields,
+  // Array utilities
+  encodeArrayToText,
+  parseArrayFromText,
+  getArrayTypeOID,
+  getBaseTypeOID,
+  isArrayType,
 };
