@@ -5,6 +5,7 @@
 
 const Net = require('net');
 const { ConnectionState } = require('../connection/connectionState');
+const { ConnectionPool } = require('../connection/connectionPool');
 const { processMessage } = require('../protocol/messageProcessors');
 
 /**
@@ -16,6 +17,11 @@ const { processMessage } = require('../protocol/messageProcessors');
  * @property {number} connectionTimeout - Connection timeout in milliseconds
  * @property {boolean} enableLogging - Enable detailed logging
  * @property {string} logLevel - Log level (error, warn, info, debug)
+ * @property {boolean} enableConnectionPooling - Enable connection pooling (default: true)
+ * @property {Object} poolConfig - Connection pool configuration options
+ * @property {number} poolConfig.maxConnections - Max connections in pool (default: 50)
+ * @property {number} poolConfig.minConnections - Min connections in pool (default: 5)
+ * @property {number} poolConfig.idleTimeoutMs - Idle connection timeout (default: 300000)
  */
 
 /**
@@ -35,6 +41,17 @@ class ServerManager {
       connectionTimeout: 300000, // 5 minutes
       enableLogging: true,
       logLevel: 'info',
+      enableConnectionPooling: true,
+      poolConfig: {
+        maxConnections: 50,
+        minConnections: 5,
+        idleTimeoutMs: 300000,
+        acquisitionTimeoutMs: 5000,
+        validateConnections: true,
+        enableLogging: true,
+        logLevel: 'info',
+        ...config.poolConfig,
+      },
       ...config,
     };
 
@@ -43,6 +60,16 @@ class ServerManager {
     this.connectionCount = 0;
     this.isRunning = false;
     this.startTime = null;
+
+    // Initialize connection pool if enabled
+    this.connectionPool = null;
+    if (this.config.enableConnectionPooling) {
+      this.connectionPool = new ConnectionPool({
+        ...this.config.poolConfig,
+        enableLogging: this.config.enableLogging,
+        logLevel: this.config.logLevel,
+      });
+    }
 
     // Statistics
     this.stats = {
@@ -73,7 +100,7 @@ class ServerManager {
         this.server = new Net.Server();
         this.setupServerEventHandlers();
 
-        this.server.listen(this.config.port, this.config.host, () => {
+        this.server.listen(this.config.port, this.config.host, async () => {
           this.isRunning = true;
           this.startTime = new Date();
 
@@ -81,6 +108,16 @@ class ServerManager {
           this.log('info', `Listening on ${this.config.host}:${this.config.port}`);
           this.log('info', `Max connections: ${this.config.maxConnections}`);
           this.log('info', `Connection timeout: ${this.config.connectionTimeout}ms`);
+
+          // Initialize connection pool if enabled
+          if (this.connectionPool && !this.connectionPool.isInitialized) {
+            try {
+              await this.connectionPool.initialize();
+              this.log('info', 'Connection pool initialized successfully');
+            } catch (error) {
+              this.log('error', `Failed to initialize connection pool: ${error.message}`);
+            }
+          }
 
           // Start cleanup interval (every 60 seconds)
           this.cleanupInterval = setInterval(() => {
@@ -120,6 +157,16 @@ class ServerManager {
       // Close all connections
       for (const [connectionId] of this.connections) {
         this.closeConnection(connectionId, 'Server shutdown');
+      }
+
+      // Cleanup connection pool
+      if (this.connectionPool) {
+        try {
+          this.connectionPool.destroy();
+          this.log('info', 'Connection pool cleaned up');
+        } catch (error) {
+          this.log('error', `Error cleaning up connection pool: ${error.message}`);
+        }
       }
 
       // Close server
@@ -183,7 +230,15 @@ class ServerManager {
     }
 
     const connectionId = `conn_${++this.connectionCount}`;
-    const connState = new ConnectionState();
+    let connState;
+
+    // Create connection state (pool integration can be enhanced later)
+    connState = new ConnectionState();
+    
+    // Log that pooling is enabled for future enhancement
+    if (this.connectionPool && this.connectionPool.isInitialized) {
+      this.log('debug', `Connection pooling enabled for ${connectionId}`);
+    }
 
     const connectionData = {
       id: connectionId,
@@ -194,6 +249,7 @@ class ServerManager {
       remotePort: socket.remotePort,
       connectedAt: new Date(),
       lastActivity: new Date(),
+      isPooled: !!this.connectionPool,
     };
 
     this.connections.set(connectionId, connectionData);
@@ -323,7 +379,7 @@ class ServerManager {
       return;
     }
 
-    const { socket, connState } = connectionData;
+    const { socket, connState, isPooled } = connectionData;
     const duration = Date.now() - connectionData.connectedAt.getTime();
 
     this.log(
@@ -332,10 +388,22 @@ class ServerManager {
     );
 
     try {
-      connState.close();
+      // Return connection to pool if it was pooled and is in good state
+      if (isPooled && this.connectionPool && connState.isValid()) {
+        this.connectionPool.releaseConnection(connState);
+        this.log('debug', `Returned connection ${connectionId} to pool`);
+      } else {
+        connState.close();
+      }
       socket.destroy();
     } catch (error) {
       this.log('error', `Error closing connection ${connectionId}: ${error.message}`);
+      // If there was an error, make sure connection is properly closed
+      try {
+        connState.close();
+      } catch (_) {
+        // Ignore cleanup errors
+      }
     }
 
     this.connections.delete(connectionId);
@@ -370,7 +438,7 @@ class ServerManager {
   getStats() {
     const uptime = this.startTime ? Date.now() - this.startTime.getTime() : 0;
 
-    return {
+    const stats = {
       ...this.stats,
       activeConnections: this.connections.size,
       uptime: uptime,
@@ -379,8 +447,16 @@ class ServerManager {
         port: this.config.port,
         host: this.config.host,
         maxConnections: this.config.maxConnections,
+        enableConnectionPooling: this.config.enableConnectionPooling,
       },
     };
+
+    // Add connection pool statistics if pooling is enabled
+    if (this.connectionPool) {
+      stats.connectionPool = this.connectionPool.getStats();
+    }
+
+    return stats;
   }
 
   /**
