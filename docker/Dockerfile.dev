@@ -1,0 +1,26 @@
+# PostgreSQL Wire Protocol Mock Server Docker Image
+FROM node:20-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package.json & package-lock.json
+COPY ./package*.json ./
+
+# Disable husky during build
+ENV HUSKY=0
+
+# Install dependencies (including dev)
+RUN npm ci --ignore-scripts 
+
+# Copy source code
+COPY . .
+
+# Expose PostgreSQL mock port
+EXPOSE 5432
+
+# Use non-root user
+USER node
+
+# Default command
+CMD ["npm", "run", "start:all"]
