@@ -1,30 +1,35 @@
-version: "3.9"
+# docker-compose.dev.yml
+# Stable development environment for pg-wire-mock
+# Works on Windows without Prometheus crashing
 
 services:
+  # Main application
   pg-wire-mock:
     build:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: pg-wire-mock
     ports:
-      - "5432:5432"
+      - "5432:5432"  
     restart: unless-stopped
     networks:
       - monitoring
 
+  # PostgreSQL client for testing
   pg-client:
     image: postgres:17-alpine
     container_name: pg-client
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
-      - "5433:5432"
-    command: ["sleep", "infinity"]
+      - "5433:5432"  
     restart: unless-stopped
     networks:
       - monitoring
 
+  # Postgres Exporter for Prometheus
   postgres_exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres_exporter
@@ -38,15 +43,13 @@ services:
     networks:
       - monitoring
 
+  # Prometheus monitoring (stable version)
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.48.0
     container_name: prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    # command:
-    #   - "--config.file=/etc/prometheus/prometheus.yml"
-    #   - "--storage.tsdb.path=/prometheus"
     ports:
       - "9090:9090"
     depends_on:
@@ -55,6 +58,7 @@ services:
     networks:
       - monitoring
 
+  # Grafana monitoring dashboard
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -74,3 +78,4 @@ volumes:
 
 networks:
   monitoring:
+    driver: bridge
