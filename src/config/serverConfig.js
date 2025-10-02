@@ -12,36 +12,36 @@ const DEFAULT_CONFIG = {
   host: 'localhost',
   maxConnections: 100,
   connectionTimeout: 300000, // 5 minutes
-  
+
   // Logging settings
   enableLogging: true,
   logLevel: 'info', // error, warn, info, debug
-  
+
   // Protocol settings
   protocolVersion: '3.0',
   serverVersion: '13.0 (Mock)',
-  
+
   // Database settings
   defaultDatabase: 'postgres',
   defaultUser: 'postgres',
   defaultEncoding: 'UTF8',
   defaultTimezone: 'UTC',
-  
+
   // Performance settings
   maxQueryLength: 1048576, // 1MB
   maxParameterLength: 65536, // 64KB
   cleanupInterval: 60000, // 1 minute
-  
+
   // Feature flags
   enableExtendedProtocol: true,
   enableCopyProtocol: false,
   enableFunctionCalls: false,
   enableNotifications: false,
-  
+
   // Security settings (for future use)
   requireAuthentication: false,
   allowPasswordAuthentication: true,
-  allowCleartextPasswords: false
+  allowCleartextPasswords: false,
 };
 
 /**
@@ -63,7 +63,7 @@ const ENV_MAPPING = {
   PG_MOCK_CLEANUP_INTERVAL: { key: 'cleanupInterval', type: 'number' },
   PG_MOCK_ENABLE_EXTENDED_PROTOCOL: { key: 'enableExtendedProtocol', type: 'boolean' },
   PG_MOCK_ENABLE_COPY_PROTOCOL: { key: 'enableCopyProtocol', type: 'boolean' },
-  PG_MOCK_REQUIRE_AUTHENTICATION: { key: 'requireAuthentication', type: 'boolean' }
+  PG_MOCK_REQUIRE_AUTHENTICATION: { key: 'requireAuthentication', type: 'boolean' },
 };
 
 /**
@@ -72,7 +72,7 @@ const ENV_MAPPING = {
  */
 function loadConfig() {
   const config = { ...DEFAULT_CONFIG };
-  
+
   // Load from environment variables
   for (const [envVar, mapping] of Object.entries(ENV_MAPPING)) {
     const value = process.env[envVar];
@@ -80,7 +80,7 @@ function loadConfig() {
       config[mapping.key] = parseConfigValue(value, mapping.type);
     }
   }
-  
+
   return config;
 }
 
@@ -92,13 +92,14 @@ function loadConfig() {
  */
 function parseConfigValue(value, type) {
   switch (type) {
-    case 'number':
+    case 'number': {
       const num = parseInt(value, 10);
       return isNaN(num) ? null : num;
-      
+    }
+
     case 'boolean':
       return value.toLowerCase() === 'true' || value === '1';
-      
+
     case 'string':
     default:
       return value;
@@ -112,41 +113,41 @@ function parseConfigValue(value, type) {
  */
 function validateConfig(config) {
   const errors = [];
-  
+
   // Validate port
   if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
     errors.push('Port must be an integer between 1 and 65535');
   }
-  
+
   // Validate host
   if (!config.host || typeof config.host !== 'string') {
     errors.push('Host must be a non-empty string');
   }
-  
+
   // Validate max connections
   if (!Number.isInteger(config.maxConnections) || config.maxConnections < 1) {
     errors.push('maxConnections must be a positive integer');
   }
-  
+
   // Validate connection timeout
   if (!Number.isInteger(config.connectionTimeout) || config.connectionTimeout < 1000) {
     errors.push('connectionTimeout must be at least 1000ms');
   }
-  
+
   // Validate log level
   const validLogLevels = ['error', 'warn', 'info', 'debug'];
   if (!validLogLevels.includes(config.logLevel)) {
     errors.push(`logLevel must be one of: ${validLogLevels.join(', ')}`);
   }
-  
+
   // Validate max query length
   if (!Number.isInteger(config.maxQueryLength) || config.maxQueryLength < 1024) {
     errors.push('maxQueryLength must be at least 1024 bytes');
   }
-  
+
   return {
     isValid: errors.length === 0,
-    errors
+    errors,
   };
 }
 
@@ -167,7 +168,7 @@ function createServerParameters(config) {
     IntervalStyle: 'postgres',
     TimeZone: config.defaultTimezone,
     integer_datetimes: 'on',
-    standard_conforming_strings: 'on'
+    standard_conforming_strings: 'on',
   };
 }
 
@@ -182,64 +183,64 @@ function getConfigDocumentation() {
       env: 'PG_MOCK_PORT',
       type: 'number',
       default: DEFAULT_CONFIG.port,
-      description: 'Port number to listen on'
+      description: 'Port number to listen on',
     },
     {
       key: 'host',
       env: 'PG_MOCK_HOST',
       type: 'string',
       default: DEFAULT_CONFIG.host,
-      description: 'Host address to bind to'
+      description: 'Host address to bind to',
     },
     {
       key: 'maxConnections',
       env: 'PG_MOCK_MAX_CONNECTIONS',
       type: 'number',
       default: DEFAULT_CONFIG.maxConnections,
-      description: 'Maximum number of concurrent connections'
+      description: 'Maximum number of concurrent connections',
     },
     {
       key: 'connectionTimeout',
       env: 'PG_MOCK_CONNECTION_TIMEOUT',
       type: 'number',
       default: DEFAULT_CONFIG.connectionTimeout,
-      description: 'Connection timeout in milliseconds'
+      description: 'Connection timeout in milliseconds',
     },
     {
       key: 'enableLogging',
       env: 'PG_MOCK_ENABLE_LOGGING',
       type: 'boolean',
       default: DEFAULT_CONFIG.enableLogging,
-      description: 'Enable server logging'
+      description: 'Enable server logging',
     },
     {
       key: 'logLevel',
       env: 'PG_MOCK_LOG_LEVEL',
       type: 'string',
       default: DEFAULT_CONFIG.logLevel,
-      description: 'Log level (error, warn, info, debug)'
+      description: 'Log level (error, warn, info, debug)',
     },
     {
       key: 'serverVersion',
       env: 'PG_MOCK_SERVER_VERSION',
       type: 'string',
       default: DEFAULT_CONFIG.serverVersion,
-      description: 'PostgreSQL version string to report'
+      description: 'PostgreSQL version string to report',
     },
     {
       key: 'defaultDatabase',
       env: 'PG_MOCK_DEFAULT_DATABASE',
       type: 'string',
       default: DEFAULT_CONFIG.defaultDatabase,
-      description: 'Default database name'
+      description: 'Default database name',
     },
     {
       key: 'defaultUser',
       env: 'PG_MOCK_DEFAULT_USER',
       type: 'string',
       default: DEFAULT_CONFIG.defaultUser,
-      description: 'Default user name'
-    }
+      description: 'Default user name',
+    },
   ];
 }
 
@@ -250,5 +251,5 @@ module.exports = {
   parseConfigValue,
   validateConfig,
   createServerParameters,
-  getConfigDocumentation
+  getConfigDocumentation,
 };
