@@ -1,0 +1,44 @@
+name: Docker Environment Validation
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+
+jobs:
+  docker-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build all Docker images
+        run: |
+          docker-compose -f docker-compose.dev.yml build --pull
+
+      - name: Start Docker environment
+        run: |
+          docker-compose -f docker-compose.dev.yml up -d
+
+      - name: Wait for services
+        run: |
+          sleep 20  
+
+      - name: Check if pg-client is reachable
+        run: |
+          docker exec pg-client pg_isready -U postgres
+
+      - name: Check Prometheus
+        run: |
+          curl -f http://localhost:9090/-/ready
+
+      - name: Check Grafana
+        run: |
+          curl -f http://localhost:3000/api/health
+
+      - name: Tear down Docker environment
+        run: |
+          docker-compose -f docker-compose.dev.yml down -v

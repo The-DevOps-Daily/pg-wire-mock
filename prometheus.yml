@@ -2,6 +2,6 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: "postgres_exporter"
+  - job_name: 'postgres'
     static_configs:
-      - targets: ["postgres_exporter:9187"]
+      - targets: ['postgres_exporter:9187']

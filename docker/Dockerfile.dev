@@ -11,7 +11,7 @@ COPY ./package*.json ./
 ENV HUSKY=0
 
 # Install dependencies (including dev)
-RUN npm ci --ignore-scripts 
+RUN npm ci 
 
 # Copy source code
 COPY . .
