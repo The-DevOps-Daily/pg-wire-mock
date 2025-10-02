@@ -5,6 +5,7 @@
 
 const Net = require('net');
 const { ConnectionState } = require('../connection/connectionState');
+const { ConnectionPool } = require('../connection/connectionPool');
 const { processMessage } = require('../protocol/messageProcessors');
 
 /**
@@ -18,6 +19,11 @@ const { processMessage } = require('../protocol/messageProcessors');
  * @property {string} logLevel - Log level (error, warn, info, debug)
  * @property {number} shutdownTimeout - Graceful shutdown timeout in milliseconds
  * @property {number} shutdownDrainTimeout - Connection draining timeout in milliseconds
+ * @property {boolean} enableConnectionPooling - Enable connection pooling (default: true)
+ * @property {Object} poolConfig - Connection pool configuration options
+ * @property {number} poolConfig.maxConnections - Max connections in pool (default: 50)
+ * @property {number} poolConfig.minConnections - Min connections in pool (default: 5)
+ * @property {number} poolConfig.idleTimeoutMs - Idle connection timeout (default: 300000)
  */
 
 /**
@@ -39,6 +45,17 @@ class ServerManager {
       logLevel: 'info',
       shutdownTimeout: 30000, // 30 seconds
       shutdownDrainTimeout: 10000, // 10 seconds
+      enableConnectionPooling: true,
+      poolConfig: {
+        maxConnections: 50,
+        minConnections: 5,
+        idleTimeoutMs: 300000,
+        acquisitionTimeoutMs: 5000,
+        validateConnections: true,
+        enableLogging: true,
+        logLevel: 'info',
+        ...config.poolConfig,
+      },
       ...config,
     };
 
@@ -49,6 +66,16 @@ class ServerManager {
     this.startTime = null;
     this.isShuttingDown = false;
     this.shutdownPromise = null;
+
+    // Initialize connection pool if enabled
+    this.connectionPool = null;
+    if (this.config.enableConnectionPooling) {
+      this.connectionPool = new ConnectionPool({
+        ...this.config.poolConfig,
+        enableLogging: this.config.enableLogging,
+        logLevel: this.config.logLevel,
+      });
+    }
 
     // Statistics
     this.stats = {
@@ -79,7 +106,7 @@ class ServerManager {
         this.server = new Net.Server();
         this.setupServerEventHandlers();
 
-        this.server.listen(this.config.port, this.config.host, () => {
+        this.server.listen(this.config.port, this.config.host, async () => {
           this.isRunning = true;
           this.startTime = new Date();
 
@@ -87,6 +114,16 @@ class ServerManager {
           this.log('info', `Listening on ${this.config.host}:${this.config.port}`);
           this.log('info', `Max connections: ${this.config.maxConnections}`);
           this.log('info', `Connection timeout: ${this.config.connectionTimeout}ms`);
+
+          // Initialize connection pool if enabled
+          if (this.connectionPool && !this.connectionPool.isInitialized) {
+            try {
+              await this.connectionPool.initialize();
+              this.log('info', 'Connection pool initialized successfully');
+            } catch (error) {
+              this.log('error', `Failed to initialize connection pool: ${error.message}`);
+            }
+          }
 
           // Start cleanup interval (every 60 seconds)
           this.cleanupInterval = setInterval(() => {
@@ -252,7 +289,7 @@ class ServerManager {
           this.log(
             'warn',
             `Connection drain timeout reached (${timeout}ms), ` +
-              `${remainingConnections} connections remain`,
+              `${remainingConnections} connections remain`
           );
           resolve();
           return;
@@ -328,6 +365,16 @@ class ServerManager {
       this.cleanupInterval = null;
     }
 
+    // Cleanup connection pool
+    if (this.connectionPool) {
+      try {
+        this.connectionPool.destroy();
+        this.log('info', 'Connection pool cleaned up');
+      } catch (error) {
+        this.log('error', `Error cleaning up connection pool: ${error.message}`);
+      }
+    }
+
     // Clear all connections
     this.connections.clear();
 
@@ -385,14 +432,22 @@ class ServerManager {
       this.stats.connectionsRejected++;
       this.log(
         'warn',
-        `Connection rejected: max connections (${this.config.maxConnections}) reached`,
+        `Connection rejected: max connections (${this.config.maxConnections}) reached`
       );
       socket.end();
       return;
     }
 
     const connectionId = `conn_${++this.connectionCount}`;
-    const connState = new ConnectionState();
+    let connState;
+
+    // Create connection state (pool integration can be enhanced later)
+    connState = new ConnectionState();
+
+    // Log that pooling is enabled for future enhancement
+    if (this.connectionPool && this.connectionPool.isInitialized) {
+      this.log('debug', `Connection pooling enabled for ${connectionId}`);
+    }
 
     const connectionData = {
       id: connectionId,
@@ -403,6 +458,7 @@ class ServerManager {
       remotePort: socket.remotePort,
       connectedAt: new Date(),
       lastActivity: new Date(),
+      isPooled: !!this.connectionPool,
     };
 
     this.connections.set(connectionId, connectionData);
@@ -410,7 +466,7 @@ class ServerManager {
 
     this.log(
       'info',
-      `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`,
+      `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`
     );
 
     // Set connection timeout
@@ -508,7 +564,7 @@ class ServerManager {
           sendErrorResponse(
             socket,
             ERROR_CODES.PROTOCOL_VIOLATION,
-            `Protocol error: ${error.message}`,
+            `Protocol error: ${error.message}`
           );
         } catch (sendError) {
           this.log('error', `Failed to send error response: ${sendError.message}`);
@@ -533,12 +589,12 @@ class ServerManager {
       return;
     }
 
-    const { socket, connState } = connectionData;
+    const { socket, connState, isPooled } = connectionData;
     const duration = Date.now() - connectionData.connectedAt.getTime();
 
     this.log(
       'info',
-      `Closing connection ${connectionId}: ${reason} (duration: ${Math.round(duration / 1000)}s)`,
+      `Closing connection ${connectionId}: ${reason} (duration: ${Math.round(duration / 1000)}s)`
     );
 
     try {
@@ -548,8 +604,20 @@ class ServerManager {
         connState.rollbackTransaction();
       }
 
-      // Close connection state
-      connState.close();
+      // If pooling is enabled and connection is valid, return to pool
+      if (
+        !force &&
+        isPooled &&
+        this.connectionPool &&
+        typeof connState.isValid === 'function' &&
+        connState.isValid()
+      ) {
+        this.connectionPool.releaseConnection(connState);
+        this.log('debug', `Returned connection ${connectionId} to pool`);
+      } else {
+        // Close connection state
+        connState.close();
+      }
 
       if (force) {
         // Force close immediately
@@ -582,9 +650,14 @@ class ServerManager {
       }
     } catch (error) {
       this.log('error', `Error closing connection ${connectionId}: ${error.message}`);
-      // Force close on error
+      // Ensure the socket is closed on error
       if (socket && !socket.destroyed) {
         socket.destroy();
+      }
+      try {
+        connState.close();
+      } catch (_) {
+        // Ignore cleanup errors
       }
     }
 
@@ -620,7 +693,7 @@ class ServerManager {
   getStats() {
     const uptime = this.startTime ? Date.now() - this.startTime.getTime() : 0;
 
-    return {
+    const stats = {
       ...this.stats,
       activeConnections: this.connections.size,
       uptime: uptime,
@@ -629,8 +702,16 @@ class ServerManager {
         port: this.config.port,
         host: this.config.host,
         maxConnections: this.config.maxConnections,
+        enableConnectionPooling: this.config.enableConnectionPooling,
       },
     };
+
+    // Add connection pool statistics if pooling is enabled
+    if (this.connectionPool) {
+      stats.connectionPool = this.connectionPool.getStats();
+    }
+
+    return stats;
   }
 
   /**

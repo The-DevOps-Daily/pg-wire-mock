@@ -206,7 +206,7 @@ async function main() {
     if (error.code === 'EADDRINUSE') {
       console.error(
         `Port ${server?.config?.port || 5432} is already in use. ` +
-          'Try a different port with --port <port>',
+          'Try another with --port <port>'
       );
     } else if (error.code === 'EACCES') {
       console.error('Permission denied. Try running with sudo or use a port >= 1024');
