@@ -223,7 +223,7 @@ class ServerManager {
       this.stats.connectionsRejected++;
       this.log(
         'warn',
-        `Connection rejected: max connections (${this.config.maxConnections}) reached`,
+        `Connection rejected: max connections (${this.config.maxConnections}) reached`
       );
       socket.end();
       return;
@@ -234,7 +234,7 @@ class ServerManager {
 
     // Create connection state (pool integration can be enhanced later)
     connState = new ConnectionState();
-    
+
     // Log that pooling is enabled for future enhancement
     if (this.connectionPool && this.connectionPool.isInitialized) {
       this.log('debug', `Connection pooling enabled for ${connectionId}`);
@@ -257,7 +257,7 @@ class ServerManager {
 
     this.log(
       'info',
-      `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`,
+      `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`
     );
 
     // Set connection timeout
@@ -355,7 +355,7 @@ class ServerManager {
           sendErrorResponse(
             socket,
             ERROR_CODES.PROTOCOL_VIOLATION,
-            `Protocol error: ${error.message}`,
+            `Protocol error: ${error.message}`
           );
         } catch (sendError) {
           this.log('error', `Failed to send error response: ${sendError.message}`);
@@ -384,7 +384,7 @@ class ServerManager {
 
     this.log(
       'info',
-      `Closing connection ${connectionId}: ${reason} (duration: ${Math.round(duration / 1000)}s)`,
+      `Closing connection ${connectionId}: ${reason} (duration: ${Math.round(duration / 1000)}s)`
     );
 
     try {

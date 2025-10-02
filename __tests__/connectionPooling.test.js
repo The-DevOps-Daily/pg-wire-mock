@@ -38,10 +38,10 @@ describe('Connection Pooling', () => {
   describe('Pool Initialization', () => {
     test('should initialize connection pool when enabled', async () => {
       await server.start();
-      
+
       expect(server.connectionPool).toBeDefined();
       expect(server.connectionPool).toBeInstanceOf(ConnectionPool);
-      
+
       const stats = server.getStats();
       expect(stats.config.enableConnectionPooling).toBe(true);
       expect(stats.connectionPool).toBeDefined();
@@ -56,7 +56,7 @@ describe('Connection Pooling', () => {
 
       try {
         await serverWithoutPool.start();
-        
+
         expect(serverWithoutPool.connectionPool).toBe(null);
         const stats = serverWithoutPool.getStats();
         expect(stats.config.enableConnectionPooling).toBe(false);
@@ -75,14 +75,14 @@ describe('Connection Pooling', () => {
 
     test('should provide comprehensive statistics', () => {
       const stats = server.getStats();
-      
+
       expect(stats).toHaveProperty('connectionsAccepted');
       expect(stats).toHaveProperty('connectionsRejected');
       expect(stats).toHaveProperty('activeConnections');
       expect(stats).toHaveProperty('uptime');
       expect(stats).toHaveProperty('config');
       expect(stats.config).toHaveProperty('enableConnectionPooling');
-      
+
       if (stats.connectionPool) {
         expect(stats.connectionPool).toHaveProperty('totalConnections');
         expect(stats.connectionPool).toHaveProperty('activeConnections');
@@ -92,10 +92,10 @@ describe('Connection Pooling', () => {
 
     test('should show pool is initialized and active', () => {
       const stats = server.getStats();
-      
+
       // Verify connection pool is active
       expect(stats.config.enableConnectionPooling).toBe(true);
-      
+
       // Verify pool statistics are available
       if (stats.connectionPool) {
         expect(stats.connectionPool.totalConnections).toBeGreaterThanOrEqual(0);
@@ -120,14 +120,13 @@ describe('Connection Pooling', () => {
 
       try {
         await customServer.start();
-        
+
         expect(customServer.connectionPool).toBeDefined();
         expect(customServer.config.poolConfig.maxConnections).toBe(10);
         expect(customServer.config.poolConfig.minConnections).toBe(3);
-        
+
         const stats = customServer.getStats();
         expect(stats.config.enableConnectionPooling).toBe(true);
-        
       } finally {
         await customServer.stop();
       }
@@ -137,19 +136,19 @@ describe('Connection Pooling', () => {
   describe('Server Integration', () => {
     test('should start and stop server with pool successfully', async () => {
       await server.start();
-      
+
       expect(server.isServerRunning()).toBe(true);
       expect(server.connectionPool).toBeDefined();
-      
+
       await server.stop();
-      
+
       expect(server.isServerRunning()).toBe(false);
     });
 
     test('should handle server startup errors gracefully', async () => {
       // Try to start server on same port twice
       await server.start();
-      
+
       const duplicateServer = new ServerManager({
         port: testPort, // Same port
         enableConnectionPooling: true,
