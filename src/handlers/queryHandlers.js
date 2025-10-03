@@ -16,6 +16,97 @@ const {
 } = require('../protocol/messageBuilders');
 
 /**
+ * Mock database schema for introspection queries
+ * This represents a realistic database structure that tools and ORMs can discover
+ */
+const MOCK_SCHEMA = {
+  // Database schemas (namespaces)
+  schemas: [
+    { schema_name: 'public' },
+    { schema_name: 'information_schema' },
+    { schema_name: 'pg_catalog' },
+  ],
+  
+  // Mock tables with realistic structure
+  tables: [
+    {
+      table_catalog: 'postgres',
+      table_schema: 'public',
+      table_name: 'users',
+      table_type: 'BASE TABLE',
+      columns: [
+        {
+          column_name: 'id',
+          data_type: 'integer',
+          is_nullable: 'NO',
+          column_default: 'nextval(\'users_id_seq\'::regclass)',
+          ordinal_position: 1,
+        },
+        {
+          column_name: 'name',
+          data_type: 'character varying',
+          character_maximum_length: 255,
+          is_nullable: 'YES',
+          column_default: null,
+          ordinal_position: 2,
+        },
+        {
+          column_name: 'email',
+          data_type: 'character varying',
+          character_maximum_length: 255,
+          is_nullable: 'NO',
+          column_default: null,
+          ordinal_position: 3,
+        },
+        {
+          column_name: 'created_at',
+          data_type: 'timestamp with time zone',
+          is_nullable: 'NO',
+          column_default: 'CURRENT_TIMESTAMP',
+          ordinal_position: 4,
+        },
+      ],
+    },
+    {
+      table_catalog: 'postgres',
+      table_schema: 'public',
+      table_name: 'posts',
+      table_type: 'BASE TABLE',
+      columns: [
+        {
+          column_name: 'id',
+          data_type: 'integer',
+          is_nullable: 'NO',
+          column_default: 'nextval(\'posts_id_seq\'::regclass)',
+          ordinal_position: 1,
+        },
+        {
+          column_name: 'title',
+          data_type: 'text',
+          is_nullable: 'NO',
+          column_default: null,
+          ordinal_position: 2,
+        },
+        {
+          column_name: 'content',
+          data_type: 'text',
+          is_nullable: 'YES',
+          column_default: null,
+          ordinal_position: 3,
+        },
+        {
+          column_name: 'user_id',
+          data_type: 'integer',
+          is_nullable: 'NO',
+          column_default: null,
+          ordinal_position: 4,
+        },
+      ],
+    },
+  ],
+};
+
+/**
  * Query result structure
  * @typedef {Object} QueryResult
  * @property {Array} columns - Column descriptors for RowDescription
@@ -120,7 +211,11 @@ function processQuery(query, connState) {
 
   try {
     // Route to appropriate handler based on query type
-    if (normalizedQuery.startsWith('SELECT')) {
+    
+    // Check for database introspection queries first (before general SELECT)
+    if (normalizedQuery.includes('INFORMATION_SCHEMA.') || normalizedQuery.includes('PG_CATALOG.')) {
+      return handleIntrospectionQuery(normalizedQuery, connState);
+    } else if (normalizedQuery.startsWith('SELECT')) {
       return handleSelectQuery(normalizedQuery, connState);
     } else if (normalizedQuery.startsWith('SHOW')) {
       return handleShowQuery(normalizedQuery, connState);
@@ -783,6 +878,279 @@ function getQueryType(query) {
   return firstWord || 'UNKNOWN';
 }
 
+/**
+ * Handles database introspection queries (information_schema and pg_catalog)
+ * @param {string} query - The introspection query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleIntrospectionQuery(query, connState) {
+  const upperQuery = query.toUpperCase();
+  
+  // Handle information_schema queries
+  if (upperQuery.includes('INFORMATION_SCHEMA.TABLES')) {
+    return handleInformationSchemaTables(query, connState);
+  } else if (upperQuery.includes('INFORMATION_SCHEMA.COLUMNS')) {
+    return handleInformationSchemaColumns(query, connState);
+  } else if (upperQuery.includes('INFORMATION_SCHEMA.SCHEMATA')) {
+    return handleInformationSchemaSchemata(query, connState);
+  }
+  
+  // Handle pg_catalog queries (we'll implement these in step 4)
+  else if (upperQuery.includes('PG_CATALOG.')) {
+    return handlePgCatalogQuery(query, connState);
+  }
+  
+  // Fallback for unknown introspection queries
+  return {
+    columns: [
+      {
+        name: 'note',
+        dataTypeOID: DATA_TYPES.TEXT,
+        dataTypeSize: -1,
+      },
+    ],
+    rows: [['Introspection query not yet implemented: ' + query.substring(0, 100)]],
+    command: 'SELECT',
+    rowCount: 1,
+  };
+}
+
+/**
+ * Handles information_schema.tables queries
+ * Returns list of tables in the database
+ */
+function handleInformationSchemaTables(_query, _connState) {
+  // Build the standard information_schema.tables columns
+  const columns = [
+    { name: 'table_catalog', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'table_schema', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'table_name', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'table_type', dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 },
+  ];
+
+  // Convert our mock schema tables to information_schema format
+  const rows = MOCK_SCHEMA.tables.map(table => [
+    table.table_catalog,
+    table.table_schema,
+    table.table_name,
+    table.table_type,
+  ]);
+
+  return {
+    columns,
+    rows,
+    command: 'SELECT',
+    rowCount: rows.length,
+  };
+}
+
+/**
+ * Handles information_schema.columns queries
+ * Returns list of columns for tables
+ */
+function handleInformationSchemaColumns(_query, _connState) {
+  const columns = [
+    { name: 'table_catalog', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'table_schema', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'table_name', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'column_name', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'ordinal_position', dataTypeOID: DATA_TYPES.INT4, dataTypeSize: 4 },
+    { name: 'column_default', dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 },
+    { name: 'is_nullable', dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 },
+    { name: 'data_type', dataTypeOID: DATA_TYPES.TEXT, dataTypeSize: -1 },
+    { name: 'character_maximum_length', dataTypeOID: DATA_TYPES.INT4, dataTypeSize: 4 },
+  ];
+
+  // Build rows from all columns in all tables
+  const rows = [];
+  MOCK_SCHEMA.tables.forEach(table => {
+    table.columns.forEach(column => {
+      rows.push([
+        table.table_catalog,
+        table.table_schema,
+        table.table_name,
+        column.column_name,
+        column.ordinal_position.toString(),
+        column.column_default,
+        column.is_nullable,
+        column.data_type,
+        column.character_maximum_length ? column.character_maximum_length.toString() : null,
+      ]);
+    });
+  });
+
+  return {
+    columns,
+    rows,
+    command: 'SELECT',
+    rowCount: rows.length,
+  };
+}
+
+/**
+ * Handles information_schema.schemata queries
+ * Returns list of database schemas (namespaces)
+ */
+function handleInformationSchemaSchemata(_query, _connState) {
+  const columns = [
+    { name: 'catalog_name', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'schema_name', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'schema_owner', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+  ];
+
+  const rows = MOCK_SCHEMA.schemas.map(schema => [
+    'postgres', // catalog_name
+    schema.schema_name,
+    'postgres', // schema_owner
+  ]);
+
+  return {
+    columns,
+    rows,
+    command: 'SELECT',
+    rowCount: rows.length,
+  };
+}
+
+/**
+ * Handles pg_catalog queries (PostgreSQL system catalogs)
+ * @param {string} query - The pg_catalog query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handlePgCatalogQuery(query, connState) {
+  const upperQuery = query.toUpperCase();
+  
+  if (upperQuery.includes('PG_CATALOG.PG_TABLES')) {
+    return handlePgTables(query, connState);
+  } else if (upperQuery.includes('PG_CATALOG.PG_TYPE')) {
+    return handlePgType(query, connState);
+  } else if (upperQuery.includes('PG_CATALOG.PG_CLASS')) {
+    return handlePgClass(query, connState);
+  }
+  
+  // Fallback for unknown pg_catalog queries
+  return {
+    columns: [
+      {
+        name: 'note',
+        dataTypeOID: DATA_TYPES.TEXT,
+        dataTypeSize: -1,
+      },
+    ],
+    rows: [['pg_catalog query not yet implemented: ' + query.substring(0, 100)]],
+    command: 'SELECT',
+    rowCount: 1,
+  };
+}
+
+/**
+ * Handles pg_catalog.pg_tables queries
+ * PostgreSQL-specific table information
+ */
+function handlePgTables(_query, _connState) {
+  const columns = [
+    { name: 'schemaname', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'tablename', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'tableowner', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'tablespace', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'hasindexes', dataTypeOID: DATA_TYPES.BOOL, dataTypeSize: 1 },
+    { name: 'hasrules', dataTypeOID: DATA_TYPES.BOOL, dataTypeSize: 1 },
+    { name: 'hastriggers', dataTypeOID: DATA_TYPES.BOOL, dataTypeSize: 1 },
+    { name: 'rowsecurity', dataTypeOID: DATA_TYPES.BOOL, dataTypeSize: 1 },
+  ];
+
+  const rows = MOCK_SCHEMA.tables
+    .filter(table => table.table_type === 'BASE TABLE')
+    .map(table => [
+      table.table_schema,    // schemaname
+      table.table_name,      // tablename
+      'postgres',            // tableowner
+      null,                  // tablespace
+      'true',                // hasindexes
+      'false',               // hasrules
+      'false',               // hastriggers
+      'false',               // rowsecurity
+    ]);
+
+  return {
+    columns,
+    rows,
+    command: 'SELECT',
+    rowCount: rows.length,
+  };
+}
+
+/**
+ * Handles pg_catalog.pg_type queries
+ * PostgreSQL data type information
+ */
+function handlePgType(_query, _connState) {
+  const columns = [
+    { name: 'oid', dataTypeOID: DATA_TYPES.OID, dataTypeSize: 4 },
+    { name: 'typname', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'typnamespace', dataTypeOID: DATA_TYPES.OID, dataTypeSize: 4 },
+    { name: 'typlen', dataTypeOID: DATA_TYPES.INT2, dataTypeSize: 2 },
+    { name: 'typtype', dataTypeOID: DATA_TYPES.CHAR, dataTypeSize: 1 },
+  ];
+
+  // Common PostgreSQL data types
+  const rows = [
+    [DATA_TYPES.BOOL.toString(), 'bool', '11', '1', 'b'],
+    [DATA_TYPES.INT2.toString(), 'int2', '11', '2', 'b'],
+    [DATA_TYPES.INT4.toString(), 'int4', '11', '4', 'b'],
+    [DATA_TYPES.INT8.toString(), 'int8', '11', '8', 'b'],
+    [DATA_TYPES.TEXT.toString(), 'text', '11', '-1', 'b'],
+    [DATA_TYPES.VARCHAR.toString(), 'varchar', '11', '-1', 'b'],
+    [DATA_TYPES.TIMESTAMP.toString(), 'timestamp', '11', '8', 'b'],
+    [DATA_TYPES.TIMESTAMPTZ.toString(), 'timestamptz', '11', '8', 'b'],
+  ];
+
+  return {
+    columns,
+    rows,
+    command: 'SELECT',
+    rowCount: rows.length,
+  };
+}
+
+/**
+ * Handles pg_catalog.pg_class queries
+ * PostgreSQL relation (table/index/sequence) information
+ */
+function handlePgClass(_query, _connState) {
+  const columns = [
+    { name: 'oid', dataTypeOID: DATA_TYPES.OID, dataTypeSize: 4 },
+    { name: 'relname', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
+    { name: 'relnamespace', dataTypeOID: DATA_TYPES.OID, dataTypeSize: 4 },
+    { name: 'relkind', dataTypeOID: DATA_TYPES.CHAR, dataTypeSize: 1 },
+    { name: 'relowner', dataTypeOID: DATA_TYPES.OID, dataTypeSize: 4 },
+    { name: 'reltablespace', dataTypeOID: DATA_TYPES.OID, dataTypeSize: 4 },
+    { name: 'reltuples', dataTypeOID: DATA_TYPES.FLOAT4, dataTypeSize: 4 },
+    { name: 'relpages', dataTypeOID: DATA_TYPES.INT4, dataTypeSize: 4 },
+  ];
+
+  // Mock relations (tables) from our schema
+  const rows = MOCK_SCHEMA.tables.map((table, index) => [
+    (16384 + index).toString(),  // oid (fake but realistic)
+    table.table_name,            // relname
+    '2200',                      // relnamespace (public schema)
+    'r',                         // relkind ('r' = ordinary table)
+    '10',                        // relowner (postgres user)
+    '0',                         // reltablespace (default)
+    '100.0',                     // reltuples (estimated row count)
+    '10',                        // relpages (estimated page count)
+  ]);
+
+  return {
+    columns,
+    rows,
+    command: 'SELECT',
+    rowCount: rows.length,
+  };
+}
+
 module.exports = {
   executeQuery,
   executeQueryString,
@@ -798,6 +1166,14 @@ module.exports = {
   handleCreateQuery,
   handleDropQuery,
   handleUnknownQuery,
+  handleIntrospectionQuery,
+  handleInformationSchemaTables,
+  handleInformationSchemaColumns,
+  handleInformationSchemaSchemata,
+  handlePgCatalogQuery,
+  handlePgTables,
+  handlePgType,
+  handlePgClass,
   updateTransactionStatus,
   validateQuery,
   getQueryType,

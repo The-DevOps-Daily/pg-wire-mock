@@ -1,0 +1,81 @@
+# docker-compose.dev.yml
+# Stable development environment for pg-wire-mock
+# Works on Windows without Prometheus crashing
+
+services:
+  # Main application
+  pg-wire-mock:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: pg-wire-mock
+    ports:
+      - "5432:5432"  
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # PostgreSQL client for testing
+  pg-client:
+    image: postgres:17-alpine
+    container_name: pg-client
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"  
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Postgres Exporter for Prometheus
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@pg-client:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - pg-client
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Prometheus monitoring (stable version)
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - postgres_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Grafana monitoring dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+volumes:
+  prometheus_data:
+
+networks:
+  monitoring:
+    driver: bridge
