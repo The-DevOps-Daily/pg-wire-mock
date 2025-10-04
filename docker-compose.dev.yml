@@ -9,8 +9,16 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: pg-wire-mock
+    environment:
+      - PG_MOCK_ENABLE_METRICS=true
+      - PG_MOCK_METRICS_PORT=9091
+      - PG_MOCK_METRICS_HOST=0.0.0.0
+      - PG_MOCK_SLOW_QUERY_THRESHOLD=100
+      - PG_MOCK_ENABLE_LOGGING=true
+      - PG_MOCK_LOG_LEVEL=info
     ports:
-      - "5432:5432"  
+      - "5432:5432"
+      - "9091:9091"  # Metrics endpoint
     restart: unless-stopped
     networks:
       - monitoring
