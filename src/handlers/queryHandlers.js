@@ -26,7 +26,7 @@ const MOCK_SCHEMA = {
     { schema_name: 'information_schema' },
     { schema_name: 'pg_catalog' },
   ],
-  
+
   // Mock tables with realistic structure
   tables: [
     {
@@ -39,7 +39,7 @@ const MOCK_SCHEMA = {
           column_name: 'id',
           data_type: 'integer',
           is_nullable: 'NO',
-          column_default: 'nextval(\'users_id_seq\'::regclass)',
+          column_default: "nextval('users_id_seq'::regclass)",
           ordinal_position: 1,
         },
         {
@@ -77,7 +77,7 @@ const MOCK_SCHEMA = {
           column_name: 'id',
           data_type: 'integer',
           is_nullable: 'NO',
-          column_default: 'nextval(\'posts_id_seq\'::regclass)',
+          column_default: "nextval('posts_id_seq'::regclass)",
           ordinal_position: 1,
         },
         {
@@ -142,7 +142,7 @@ function executeQuery(query, socket, connState) {
         context: results.error.context,
         schema: results.error.schema,
         table: results.error.table,
-      },
+      }
     );
     connState.transactionStatus = TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
     return;
@@ -211,9 +211,12 @@ function processQuery(query, connState) {
 
   try {
     // Route to appropriate handler based on query type
-    
+
     // Check for database introspection queries first (before general SELECT)
-    if (normalizedQuery.includes('INFORMATION_SCHEMA.') || normalizedQuery.includes('PG_CATALOG.')) {
+    if (
+      normalizedQuery.includes('INFORMATION_SCHEMA.') ||
+      normalizedQuery.includes('PG_CATALOG.')
+    ) {
       return handleIntrospectionQuery(normalizedQuery, connState);
     } else if (normalizedQuery.startsWith('SELECT')) {
       return handleSelectQuery(normalizedQuery, connState);
@@ -886,7 +889,7 @@ function getQueryType(query) {
  */
 function handleIntrospectionQuery(query, connState) {
   const upperQuery = query.toUpperCase();
-  
+
   // Handle information_schema queries
   if (upperQuery.includes('INFORMATION_SCHEMA.TABLES')) {
     return handleInformationSchemaTables(query, connState);
@@ -895,12 +898,12 @@ function handleIntrospectionQuery(query, connState) {
   } else if (upperQuery.includes('INFORMATION_SCHEMA.SCHEMATA')) {
     return handleInformationSchemaSchemata(query, connState);
   }
-  
+
   // Handle pg_catalog queries (we'll implement these in step 4)
   else if (upperQuery.includes('PG_CATALOG.')) {
     return handlePgCatalogQuery(query, connState);
   }
-  
+
   // Fallback for unknown introspection queries
   return {
     columns: [
@@ -1021,7 +1024,7 @@ function handleInformationSchemaSchemata(_query, _connState) {
  */
 function handlePgCatalogQuery(query, connState) {
   const upperQuery = query.toUpperCase();
-  
+
   if (upperQuery.includes('PG_CATALOG.PG_TABLES')) {
     return handlePgTables(query, connState);
   } else if (upperQuery.includes('PG_CATALOG.PG_TYPE')) {
@@ -1029,7 +1032,7 @@ function handlePgCatalogQuery(query, connState) {
   } else if (upperQuery.includes('PG_CATALOG.PG_CLASS')) {
     return handlePgClass(query, connState);
   }
-  
+
   // Fallback for unknown pg_catalog queries
   return {
     columns: [
@@ -1064,14 +1067,14 @@ function handlePgTables(_query, _connState) {
   const rows = MOCK_SCHEMA.tables
     .filter(table => table.table_type === 'BASE TABLE')
     .map(table => [
-      table.table_schema,    // schemaname
-      table.table_name,      // tablename
-      'postgres',            // tableowner
-      null,                  // tablespace
-      'true',                // hasindexes
-      'false',               // hasrules
-      'false',               // hastriggers
-      'false',               // rowsecurity
+      table.table_schema, // schemaname
+      table.table_name, // tablename
+      'postgres', // tableowner
+      null, // tablespace
+      'true', // hasindexes
+      'false', // hasrules
+      'false', // hastriggers
+      'false', // rowsecurity
     ]);
 
   return {
@@ -1133,14 +1136,14 @@ function handlePgClass(_query, _connState) {
 
   // Mock relations (tables) from our schema
   const rows = MOCK_SCHEMA.tables.map((table, index) => [
-    (16384 + index).toString(),  // oid (fake but realistic)
-    table.table_name,            // relname
-    '2200',                      // relnamespace (public schema)
-    'r',                         // relkind ('r' = ordinary table)
-    '10',                        // relowner (postgres user)
-    '0',                         // reltablespace (default)
-    '100.0',                     // reltuples (estimated row count)
-    '10',                        // relpages (estimated page count)
+    (16384 + index).toString(), // oid (fake but realistic)
+    table.table_name, // relname
+    '2200', // relnamespace (public schema)
+    'r', // relkind ('r' = ordinary table)
+    '10', // relowner (postgres user)
+    '0', // reltablespace (default)
+    '100.0', // reltuples (estimated row count)
+    '10', // relpages (estimated page count)
   ]);
 
   return {
