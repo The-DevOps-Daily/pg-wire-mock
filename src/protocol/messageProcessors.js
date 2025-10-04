@@ -13,6 +13,18 @@ const {
 } = require('./constants');
 
 const { parseParameters, getMessageType } = require('./utils');
+const { createProtocolLogger } = require('../utils/logger');
+
+// Create protocol logger instance (will be configured by server)
+let protocolLogger = createProtocolLogger();
+
+/**
+ * Configures the protocol logger for message processors
+ * @param {Object} config - Logger configuration
+ */
+function configureMessageProcessorLogger(config) {
+  protocolLogger = createProtocolLogger(config);
+}
 
 const {
   sendAuthenticationOK,
@@ -66,7 +78,10 @@ function processStartupMessage(buffer, socket, connState) {
 
   const protocolVersion = buffer.readInt32BE(4);
 
-  console.log(`Startup message - Length: ${length}, Protocol: ${protocolVersion}`);
+  protocolLogger.received('StartupMessage', `length: ${length}, protocol: ${protocolVersion}`, {
+    messageLength: length,
+    protocolVersion: protocolVersion,
+  });
 
   try {
     // Handle SSL request
@@ -115,7 +130,10 @@ function processRegularMessage(buffer, socket, connState) {
     return 0;
   }
 
-  console.log(`Processing message type '${messageType}', length: ${length}`);
+  protocolLogger.received(messageType, `length: ${length}`, {
+    messageType: messageType,
+    messageLength: length,
+  });
 
   try {
     switch (messageType) {
@@ -680,4 +698,5 @@ module.exports = {
   handleCancelRequest,
   handleStartupPacket,
   handleTerminate,
+  configureMessageProcessorLogger,
 };
