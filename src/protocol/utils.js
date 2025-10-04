@@ -147,6 +147,218 @@ function getMessageType(buffer) {
 }
 
 /**
+ * Validates if a message type is valid for the current protocol state
+ * @param {string} messageType - Message type character to validate
+ * @param {boolean} isAuthenticated - Whether connection is authenticated
+ * @returns {Object} Validation result with isValid and error message
+ */
+function validateMessageType(messageType, isAuthenticated = false) {
+  const { MESSAGE_TYPES } = require('./constants');
+
+  // Valid message types for authenticated connections
+  const authenticatedMessages = [
+    MESSAGE_TYPES.QUERY, // Q - Simple Query
+    MESSAGE_TYPES.PARSE, // P - Parse
+    MESSAGE_TYPES.BIND, // B - Bind
+    MESSAGE_TYPES.DESCRIBE, // D - Describe
+    MESSAGE_TYPES.EXECUTE, // E - Execute
+    MESSAGE_TYPES.SYNC, // S - Sync
+    MESSAGE_TYPES.TERMINATE, // X - Terminate
+    MESSAGE_TYPES.COPY_DATA, // d - Copy Data
+    MESSAGE_TYPES.COPY_DONE, // c - Copy Done
+    MESSAGE_TYPES.COPY_FAIL, // f - Copy Fail
+    MESSAGE_TYPES.FUNCTION_CALL, // F - Function Call
+  ];
+
+  // Valid message types for unauthenticated connections
+  const unauthenticatedMessages = [
+    MESSAGE_TYPES.PASSWORD_MESSAGE, // p - Password Message
+    MESSAGE_TYPES.TERMINATE, // X - Terminate (allowed anytime)
+  ];
+
+  if (!messageType || typeof messageType !== 'string' || messageType.length !== 1) {
+    return {
+      isValid: false,
+      error: 'Message type must be a single character',
+      code: 'INVALID_MESSAGE_TYPE_FORMAT',
+    };
+  }
+
+  // Check if message type is printable ASCII (PostgreSQL protocol requirement)
+  const charCode = messageType.charCodeAt(0);
+  if (charCode < 32 || charCode > 126) {
+    return {
+      isValid: false,
+      error: `Invalid message type character: non-printable ASCII (${charCode})`,
+      code: 'INVALID_MESSAGE_TYPE_CHARACTER',
+    };
+  }
+
+  if (isAuthenticated) {
+    if (!authenticatedMessages.includes(messageType)) {
+      return {
+        isValid: false,
+        error: `Message type '${messageType}' not allowed for authenticated connections`,
+        code: 'INVALID_MESSAGE_TYPE_FOR_STATE',
+      };
+    }
+  } else {
+    if (!unauthenticatedMessages.includes(messageType)) {
+      return {
+        isValid: false,
+        error: `Message type '${messageType}' not allowed before authentication`,
+        code: 'INVALID_MESSAGE_TYPE_BEFORE_AUTH',
+      };
+    }
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Validates message length against protocol constraints
+ * @param {number} messageLength - Declared message length from header
+ * @param {number} bufferLength - Actual buffer length available
+ * @param {string} messageType - Message type for context
+ * @returns {Object} Validation result with isValid and error message
+ */
+function validateMessageLength(messageLength, bufferLength, messageType) {
+  const MAX_MESSAGE_LENGTH = 1073741824; // 1GB - PostgreSQL's max message size
+  const MIN_MESSAGE_LENGTH = 4; // Minimum length (just the length field)
+
+  if (messageLength < MIN_MESSAGE_LENGTH) {
+    return {
+      isValid: false,
+      error: `Message length ${messageLength} is too small (minimum ${MIN_MESSAGE_LENGTH})`,
+      code: 'MESSAGE_TOO_SHORT',
+    };
+  }
+
+  if (messageLength > MAX_MESSAGE_LENGTH) {
+    return {
+      isValid: false,
+      error: `Message length ${messageLength} exceeds maximum allowed size (${MAX_MESSAGE_LENGTH})`,
+      code: 'MESSAGE_TOO_LONG',
+    };
+  }
+
+  // Check if we have enough data for the declared message length
+  const requiredLength = messageLength + 1; // +1 for message type byte
+  if (bufferLength < requiredLength) {
+    return {
+      isValid: false,
+      error: `Incomplete message: need ${requiredLength} bytes, have ${bufferLength}`,
+      code: 'INCOMPLETE_MESSAGE',
+      incomplete: true, // Flag to indicate this is not an error, just need more data
+    };
+  }
+
+  // Type-specific length validations
+  switch (messageType) {
+    case 'Q': // Query - must have at least null terminator
+      if (messageLength < 5) {
+        // 4 bytes length + 1 byte null terminator minimum
+        return {
+          isValid: false,
+          error: 'Query message too short to contain valid query string',
+          code: 'INVALID_QUERY_LENGTH',
+        };
+      }
+      break;
+
+    case 'X': // Terminate - should be exactly 4 bytes (just length)
+      if (messageLength !== 4) {
+        return {
+          isValid: false,
+          error: 'Terminate message should have exactly 4 bytes length',
+          code: 'INVALID_TERMINATE_LENGTH',
+        };
+      }
+      break;
+
+    case 'S': // Sync - should be exactly 4 bytes (just length)
+      if (messageLength !== 4) {
+        return {
+          isValid: false,
+          error: 'Sync message should have exactly 4 bytes length',
+          code: 'INVALID_SYNC_LENGTH',
+        };
+      }
+      break;
+
+    case 'P': // Parse - needs at least statement name, query, and param count
+      if (messageLength < 7) {
+        // 4 + 1 (null) + 1 (null) + 2 (param count) minimum
+        return {
+          isValid: false,
+          error: 'Parse message too short for minimum required fields',
+          code: 'INVALID_PARSE_LENGTH',
+        };
+      }
+      break;
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Enhanced message type extraction with validation
+ * @param {Buffer} buffer - Buffer containing the message
+ * @param {boolean} isAuthenticated - Whether connection is authenticated
+ * @returns {Object} Result with messageType, isValid, and optional error
+ */
+function getValidatedMessageType(buffer, isAuthenticated = false) {
+  try {
+    if (!buffer || buffer.length < 5) {
+      return {
+        isValid: false,
+        error: 'Buffer too small for complete message header',
+        code: 'INSUFFICIENT_DATA',
+      };
+    }
+
+    const messageType = getMessageType(buffer);
+    const messageLength = buffer.readInt32BE(1);
+
+    // Validate message type
+    const typeValidation = validateMessageType(messageType, isAuthenticated);
+    if (!typeValidation.isValid) {
+      return {
+        messageType,
+        isValid: false,
+        error: typeValidation.error,
+        code: typeValidation.code,
+      };
+    }
+
+    // Validate message length
+    const lengthValidation = validateMessageLength(messageLength, buffer.length, messageType);
+    if (!lengthValidation.isValid) {
+      return {
+        messageType,
+        messageLength,
+        isValid: false,
+        error: lengthValidation.error,
+        code: lengthValidation.code,
+        incomplete: lengthValidation.incomplete,
+      };
+    }
+
+    return {
+      messageType,
+      messageLength,
+      isValid: true,
+    };
+  } catch (error) {
+    return {
+      isValid: false,
+      error: error.message,
+      code: 'MESSAGE_VALIDATION_ERROR',
+    };
+  }
+}
+
+/**
  * Calculates MD5 hash for PostgreSQL authentication
  * @param {string} password - User password
  * @param {string} username - Username
@@ -657,6 +869,10 @@ module.exports = {
   isValidProtocolVersion,
   parseQueryStatements,
   createErrorFields,
+  // Message validation utilities
+  validateMessageType,
+  validateMessageLength,
+  getValidatedMessageType,
   // Array utilities
   encodeArrayToText,
   parseArrayFromText,
