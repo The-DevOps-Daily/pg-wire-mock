@@ -650,7 +650,7 @@ class ServerManager {
 
     while (connectionData.buffer.length > 0) {
       try {
-        const processed = processMessage(connectionData.buffer, socket, connState);
+        const processed = processMessage(connectionData.buffer, socket, connState, this.statsCollector);
 
         if (processed === 0) {
           break; // Need more data
