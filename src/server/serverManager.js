@@ -191,6 +191,24 @@ class ServerManager {
             this.cleanupConnections();
           }, 60000);
 
+          // Start metrics endpoint if enabled
+          if (this.config.enableMetrics && this.prometheusExporter) {
+            try {
+              await this.prometheusExporter.start();
+              this.log('info', `Metrics endpoint available at ${this.prometheusExporter.getMetricsUrl()}`);
+
+              // Start periodic metrics updates
+              this.metricsInterval = setInterval(() => {
+                const stats = this.getDetailedStats();
+                this.prometheusExporter.updateMetrics(stats);
+              }, this.config.metricsUpdateInterval);
+
+              this.log('info', `Metrics collection enabled with ${this.config.metricsUpdateInterval}ms update interval`);
+            } catch (error) {
+              this.log('warn', `Failed to start metrics endpoint: ${error.message}`);
+            }
+          }
+
           resolve();
         });
 
