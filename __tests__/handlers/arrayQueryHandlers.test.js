@@ -8,7 +8,7 @@ const { DATA_TYPES } = require('../../src/protocol/constants');
 describe('Array Query Handlers', () => {
   describe('handleArrayQuery', () => {
     test('should handle ARRAY constructor syntax', () => {
-      const query = "SELECT ARRAY['apple', 'banana', 'cherry']";
+      const query = 'SELECT ARRAY[\'apple\', \'banana\', \'cherry\']';
       const result = handleArrayQuery(query, {});
 
       expect(result.command).toBe('SELECT');
@@ -21,7 +21,7 @@ describe('Array Query Handlers', () => {
     });
 
     test('should handle array literal syntax', () => {
-      const query = "SELECT '{apple,banana,cherry}'";
+      const query = 'SELECT \'{apple,banana,cherry}\'';
       const result = handleArrayQuery(query, {});
 
       expect(result.command).toBe('SELECT');
@@ -34,7 +34,7 @@ describe('Array Query Handlers', () => {
     });
 
     test('should handle typed array casting', () => {
-      const query = "SELECT '{1,2,3,4,5}'::int4[]";
+      const query = 'SELECT \'{1,2,3,4,5}\'::int4[]';
       const result = handleArrayQuery(query, {});
 
       expect(result.command).toBe('SELECT');
@@ -47,7 +47,7 @@ describe('Array Query Handlers', () => {
     });
 
     test('should handle boolean array casting', () => {
-      const query = "SELECT '{t,f,true,false}'::bool[]";
+      const query = 'SELECT \'{t,f,true,false}\'::bool[]';
       const result = handleArrayQuery(query, {});
 
       expect(result.command).toBe('SELECT');
@@ -76,7 +76,7 @@ describe('Array Query Handlers', () => {
     });
 
     test('should handle multidimensional array literal', () => {
-      const query = "SELECT '{{a,b},{c,d}}'";
+      const query = 'SELECT \'{{a,b},{c,d}}\'';
       const result = handleArrayQuery(query, {});
 
       expect(result.command).toBe('SELECT');
@@ -92,7 +92,7 @@ describe('Array Query Handlers', () => {
     });
 
     test('should handle invalid array syntax', () => {
-      const query = "SELECT '{invalid,array'"; // Missing closing brace
+      const query = 'SELECT \'{invalid,array\''; // Missing closing brace
       const result = handleArrayQuery(query, {});
 
       // This should not match any pattern and fall back to the default case

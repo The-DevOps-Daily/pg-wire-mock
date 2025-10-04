@@ -52,6 +52,14 @@ const DEFAULT_CONFIG = {
   // Shutdown settings
   shutdownTimeout: 30000,
   shutdownDrainTimeout: 10000,
+
+  // Monitoring settings
+  enableMetrics: false,
+  metricsPort: 9090,
+  metricsHost: '0.0.0.0',
+  slowQueryThreshold: 100, // milliseconds
+  metricsRetention: 3600000, // 1 hour in milliseconds
+  metricsUpdateInterval: 5000, // 5 seconds
 };
 
 /**
@@ -76,6 +84,14 @@ const ENV_MAPPING = {
   PG_MOCK_REQUIRE_AUTHENTICATION: { key: 'requireAuthentication', type: 'boolean' },
   PG_MOCK_SHUTDOWN_TIMEOUT: { key: 'shutdownTimeout', type: 'number' },
   PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT: { key: 'shutdownDrainTimeout', type: 'number' },
+
+  // Monitoring environment variables
+  PG_MOCK_ENABLE_METRICS: { key: 'enableMetrics', type: 'boolean' },
+  PG_MOCK_METRICS_PORT: { key: 'metricsPort', type: 'number' },
+  PG_MOCK_METRICS_HOST: { key: 'metricsHost', type: 'string' },
+  PG_MOCK_SLOW_QUERY_THRESHOLD: { key: 'slowQueryThreshold', type: 'number' },
+  PG_MOCK_METRICS_RETENTION: { key: 'metricsRetention', type: 'number' },
+  PG_MOCK_METRICS_UPDATE_INTERVAL: { key: 'metricsUpdateInterval', type: 'number' },
 };
 
 /**
@@ -118,17 +134,17 @@ function loadConfig() {
  */
 function parseConfigValue(value, type) {
   switch (type) {
-    case 'number': {
-      const num = parseInt(value, 10);
-      return isNaN(num) ? null : num;
-    }
+  case 'number': {
+    const num = parseInt(value, 10);
+    return isNaN(num) ? null : num;
+  }
 
-    case 'boolean':
-      return value.toLowerCase() === 'true' || value === '1';
+  case 'boolean':
+    return value.toLowerCase() === 'true' || value === '1';
 
-    case 'string':
-    default:
-      return value;
+  case 'string':
+  default:
+    return value;
   }
 }
 
@@ -169,6 +185,29 @@ function validateConfig(config) {
   // Validate max query length
   if (!Number.isInteger(config.maxQueryLength) || config.maxQueryLength < 1024) {
     errors.push('maxQueryLength must be at least 1024 bytes');
+  }
+
+  // Validate monitoring settings
+  if (config.enableMetrics) {
+    if (!Number.isInteger(config.metricsPort) || config.metricsPort < 1 || config.metricsPort > 65535) {
+      errors.push('metricsPort must be an integer between 1 and 65535');
+    }
+
+    if (!config.metricsHost || typeof config.metricsHost !== 'string') {
+      errors.push('metricsHost must be a non-empty string');
+    }
+
+    if (!Number.isInteger(config.slowQueryThreshold) || config.slowQueryThreshold < 0) {
+      errors.push('slowQueryThreshold must be a non-negative integer');
+    }
+
+    if (!Number.isInteger(config.metricsRetention) || config.metricsRetention < 60000) {
+      errors.push('metricsRetention must be at least 60000ms (1 minute)');
+    }
+
+    if (!Number.isInteger(config.metricsUpdateInterval) || config.metricsUpdateInterval < 1000) {
+      errors.push('metricsUpdateInterval must be at least 1000ms');
+    }
   }
 
   return {
@@ -266,6 +305,34 @@ function getConfigDocumentation() {
       type: 'string',
       default: DEFAULT_CONFIG.defaultUser,
       description: 'Default user name',
+    },
+    {
+      key: 'enableMetrics',
+      env: 'PG_MOCK_ENABLE_METRICS',
+      type: 'boolean',
+      default: DEFAULT_CONFIG.enableMetrics,
+      description: 'Enable Prometheus metrics collection and export',
+    },
+    {
+      key: 'metricsPort',
+      env: 'PG_MOCK_METRICS_PORT',
+      type: 'number',
+      default: DEFAULT_CONFIG.metricsPort,
+      description: 'Port for Prometheus metrics endpoint',
+    },
+    {
+      key: 'metricsHost',
+      env: 'PG_MOCK_METRICS_HOST',
+      type: 'string',
+      default: DEFAULT_CONFIG.metricsHost,
+      description: 'Host address for metrics endpoint',
+    },
+    {
+      key: 'slowQueryThreshold',
+      env: 'PG_MOCK_SLOW_QUERY_THRESHOLD',
+      type: 'number',
+      default: DEFAULT_CONFIG.slowQueryThreshold,
+      description: 'Threshold in milliseconds for slow query tracking',
     },
   ];
 }

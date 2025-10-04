@@ -220,7 +220,7 @@ describe('Database Introspection Queries', () => {
     });
 
     test('should route pg_catalog queries to correct handlers', () => {
-      const query = "SELECT * FROM pg_catalog.pg_type WHERE typname = 'int4'";
+      const query = 'SELECT * FROM pg_catalog.pg_type WHERE typname = \'int4\'';
       const result = handlePgCatalogQuery(query, mockConnState);
 
       expect(result.command).toBe('SELECT');

@@ -45,13 +45,14 @@ const { executeQueryString, executeQuery } = require('../handlers/queryHandlers'
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
+ * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processMessage(buffer, socket, connState) {
+function processMessage(buffer, socket, connState, statsCollector = null) {
   if (!connState.authenticated) {
-    return processStartupMessage(buffer, socket, connState);
+    return processStartupMessage(buffer, socket, connState, statsCollector);
   } else {
-    return processRegularMessage(buffer, socket, connState);
+    return processRegularMessage(buffer, socket, connState, statsCollector);
   }
 }
 
@@ -63,7 +64,7 @@ function processMessage(buffer, socket, connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processStartupMessage(buffer, socket, connState) {
+function processStartupMessage(buffer, socket, connState, _statsCollector = null) {
   // Need at least 8 bytes for length + protocol version
   if (buffer.length < 8) {
     return 0;
@@ -116,7 +117,7 @@ function processStartupMessage(buffer, socket, connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processRegularMessage(buffer, socket, connState) {
+function processRegularMessage(buffer, socket, connState, statsCollector = null) {
   // Need at least 5 bytes for message type + length
   if (buffer.length < 5) {
     return 0;
@@ -137,50 +138,50 @@ function processRegularMessage(buffer, socket, connState) {
 
   try {
     switch (messageType) {
-      case MESSAGE_TYPES.QUERY: // 'Q' - Simple Query
-        return processSimpleQuery(buffer, socket, connState);
+    case MESSAGE_TYPES.QUERY: // 'Q' - Simple Query
+      return processSimpleQuery(buffer, socket, connState, statsCollector);
 
-      case MESSAGE_TYPES.TERMINATE: // 'X' - Terminate
-        return handleTerminate(socket, connState, length);
+    case MESSAGE_TYPES.TERMINATE: // 'X' - Terminate
+      return handleTerminate(socket, connState, length);
 
-      case MESSAGE_TYPES.PARSE: // 'P' - Parse (Extended Query)
-        return processParse(buffer, socket, connState);
+    case MESSAGE_TYPES.PARSE: // 'P' - Parse (Extended Query)
+      return processParse(buffer, socket, connState);
 
-      case MESSAGE_TYPES.BIND: // 'B' - Bind (Extended Query)
-        return processBind(buffer, socket, connState);
+    case MESSAGE_TYPES.BIND: // 'B' - Bind (Extended Query)
+      return processBind(buffer, socket, connState);
 
-      case MESSAGE_TYPES.DESCRIBE: // 'D' - Describe
-        return processDescribe(buffer, socket, connState);
+    case MESSAGE_TYPES.DESCRIBE: // 'D' - Describe
+      return processDescribe(buffer, socket, connState);
 
-      case MESSAGE_TYPES.EXECUTE: // 'E' - Execute
-        return processExecute(buffer, socket, connState);
+    case MESSAGE_TYPES.EXECUTE: // 'E' - Execute
+      return processExecute(buffer, socket, connState, statsCollector);
 
-      case MESSAGE_TYPES.SYNC: // 'S' - Sync
-        return processSync(buffer, socket, connState);
+    case MESSAGE_TYPES.SYNC: // 'S' - Sync
+      return processSync(buffer, socket, connState);
 
-      case MESSAGE_TYPES.PASSWORD_MESSAGE: // 'p' - Password Message
-        return processPasswordMessage(buffer, socket, connState);
+    case MESSAGE_TYPES.PASSWORD_MESSAGE: // 'p' - Password Message
+      return processPasswordMessage(buffer, socket, connState);
 
-      case MESSAGE_TYPES.COPY_DATA: // 'd' - Copy Data
-        return processCopyData(buffer, socket, connState);
+    case MESSAGE_TYPES.COPY_DATA: // 'd' - Copy Data
+      return processCopyData(buffer, socket, connState);
 
-      case MESSAGE_TYPES.COPY_DONE: // 'c' - Copy Done
-        return processCopyDone(buffer, socket, connState);
+    case MESSAGE_TYPES.COPY_DONE: // 'c' - Copy Done
+      return processCopyDone(buffer, socket, connState);
 
-      case MESSAGE_TYPES.COPY_FAIL: // 'f' - Copy Fail
-        return processCopyFail(buffer, socket, connState);
+    case MESSAGE_TYPES.COPY_FAIL: // 'f' - Copy Fail
+      return processCopyFail(buffer, socket, connState);
 
-      case MESSAGE_TYPES.FUNCTION_CALL: // 'F' - Function Call
-        return processFunctionCall(buffer, socket, connState);
+    case MESSAGE_TYPES.FUNCTION_CALL: // 'F' - Function Call
+      return processFunctionCall(buffer, socket, connState);
 
-      default:
-        console.warn(`Unknown message type: ${messageType}`);
-        sendErrorResponse(
-          socket,
-          ERROR_CODES.PROTOCOL_VIOLATION,
-          `${ERROR_MESSAGES.UNKNOWN_MESSAGE_TYPE}: ${messageType}`
-        );
-        return length + 1;
+    default:
+      console.warn(`Unknown message type: ${messageType}`);
+      sendErrorResponse(
+        socket,
+        ERROR_CODES.PROTOCOL_VIOLATION,
+        `${ERROR_MESSAGES.UNKNOWN_MESSAGE_TYPE}: ${messageType}`
+      );
+      return length + 1;
     }
   } catch (error) {
     console.error(`Error processing ${messageType} message:`, error);
@@ -267,9 +268,10 @@ function handleStartupPacket(buffer, socket, connState, length) {
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
+ * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  * @returns {number} Bytes processed
  */
-function processSimpleQuery(buffer, socket, connState) {
+function processSimpleQuery(buffer, socket, connState, statsCollector = null) {
   const length = buffer.readInt32BE(1);
 
   // Extract query string (remove message type, length, and null terminator)
@@ -278,11 +280,16 @@ function processSimpleQuery(buffer, socket, connState) {
 
   console.log(`Executing simple query: ${query}`);
 
+  // Record protocol message for monitoring
+  if (statsCollector) {
+    statsCollector.recordProtocolMessage('QUERY', false);
+  }
+
   // Increment query counter
   connState.incrementQueryCount();
 
   // Execute the query string (handles multiple statements)
-  executeQueryString(query, socket, connState);
+  executeQueryString(query, socket, connState, statsCollector);
 
   sendReadyForQuery(socket, connState);
   return length + 1;
@@ -497,9 +504,10 @@ function processDescribe(buffer, socket, connState) {
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
+ * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  * @returns {number} Bytes processed
  */
-function processExecute(buffer, socket, connState) {
+function processExecute(buffer, socket, connState, statsCollector = null) {
   const length = buffer.readInt32BE(1);
 
   try {
@@ -516,6 +524,11 @@ function processExecute(buffer, socket, connState) {
 
     console.log(`Execute: portal="${portalName || '(unnamed)'}", limit=${rowLimit}`);
 
+    // Record protocol message for monitoring
+    if (statsCollector) {
+      statsCollector.recordProtocolMessage('EXECUTE', true);
+    }
+
     // Get the portal
     const portal = connState.getPortal(portalName);
     if (!portal) {
@@ -529,7 +542,7 @@ function processExecute(buffer, socket, connState) {
 
     // Execute the query from the portal
     connState.incrementQueryCount();
-    executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState);
+    executeQuery(portal.query || 'SELECT \'Extended query result\'', socket, connState, statsCollector);
 
     return length + 1;
   } catch (error) {

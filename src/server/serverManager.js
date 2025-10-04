@@ -13,6 +13,8 @@ const {
 const { configureProtocolLogger } = require('../protocol/messageBuilders');
 const { configureQueryLogger } = require('../handlers/queryHandlers');
 const { createLogger } = require('../utils/logger');
+const { StatsCollector } = require('../monitoring/statsCollector');
+const { PrometheusExporter } = require('../monitoring/prometheusExporter');
 
 /**
  * Configuration options for the server
@@ -30,6 +32,12 @@ const { createLogger } = require('../utils/logger');
  * @property {number} poolConfig.maxConnections - Max connections in pool (default: 50)
  * @property {number} poolConfig.minConnections - Min connections in pool (default: 5)
  * @property {number} poolConfig.idleTimeoutMs - Idle connection timeout (default: 300000)
+ * @property {boolean} enableMetrics - Enable metrics collection and Prometheus export (default: false)
+ * @property {number} metricsPort - Port for Prometheus metrics endpoint (default: 9090)
+ * @property {string} metricsHost - Host for metrics endpoint (default: '0.0.0.0')
+ * @property {number} slowQueryThreshold - Threshold in ms for slow query tracking (default: 100)
+ * @property {number} metricsRetention - Metrics retention period in ms (default: 3600000)
+ * @property {number} metricsUpdateInterval - Metrics update interval in ms (default: 5000)
  */
 
 /**
@@ -62,6 +70,13 @@ class ServerManager {
         logLevel: 'info',
         ...config.poolConfig,
       },
+      // Monitoring settings
+      enableMetrics: false,
+      metricsPort: 9090,
+      metricsHost: '0.0.0.0',
+      slowQueryThreshold: 100,
+      metricsRetention: 3600000,
+      metricsUpdateInterval: 5000,
       ...config,
     };
 
@@ -96,6 +111,24 @@ class ServerManager {
 
     // Cleanup interval
     this.cleanupInterval = null;
+
+    // Initialize monitoring components
+    this.statsCollector = null;
+    this.prometheusExporter = null;
+    this.metricsInterval = null;
+
+    if (this.config.enableMetrics) {
+      this.statsCollector = new StatsCollector({
+        enableMetrics: this.config.enableMetrics,
+        slowQueryThreshold: this.config.slowQueryThreshold,
+        retentionPeriod: this.config.metricsRetention,
+      });
+
+      this.prometheusExporter = new PrometheusExporter({
+        port: this.config.metricsPort,
+        host: this.config.metricsHost,
+      });
+    }
 
     // Initialize centralized logging system
     this.logger = createLogger('server');
@@ -157,6 +190,24 @@ class ServerManager {
           this.cleanupInterval = setInterval(() => {
             this.cleanupConnections();
           }, 60000);
+
+          // Start metrics endpoint if enabled
+          if (this.config.enableMetrics && this.prometheusExporter) {
+            try {
+              await this.prometheusExporter.start();
+              this.log('info', `Metrics endpoint available at ${this.prometheusExporter.getMetricsUrl()}`);
+
+              // Start periodic metrics updates
+              this.metricsInterval = setInterval(() => {
+                const stats = this.getDetailedStats();
+                this.prometheusExporter.updateMetrics(stats);
+              }, this.config.metricsUpdateInterval);
+
+              this.log('info', `Metrics collection enabled with ${this.config.metricsUpdateInterval}ms update interval`);
+            } catch (error) {
+              this.log('warn', `Failed to start metrics endpoint: ${error.message}`);
+            }
+          }
 
           resolve();
         });
@@ -393,6 +444,25 @@ class ServerManager {
       this.cleanupInterval = null;
     }
 
+    // Clear metrics interval
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
+
+    // Stop metrics endpoint
+    if (this.prometheusExporter) {
+      this.prometheusExporter.stop()
+        .then(() => this.log('info', 'Metrics endpoint stopped'))
+        .catch(error => this.log('warn', `Error stopping metrics endpoint: ${error.message}`));
+    }
+
+    // Cleanup stats collector
+    if (this.statsCollector) {
+      this.statsCollector.destroy();
+      this.log('info', 'Stats collector cleaned up');
+    }
+
     // Cleanup connection pool
     if (this.connectionPool) {
       try {
@@ -497,6 +567,15 @@ class ServerManager {
       `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`
     );
 
+    // Record connection creation for monitoring
+    if (this.statsCollector) {
+      this.statsCollector.recordConnectionCreated(connectionId, {
+        remoteAddress: socket.remoteAddress,
+        remotePort: socket.remotePort,
+        isPooled: !!this.connectionPool,
+      });
+    }
+
     // Set connection timeout
     socket.setTimeout(this.config.connectionTimeout);
 
@@ -518,6 +597,11 @@ class ServerManager {
         this.stats.bytesReceived += chunk.length;
         connectionData.lastActivity = new Date();
         connectionData.buffer = Buffer.concat([connectionData.buffer, chunk]);
+
+        // Record data transfer for monitoring
+        if (this.statsCollector) {
+          this.statsCollector.recordDataTransfer(connectionId, chunk.length, 0);
+        }
 
         this.processMessages(connectionId, connectionData);
       } catch (error) {
@@ -566,7 +650,7 @@ class ServerManager {
 
     while (connectionData.buffer.length > 0) {
       try {
-        const processed = processMessage(connectionData.buffer, socket, connState);
+        const processed = processMessage(connectionData.buffer, socket, connState, this.statsCollector);
 
         if (processed === 0) {
           break; // Need more data
@@ -615,6 +699,11 @@ class ServerManager {
     const connectionData = this.connections.get(connectionId);
     if (!connectionData) {
       return;
+    }
+
+    // Record connection destruction for monitoring
+    if (this.statsCollector) {
+      this.statsCollector.recordConnectionDestroyed(connectionId, reason);
     }
 
     const { socket, connState, isPooled } = connectionData;
@@ -731,6 +820,7 @@ class ServerManager {
         host: this.config.host,
         maxConnections: this.config.maxConnections,
         enableConnectionPooling: this.config.enableConnectionPooling,
+        enableMetrics: this.config.enableMetrics,
       },
     };
 
@@ -740,6 +830,24 @@ class ServerManager {
     }
 
     return stats;
+  }
+
+  /**
+   * Gets detailed server statistics including monitoring data
+   * @returns {Object} Enhanced server statistics
+   */
+  getDetailedStats() {
+    const baseStats = this.getStats();
+
+    if (this.statsCollector) {
+      const detailedStats = this.statsCollector.getStats();
+      return {
+        ...baseStats,
+        monitoring: detailedStats,
+      };
+    }
+
+    return baseStats;
   }
 
   /**

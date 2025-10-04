@@ -32,7 +32,7 @@ function checkSyntaxErrors(query) {
       message: 'Unterminated string literal',
       detail: 'The query contains an odd number of single quotes',
       hint: 'Check for missing closing quotes in string literals',
-      position: findUnmatchedQuotePosition(trimmedQuery, "'"),
+      position: findUnmatchedQuotePosition(trimmedQuery, '\''),
     };
   }
 
