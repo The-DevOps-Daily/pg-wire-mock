@@ -296,7 +296,7 @@ class ConnectionPool {
 
     this.validationInterval = setInterval(
       this.validateIdleConnections,
-      this.config.validationIntervalMs,
+      this.config.validationIntervalMs
     );
     this.log('debug', `Started validation interval: ${this.config.validationIntervalMs}ms`);
   }
@@ -570,7 +570,7 @@ class ConnectionPool {
           const assignedConnection = this.assignConnectionToClient(
             connection,
             request.clientId,
-            request.acquisitionStart,
+            request.acquisitionStart
           );
           request.resolve(assignedConnection);
         } else {
@@ -786,7 +786,7 @@ class ConnectionPool {
     const shutdownStart = Date.now();
     const checkInterval = 100; // Check every 100ms
 
-    while (this.stats.activeConnections > 0 && (Date.now() - shutdownStart) < timeoutMs) {
+    while (this.stats.activeConnections > 0 && Date.now() - shutdownStart < timeoutMs) {
       await new Promise(resolve => setTimeout(resolve, checkInterval));
     }
 

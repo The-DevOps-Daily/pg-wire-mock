@@ -31,6 +31,8 @@ describe('Server Configuration', () => {
       connectionTimeout: 300000,
       enableLogging: true,
       logLevel: 'info',
+      shutdownTimeout: 30000,
+      shutdownDrainTimeout: 10000,
     });
   });
 
@@ -49,6 +51,8 @@ describe('Server Configuration', () => {
       connectionTimeout: 300000,
       enableLogging: true,
       logLevel: 'debug',
+      shutdownTimeout: 30000,
+      shutdownDrainTimeout: 10000,
     });
   });
 
@@ -75,6 +79,8 @@ describe('Server Configuration', () => {
       connectionTimeout: 300000,
       enableLogging: true,
       logLevel: 'error',
+      shutdownTimeout: 30000,
+      shutdownDrainTimeout: 10000,
     });
   });
 
@@ -84,5 +90,22 @@ describe('Server Configuration', () => {
     const config = parseConfig();
 
     expect(config.enableLogging).toBe(false);
+  });
+
+  test('should use default shutdown configuration', () => {
+    const config = parseConfig();
+
+    expect(config.shutdownTimeout).toBe(30000);
+    expect(config.shutdownDrainTimeout).toBe(10000);
+  });
+
+  test('should use environment variables for shutdown configuration', () => {
+    process.env.PG_MOCK_SHUTDOWN_TIMEOUT = '15000';
+    process.env.PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT = '5000';
+
+    const config = parseConfig();
+
+    expect(config.shutdownTimeout).toBe(15000);
+    expect(config.shutdownDrainTimeout).toBe(5000);
   });
 });

@@ -7,7 +7,7 @@
 
 A comprehensive mock PostgreSQL server that implements the PostgreSQL wire protocol for learning, testing, and development purposes. Built for experimenting with and understanding the PostgreSQL wire protocol.
 
-> **New!** Check out our detailed [PostgreSQL Wire Protocol Guide](PROTOCOL.md) to learn how the protocol works.
+> **New!** Check out our detailed [PostgreSQL Wire Protocol Guide](PROTOCOL.md) to learn how the protocol works, and our [Graceful Shutdown Documentation](SHUTDOWN.md) for production deployment guidance.
 
 ## 🌟 Features
 
@@ -32,7 +32,7 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Connection management and pooling
   - Configurable logging and monitoring
   - Statistics and performance tracking
-  - Graceful shutdown handling
+  - Graceful shutdown handling with connection draining
 
 ## 🚀 Quick Start
 
@@ -167,6 +167,10 @@ export PG_MOCK_CONNECTION_TIMEOUT=300000
 export PG_MOCK_ENABLE_LOGGING=true
 export PG_MOCK_LOG_LEVEL=info
 
+# Shutdown settings
+export PG_MOCK_SHUTDOWN_TIMEOUT=30000
+export PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT=10000
+
 # Database settings
 export PG_MOCK_SERVER_VERSION="13.0 (Mock)"
 export PG_MOCK_DEFAULT_DATABASE=postgres
@@ -224,6 +228,63 @@ console.log(stats);
 //   activeConnections: 3
 // }
 ```
+
+## 🔄 Graceful Shutdown
+
+The server implements comprehensive graceful shutdown behavior to ensure clean connection termination:
+
+### Shutdown Process
+
+1. **Stop Accepting New Connections**: Server immediately stops accepting new client connections
+2. **Notify Active Clients**: All connected clients receive a shutdown notice
+3. **Transaction Rollback**: Any active transactions are automatically rolled back
+4. **Connection Draining**: Server waits for clients to disconnect gracefully
+5. **Force Close**: After timeout, remaining connections are force-closed
+6. **Resource Cleanup**: All server resources are cleaned up
+
+### Configuration
+
+```bash
+# Shutdown timeout (total time for graceful shutdown)
+export PG_MOCK_SHUTDOWN_TIMEOUT=30000
+
+# Connection drain timeout (time to wait for clients to disconnect)
+export PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT=10000
+```
+
+### Shutdown Status Monitoring
+
+```javascript
+// Check if server is shutting down
+if (server.isServerShuttingDown()) {
+  console.log('Server is currently shutting down');
+}
+
+// Get detailed shutdown status
+const status = server.getShutdownStatus();
+console.log(status);
+// {
+//   isShuttingDown: false,
+//   activeConnections: 5,
+//   shutdownTimeout: 30000,
+//   drainTimeout: 10000
+// }
+```
+
+### Signal Handling
+
+The server automatically handles common termination signals:
+
+- **SIGTERM**: Graceful shutdown (used by process managers)
+- **SIGINT**: Graceful shutdown (Ctrl+C)
+- **SIGUSR1**: Graceful shutdown (custom signal)
+
+### Best Practices
+
+- **Client Applications**: Implement proper connection cleanup to respond to shutdown notices
+- **Process Managers**: Use SIGTERM for graceful shutdown, SIGKILL only as last resort
+- **Monitoring**: Check `isServerShuttingDown()` before attempting new operations
+- **Timeouts**: Configure appropriate timeouts based on your application needs
 
 ## 🐞 Debugging
 
