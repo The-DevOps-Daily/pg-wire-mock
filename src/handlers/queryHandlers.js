@@ -3,7 +3,12 @@
  * Functions for processing SQL queries and generating appropriate responses
  */
 
-const { DATA_TYPES, TRANSACTION_STATUS, ERROR_CODES } = require('../protocol/constants');
+const {
+  DATA_TYPES,
+  TRANSACTION_STATUS,
+  ERROR_CODES,
+  ERROR_MESSAGES,
+} = require('../protocol/constants');
 
 const { formatCommandTag } = require('../protocol/utils');
 
@@ -838,7 +843,7 @@ function validateQuery(query) {
       isValid: false,
       error: {
         code: ERROR_CODES.SYNTAX_ERROR,
-        message: 'Empty query string',
+        message: ERROR_MESSAGES.EMPTY_QUERY,
       },
     };
   }
@@ -852,7 +857,7 @@ function validateQuery(query) {
       isValid: false,
       error: {
         code: ERROR_CODES.SYNTAX_ERROR,
-        message: 'Unterminated quoted string',
+        message: ERROR_MESSAGES.UNTERMINATED_STRING,
       },
     };
   }
@@ -862,7 +867,7 @@ function validateQuery(query) {
       isValid: false,
       error: {
         code: ERROR_CODES.SYNTAX_ERROR,
-        message: 'Unterminated quoted identifier',
+        message: ERROR_MESSAGES.UNTERMINATED_IDENTIFIER,
       },
     };
   }

@@ -9,6 +9,7 @@ const {
   CANCEL_REQUEST_CODE,
   MESSAGE_TYPES,
   ERROR_CODES,
+  ERROR_MESSAGES,
 } = require('./constants');
 
 const { parseParameters, getMessageType } = require('./utils');
@@ -159,7 +160,7 @@ function processRegularMessage(buffer, socket, connState) {
         sendErrorResponse(
           socket,
           ERROR_CODES.PROTOCOL_VIOLATION,
-          `Unknown message type: ${messageType}`,
+          `${ERROR_MESSAGES.UNKNOWN_MESSAGE_TYPE}: ${messageType}`
         );
         return length + 1;
     }
@@ -168,7 +169,7 @@ function processRegularMessage(buffer, socket, connState) {
     sendErrorResponse(
       socket,
       ERROR_CODES.INTERNAL_ERROR,
-      `Message processing error: ${error.message}`,
+      `${ERROR_MESSAGES.MESSAGE_PROCESSING_ERROR}: ${error.message}`
     );
     return length + 1;
   }
@@ -202,9 +203,8 @@ function handleCancelRequest(buffer, socket, length) {
     const pid = buffer.readInt32BE(8);
     const secret = buffer.readInt32BE(12);
     console.log(`Cancel request received for PID: ${pid}, Secret: ${secret}`);
-    // In a real implementation, we'd find and cancel the query
-  } else {
-    console.log('Malformed cancel request received');
+    // In a real implementation, we'd find and cancel the query    } else {
+    console.log(ERROR_MESSAGES.MALFORMED_CANCEL_REQUEST);
   }
 
   socket.end(); // Cancel requests close the connection
@@ -326,7 +326,7 @@ function processParse(buffer, socket, connState) {
     }
 
     console.log(
-      `Parse: statement="${statementName || '(unnamed)'}", query="${query}", params=${paramCount}`,
+      `Parse: statement="${statementName || '(unnamed)'}", query="${query}", params=${paramCount}`
     );
 
     // Store the prepared statement
@@ -340,7 +340,7 @@ function processParse(buffer, socket, connState) {
     return length + 1;
   } catch (error) {
     console.error('Error parsing Parse message:', error);
-    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Parse message format');
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, ERROR_MESSAGES.INVALID_PARSE_MESSAGE);
     return length + 1;
   }
 }
@@ -372,7 +372,7 @@ function processBind(buffer, socket, connState) {
     offset++; // Skip null terminator
 
     console.log(
-      `Bind: portal="${portalName || '(unnamed)'}", statement="${statementName || '(unnamed)'}"`,
+      `Bind: portal="${portalName || '(unnamed)'}", statement="${statementName || '(unnamed)'}"`
     );
 
     // Get the prepared statement
@@ -381,7 +381,7 @@ function processBind(buffer, socket, connState) {
       sendErrorResponse(
         socket,
         ERROR_CODES.UNDEFINED_FUNCTION,
-        `Prepared statement "${statementName}" does not exist`,
+        `Prepared statement "${statementName}" does not exist`
       );
       return length + 1;
     }
@@ -397,7 +397,7 @@ function processBind(buffer, socket, connState) {
     return length + 1;
   } catch (error) {
     console.error('Error parsing Bind message:', error);
-    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Bind message format');
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, ERROR_MESSAGES.INVALID_BIND_MESSAGE);
     return length + 1;
   }
 }
@@ -439,7 +439,7 @@ function processDescribe(buffer, socket, connState) {
         sendErrorResponse(
           socket,
           ERROR_CODES.UNDEFINED_FUNCTION,
-          `Prepared statement "${name}" does not exist`,
+          `Prepared statement "${name}" does not exist`
         );
       }
     } else if (describeType === 'P') {
@@ -457,7 +457,7 @@ function processDescribe(buffer, socket, connState) {
         sendErrorResponse(
           socket,
           ERROR_CODES.UNDEFINED_FUNCTION,
-          `Portal "${name}" does not exist`,
+          `Portal "${name}" does not exist`
         );
       }
     }
@@ -465,7 +465,11 @@ function processDescribe(buffer, socket, connState) {
     return length + 1;
   } catch (error) {
     console.error('Error parsing Describe message:', error);
-    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Describe message format');
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.PROTOCOL_VIOLATION,
+      ERROR_MESSAGES.INVALID_DESCRIBE_MESSAGE
+    );
     return length + 1;
   }
 }
@@ -500,7 +504,7 @@ function processExecute(buffer, socket, connState) {
       sendErrorResponse(
         socket,
         ERROR_CODES.UNDEFINED_FUNCTION,
-        `Portal "${portalName}" does not exist`,
+        `${ERROR_MESSAGES.PORTAL_DOES_NOT_EXIST}: "${portalName}"`
       );
       return length + 1;
     }
@@ -512,7 +516,11 @@ function processExecute(buffer, socket, connState) {
     return length + 1;
   } catch (error) {
     console.error('Error parsing Execute message:', error);
-    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, 'Invalid Execute message format');
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.PROTOCOL_VIOLATION,
+      ERROR_MESSAGES.INVALID_EXECUTE_MESSAGE
+    );
     return length + 1;
   }
 }
@@ -622,7 +630,11 @@ function processCopyFail(buffer, socket, _connState) {
   console.log(`Copy failed: ${errorMessage}`);
 
   // Send error response
-  sendErrorResponse(socket, ERROR_CODES.DATA_EXCEPTION, `COPY failed: ${errorMessage}`);
+  sendErrorResponse(
+    socket,
+    ERROR_CODES.DATA_EXCEPTION,
+    `${ERROR_MESSAGES.COPY_FAILED}: ${errorMessage}`
+  );
 
   return length + 1;
 }
@@ -643,7 +655,7 @@ function processFunctionCall(buffer, socket, _connState) {
   sendErrorResponse(
     socket,
     ERROR_CODES.FEATURE_NOT_SUPPORTED,
-    'Function call protocol not supported',
+    ERROR_MESSAGES.FUNCTION_CALL_NOT_SUPPORTED
   );
 
   return length + 1;
