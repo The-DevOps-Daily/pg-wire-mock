@@ -444,6 +444,25 @@ class ServerManager {
       this.cleanupInterval = null;
     }
 
+    // Clear metrics interval
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
+
+    // Stop metrics endpoint
+    if (this.prometheusExporter) {
+      this.prometheusExporter.stop()
+        .then(() => this.log('info', 'Metrics endpoint stopped'))
+        .catch(error => this.log('warn', `Error stopping metrics endpoint: ${error.message}`));
+    }
+
+    // Cleanup stats collector
+    if (this.statsCollector) {
+      this.statsCollector.destroy();
+      this.log('info', 'Stats collector cleaned up');
+    }
+
     // Cleanup connection pool
     if (this.connectionPool) {
       try {
