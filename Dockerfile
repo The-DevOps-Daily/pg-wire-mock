@@ -1,5 +1,5 @@
 # PostgreSQL Wire Protocol Mock Server Docker Image
-FROM node:16-alpine
+FROM node:24.9.0-alpine
 
 # Create app directory
 WORKDIR /app
