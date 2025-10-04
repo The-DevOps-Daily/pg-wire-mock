@@ -154,7 +154,7 @@ function processRegularMessage(buffer, socket, connState, statsCollector = null)
         return processDescribe(buffer, socket, connState);
 
       case MESSAGE_TYPES.EXECUTE: // 'E' - Execute
-        return processExecute(buffer, socket, connState);
+        return processExecute(buffer, socket, connState, statsCollector);
 
       case MESSAGE_TYPES.SYNC: // 'S' - Sync
         return processSync(buffer, socket, connState);
