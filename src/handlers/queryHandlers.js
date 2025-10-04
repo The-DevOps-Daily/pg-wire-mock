@@ -216,8 +216,9 @@ function executeQuery(query, socket, connState, statsCollector = null) {
  * @param {string} queryString - Raw query string potentially containing multiple statements
  * @param {Socket} socket - Client socket for sending responses
  * @param {ConnectionState} connState - Connection state object
+ * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  */
-function executeQueryString(queryString, socket, connState) {
+function executeQueryString(queryString, socket, connState, statsCollector = null) {
   const { parseQueryStatements } = require('../protocol/utils');
 
   // Parse multiple statements
@@ -233,7 +234,7 @@ function executeQueryString(queryString, socket, connState) {
     if (statement.trim() === '') {
       sendEmptyQueryResponse(socket);
     } else {
-      executeQuery(statement, socket, connState);
+      executeQuery(statement, socket, connState, statsCollector);
 
       // Stop execution if we're in a failed transaction state
       if (connState.transactionStatus === TRANSACTION_STATUS.IN_FAILED_TRANSACTION) {
