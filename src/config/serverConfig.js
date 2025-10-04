@@ -134,17 +134,17 @@ function loadConfig() {
  */
 function parseConfigValue(value, type) {
   switch (type) {
-    case 'number': {
-      const num = parseInt(value, 10);
-      return isNaN(num) ? null : num;
-    }
+  case 'number': {
+    const num = parseInt(value, 10);
+    return isNaN(num) ? null : num;
+  }
 
-    case 'boolean':
-      return value.toLowerCase() === 'true' || value === '1';
+  case 'boolean':
+    return value.toLowerCase() === 'true' || value === '1';
 
-    case 'string':
-    default:
-      return value;
+  case 'string':
+  default:
+    return value;
   }
 }
 

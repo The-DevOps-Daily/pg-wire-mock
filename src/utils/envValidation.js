@@ -143,19 +143,19 @@ function validateEnvironmentVariable(envVar, value) {
   try {
     // Parse the value based on type
     switch (rule.type) {
-      case 'number':
-        result.parsedValue = parseNumber(value, rule, envVar);
-        break;
-      case 'boolean':
-        result.parsedValue = parseBoolean(value, rule, envVar);
-        break;
-      case 'enum':
-        result.parsedValue = parseEnum(value, rule, envVar);
-        break;
-      case 'string':
-      default:
-        result.parsedValue = parseString(value, rule, envVar);
-        break;
+    case 'number':
+      result.parsedValue = parseNumber(value, rule, envVar);
+      break;
+    case 'boolean':
+      result.parsedValue = parseBoolean(value, rule, envVar);
+      break;
+    case 'enum':
+      result.parsedValue = parseEnum(value, rule, envVar);
+      break;
+    case 'string':
+    default:
+      result.parsedValue = parseString(value, rule, envVar);
+      break;
     }
 
     // Add warnings for values outside recommended ranges
