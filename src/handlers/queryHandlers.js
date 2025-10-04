@@ -177,22 +177,38 @@ function executeQuery(query, socket, connState, statsCollector = null) {
       return;
     }
 
-  // Send result data if query returns rows
-  if (results.columns && results.columns.length > 0) {
-    sendRowDescription(socket, results.columns);
+    // Send result data if query returns rows
+    if (results.columns && results.columns.length > 0) {
+      sendRowDescription(socket, results.columns);
 
-    // Send each data row
-    for (const row of results.rows || []) {
-      sendDataRow(socket, row);
+      // Send each data row
+      for (const row of results.rows || []) {
+        sendDataRow(socket, row);
+      }
+    }
+
+    // Send command completion
+    const commandTag = formatCommandTag(results.command, results.rowCount);
+    sendCommandComplete(socket, commandTag);
+
+    // Update transaction status based on command
+    updateTransactionStatus(connState, results.command);
+
+  } catch (err) {
+    success = false;
+    error = err;
+
+    // Send error response for unexpected errors
+    sendErrorResponse(socket, ERROR_CODES.INTERNAL_ERROR, err.message);
+    connState.transactionStatus = TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
+  } finally {
+    // Record metrics if collector is available
+    if (statsCollector) {
+      const latency = Date.now() - startTime;
+      const connectionId = connState.connectionId || 'unknown';
+      statsCollector.recordQuery(connectionId, query, latency, success, error);
     }
   }
-
-  // Send command completion
-  const commandTag = formatCommandTag(results.command, results.rowCount);
-  sendCommandComplete(socket, commandTag);
-
-  // Update transaction status based on command
-  updateTransactionStatus(connState, results.command);
 }
 
 /**
