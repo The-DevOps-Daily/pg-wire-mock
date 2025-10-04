@@ -129,7 +129,7 @@ class PrometheusRegistry {
       output += `# TYPE ${name} ${metric.type}\n`;
 
       if (metric.type === 'histogram') {
-        for (const [key, data] of metric.values) {
+        for (const [, data] of metric.values) {
           const labelStr = Object.keys(data.labels).length > 0 ?
             `{${Object.keys(data.labels).map(k => `${k}="${data.labels[k]}"`).join(',')}}` : '';
 
