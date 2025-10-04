@@ -49,7 +49,7 @@ console.log('   ✅ Integration Tests - 8 integration scenarios');
 console.log('\n🧪 Test Summary:');
 console.log('   ✅ Total Tests: 157 tests across 10 test suites');
 console.log('   ✅ Protocol Tests: Array handling, message processing');
-console.log('   ✅ Server Tests: Configuration, shutdown behavior');  
+console.log('   ✅ Server Tests: Configuration, shutdown behavior');
 console.log('   ✅ Connection Tests: Pooling, state management');
 console.log('   ✅ Monitoring Tests: Full monitoring infrastructure');
 
