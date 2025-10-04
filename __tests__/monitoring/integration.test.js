@@ -183,12 +183,11 @@ describe('Monitoring Integration Tests', () => {
     for (let i = 0; i < 50; i++) {
       const connectionId = `cleanup-conn-${i}`;
       statsCollector.recordConnectionCreated(connectionId);
-      statsCollector.recordQueryStart(connectionId, `SELECT ${i}`);
-      statsCollector.recordQuerySuccess(connectionId, `SELECT ${i}`, 10);
+      statsCollector.recordQuery(connectionId, `SELECT ${i}`, 10, true);
       
       // Close some connections
       if (i % 2 === 0) {
-        statsCollector.recordConnectionClosed(connectionId);
+        statsCollector.recordConnectionDestroyed(connectionId);
       }
     }
     
@@ -196,16 +195,16 @@ describe('Monitoring Integration Tests', () => {
     expect(initialStats.connections.details.length).toBe(25); // Only active connections
     
     // Test cleanup
-    statsCollector.cleanup();
+    statsCollector.destroy();
     
     // Create new collector to verify cleanup worked
-    const newCollector = new StatsCollector({ enabled: true });
+    const newCollector = new StatsCollector({ enableMetrics: true });
     const cleanStats = newCollector.getStats();
     
     expect(cleanStats.connections.totalCreated).toBe(0);
     expect(cleanStats.connections.details.length).toBe(0);
     
-    newCollector.cleanup();
+    newCollector.destroy();
   });
 
   test('should emit events during integration', (done) => {
@@ -223,8 +222,7 @@ describe('Monitoring Integration Tests', () => {
     
     // Trigger events
     statsCollector.recordConnectionCreated('event-conn');
-    statsCollector.recordQueryStart('event-conn', 'SELECT 1');
-    statsCollector.recordQuerySuccess('event-conn', 'SELECT 1', 10);
+    statsCollector.recordQuery('event-conn', 'SELECT 1', 10, true);
     statsCollector.recordProtocolMessage('Query');
   });
 });
