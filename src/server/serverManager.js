@@ -820,6 +820,7 @@ class ServerManager {
         host: this.config.host,
         maxConnections: this.config.maxConnections,
         enableConnectionPooling: this.config.enableConnectionPooling,
+        enableMetrics: this.config.enableMetrics,
       },
     };
 
@@ -829,6 +830,24 @@ class ServerManager {
     }
 
     return stats;
+  }
+
+  /**
+   * Gets detailed server statistics including monitoring data
+   * @returns {Object} Enhanced server statistics
+   */
+  getDetailedStats() {
+    const baseStats = this.getStats();
+
+    if (this.statsCollector) {
+      const detailedStats = this.statsCollector.getStats();
+      return {
+        ...baseStats,
+        monitoring: detailedStats,
+      };
+    }
+
+    return baseStats;
   }
 
   /**
