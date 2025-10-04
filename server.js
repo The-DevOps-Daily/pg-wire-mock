@@ -45,21 +45,41 @@
  */
 
 const { ServerManager } = require('./src/server/serverManager');
+const { loadConfigWithValidation, getValidationSummary } = require('./src/config/serverConfig');
 
 /**
- * Parse command line arguments and environment variables
+ * Parse command line arguments and environment variables with enhanced validation
  * @returns {Object} Parsed configuration
  */
 function parseConfig() {
+  // Validate environment variables first
+  const configResult = loadConfigWithValidation();
+
+  if (!configResult.isValid) {
+    console.error('Environment Variable Validation Failed:');
+    configResult.errors.forEach(error => console.error(`  - ${error}`));
+    process.exit(1);
+  }
+
+  // Display validation warnings if any
+  if (configResult.warnings.length > 0) {
+    console.warn('Environment Variable Validation Warnings:');
+    configResult.warnings.forEach(warning => console.warn(`  - ${warning}`));
+    console.warn('');
+  }
+
+  // Extract only the core server configuration properties for backward compatibility
+  const coreConfig = configResult.config;
+
   const config = {
-    port: parseInt(process.env.PG_MOCK_PORT) || 5432,
-    host: process.env.PG_MOCK_HOST || 'localhost',
-    maxConnections: parseInt(process.env.PG_MOCK_MAX_CONNECTIONS) || 100,
-    connectionTimeout: parseInt(process.env.PG_MOCK_CONNECTION_TIMEOUT) || 300000,
-    enableLogging: process.env.PG_MOCK_ENABLE_LOGGING !== 'false',
-    logLevel: process.env.PG_MOCK_LOG_LEVEL || 'info',
-    shutdownTimeout: parseInt(process.env.PG_MOCK_SHUTDOWN_TIMEOUT) || 30000,
-    shutdownDrainTimeout: parseInt(process.env.PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT) || 10000,
+    port: coreConfig.port,
+    host: coreConfig.host,
+    maxConnections: coreConfig.maxConnections,
+    connectionTimeout: coreConfig.connectionTimeout,
+    enableLogging: coreConfig.enableLogging,
+    logLevel: coreConfig.logLevel,
+    shutdownTimeout: coreConfig.shutdownTimeout,
+    shutdownDrainTimeout: coreConfig.shutdownDrainTimeout,
   };
 
   // Parse command line arguments
@@ -93,6 +113,10 @@ function parseConfig() {
         console.log('PostgreSQL Wire Protocol Mock Server v1.0.0');
         process.exit(0);
         break;
+      case '--validate-config':
+        validateConfigurationCommand();
+        process.exit(0);
+        break;
       default:
         if (arg.startsWith('-')) {
           console.error(`Unknown option: ${arg}`);
@@ -122,6 +146,7 @@ Options:
   -q, --quiet                    Disable logging
   --help                         Show this help message
   --version                      Show version information
+  --validate-config              Validate environment variables and show configuration
 
 Environment Variables:
   PG_MOCK_PORT                   Port to listen on
@@ -144,6 +169,60 @@ Connect with psql:
 
 For more information, visit: https://github.com/The-DevOps-Daily/pg-wire-mock
 `);
+}
+
+/**
+ * Validates and displays configuration information
+ */
+function validateConfigurationCommand() {
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║              Configuration Validation Report               ║');
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
+
+  const configResult = loadConfigWithValidation();
+  const summary = getValidationSummary();
+
+  // Display validation summary
+  console.log('Validation Summary:');
+  console.log(`  Total Variables Checked: ${summary.totalVariables}`);
+  console.log(`  Valid Variables: ${summary.validVariables}`);
+  console.log(`  Invalid Variables: ${summary.invalidVariables}`);
+  console.log(`  Unknown Variables: ${summary.unknownVariables}`);
+  console.log(`  Warnings: ${summary.warningCount}`);
+  console.log(`  Errors: ${summary.errorCount}`);
+  console.log(`  Overall Status: ${summary.isValid ? '✓ VALID' : '✗ INVALID'}`);
+  console.log('');
+
+  // Display errors if any
+  if (configResult.errors.length > 0) {
+    console.log('Validation Errors:');
+    configResult.errors.forEach(error => console.log(`  ✗ ${error}`));
+    console.log('');
+  }
+
+  // Display warnings if any
+  if (configResult.warnings.length > 0) {
+    console.log('Validation Warnings:');
+    configResult.warnings.forEach(warning => console.log(`  ⚠ ${warning}`));
+    console.log('');
+  }
+
+  // Display validated variables
+  if (Object.keys(configResult.validatedVariables).length > 0) {
+    console.log('Environment Variables:');
+    for (const [envVar, details] of Object.entries(configResult.validatedVariables)) {
+      const status = details.isValid ? '✓' : '✗';
+      console.log(`  ${status} ${envVar}: "${details.originalValue}" → ${details.parsedValue}`);
+    }
+    console.log('');
+  }
+
+  // Display final configuration if valid
+  if (configResult.isValid && configResult.config) {
+    console.log('Final Configuration:');
+    console.log(JSON.stringify(configResult.config, null, 2));
+  }
 }
 
 /**

@@ -3,6 +3,12 @@
  * Handles configuration loading, validation, and defaults
  */
 
+const {
+  validateAllEnvironmentVariables,
+  formatValidationErrors,
+  formatValidationWarnings,
+} = require('../utils/envValidation');
+
 /**
  * Default server configuration
  */
@@ -42,6 +48,10 @@ const DEFAULT_CONFIG = {
   requireAuthentication: false,
   allowPasswordAuthentication: true,
   allowCleartextPasswords: false,
+
+  // Shutdown settings
+  shutdownTimeout: 30000,
+  shutdownDrainTimeout: 10000,
 };
 
 /**
@@ -64,20 +74,36 @@ const ENV_MAPPING = {
   PG_MOCK_ENABLE_EXTENDED_PROTOCOL: { key: 'enableExtendedProtocol', type: 'boolean' },
   PG_MOCK_ENABLE_COPY_PROTOCOL: { key: 'enableCopyProtocol', type: 'boolean' },
   PG_MOCK_REQUIRE_AUTHENTICATION: { key: 'requireAuthentication', type: 'boolean' },
+  PG_MOCK_SHUTDOWN_TIMEOUT: { key: 'shutdownTimeout', type: 'number' },
+  PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT: { key: 'shutdownDrainTimeout', type: 'number' },
 };
 
 /**
  * Loads configuration from environment variables and defaults
- * @returns {Object} Complete configuration object
+ * @returns {Object} Complete configuration object with validation
  */
 function loadConfig() {
+  // First validate all environment variables
+  const envValidation = validateAllEnvironmentVariables();
+
+  if (!envValidation.isValid) {
+    const errorMsg = formatValidationErrors(envValidation.errors);
+    throw new Error(`Environment variable validation failed:\n${errorMsg}`);
+  }
+
+  // Log warnings if any
+  if (envValidation.warnings.length > 0) {
+    const warningMsg = formatValidationWarnings(envValidation.warnings);
+    console.warn(warningMsg);
+  }
+
   const config = { ...DEFAULT_CONFIG };
 
-  // Load from environment variables
+  // Load from validated environment variables
   for (const [envVar, mapping] of Object.entries(ENV_MAPPING)) {
-    const value = process.env[envVar];
-    if (value !== undefined) {
-      config[mapping.key] = parseConfigValue(value, mapping.type);
+    const validatedVar = envValidation.validatedVariables[envVar];
+    if (validatedVar && validatedVar.isValid) {
+      config[mapping.key] = validatedVar.parsedValue;
     }
   }
 
@@ -244,12 +270,60 @@ function getConfigDocumentation() {
   ];
 }
 
+/**
+ * Loads and validates configuration with enhanced error reporting
+ * @returns {Object} Configuration with validation results
+ */
+function loadConfigWithValidation() {
+  const envValidation = validateAllEnvironmentVariables();
+
+  const result = {
+    config: null,
+    isValid: envValidation.isValid,
+    errors: envValidation.errors,
+    warnings: envValidation.warnings,
+    validatedVariables: envValidation.validatedVariables,
+  };
+
+  if (envValidation.isValid) {
+    try {
+      result.config = loadConfig();
+    } catch (error) {
+      result.isValid = false;
+      result.errors.push(error.message);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Gets environment variable validation summary
+ * @returns {Object} Validation summary with statistics
+ */
+function getValidationSummary() {
+  const envValidation = validateAllEnvironmentVariables();
+
+  return {
+    totalVariables: Object.keys(envValidation.validatedVariables).length,
+    validVariables: Object.values(envValidation.validatedVariables).filter(v => v.isValid).length,
+    invalidVariables: Object.values(envValidation.validatedVariables).filter(v => !v.isValid)
+      .length,
+    unknownVariables: envValidation.skippedVariables.length,
+    warningCount: envValidation.warnings.length,
+    errorCount: envValidation.errors.length,
+    isValid: envValidation.isValid,
+  };
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   ENV_MAPPING,
   loadConfig,
+  loadConfigWithValidation,
   parseConfigValue,
   validateConfig,
   createServerParameters,
   getConfigDocumentation,
+  getValidationSummary,
 };
