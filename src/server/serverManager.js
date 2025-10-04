@@ -70,6 +70,13 @@ class ServerManager {
         logLevel: 'info',
         ...config.poolConfig,
       },
+      // Monitoring settings
+      enableMetrics: false,
+      metricsPort: 9090,
+      metricsHost: '0.0.0.0',
+      slowQueryThreshold: 100,
+      metricsRetention: 3600000,
+      metricsUpdateInterval: 5000,
       ...config,
     };
 
