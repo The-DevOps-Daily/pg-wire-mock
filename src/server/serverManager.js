@@ -6,7 +6,13 @@
 const Net = require('net');
 const { ConnectionState } = require('../connection/connectionState');
 const { ConnectionPool } = require('../connection/connectionPool');
-const { processMessage } = require('../protocol/messageProcessors');
+const {
+  processMessage,
+  configureMessageProcessorLogger,
+} = require('../protocol/messageProcessors');
+const { configureProtocolLogger } = require('../protocol/messageBuilders');
+const { configureQueryLogger } = require('../handlers/queryHandlers');
+const { createLogger } = require('../utils/logger');
 
 /**
  * Configuration options for the server
@@ -90,6 +96,28 @@ class ServerManager {
 
     // Cleanup interval
     this.cleanupInterval = null;
+
+    // Initialize centralized logging system
+    this.logger = createLogger('server');
+    this._configureAllLoggers();
+  }
+
+  /**
+   * Configure all component loggers with consistent settings
+   * @private
+   */
+  _configureAllLoggers() {
+    const logConfig = {
+      enabled: this.config.enableLogging,
+      level: this.config.logLevel,
+    };
+
+    // Configure all component loggers
+    configureProtocolLogger(logConfig);
+    configureMessageProcessorLogger(logConfig);
+    configureQueryLogger(logConfig);
+
+    this.logger.info('All component loggers configured', { config: logConfig });
   }
 
   /**
@@ -758,16 +786,8 @@ class ServerManager {
    * @private
    */
   log(level, message) {
-    if (!this.config.enableLogging) return;
-
-    const levels = { error: 0, warn: 1, info: 2, debug: 3 };
-    const configLevel = levels[this.config.logLevel] || 2;
-    const messageLevel = levels[level] || 2;
-
-    if (messageLevel <= configLevel) {
-      const timestamp = new Date().toISOString();
-      console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
-    }
+    // Use the centralized logger for consistent formatting
+    this.logger[level](message);
   }
 
   /**

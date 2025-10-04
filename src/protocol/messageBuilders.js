@@ -6,6 +6,18 @@
 const { MESSAGE_TYPES, DATA_TYPES, ERROR_SEVERITY } = require('./constants');
 
 const { createMessage, createPayload, createErrorFields, writeCString } = require('./utils');
+const { createProtocolLogger } = require('../utils/logger');
+
+// Create protocol logger instance (will be configured by server)
+let protocolLogger = createProtocolLogger();
+
+/**
+ * Configures the protocol logger
+ * @param {Object} config - Logger configuration
+ */
+function configureProtocolLogger(config) {
+  protocolLogger = createProtocolLogger(config);
+}
 
 /**
  * Authentication and Connection Messages
@@ -18,7 +30,7 @@ const { createMessage, createPayload, createErrorFields, writeCString } = requir
 function sendAuthenticationOK(socket) {
   const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, createPayload(0));
   socket.write(message);
-  console.log('Sent AuthenticationOK');
+  protocolLogger.sent('AuthenticationOK');
 }
 
 /**
@@ -47,7 +59,7 @@ function sendParameterStatus(socket, connState) {
     const message = createMessage(MESSAGE_TYPES.PARAMETER_STATUS, createPayload(name, value));
     socket.write(message);
   }
-  console.log('Sent ParameterStatus messages');
+  protocolLogger.sent('ParameterStatus', `${Object.keys(parameters).length} parameters`);
 }
 
 /**
@@ -59,9 +71,10 @@ function sendBackendKeyData(socket, connState) {
   const payload = createPayload(connState.backendPid, connState.backendSecret);
   const message = createMessage(MESSAGE_TYPES.BACKEND_KEY_DATA, payload);
   socket.write(message);
-  console.log(
-    `Sent BackendKeyData (PID: ${connState.backendPid}, Secret: ${connState.backendSecret})`,
-  );
+  protocolLogger.sent('BackendKeyData', `PID: ${connState.backendPid}`, {
+    pid: connState.backendPid,
+    secret: '***', // Don't log the actual secret for security
+  });
 }
 
 /**
@@ -73,7 +86,9 @@ function sendReadyForQuery(socket, connState) {
   const statusBuffer = Buffer.from([connState.transactionStatus.charCodeAt(0)]);
   const message = createMessage(MESSAGE_TYPES.READY_FOR_QUERY, statusBuffer);
   socket.write(message);
-  console.log(`Sent ReadyForQuery (status: ${connState.transactionStatus})`);
+  protocolLogger.sent('ReadyForQuery', `status: ${connState.transactionStatus}`, {
+    transactionStatus: connState.transactionStatus,
+  });
 }
 
 /**
@@ -117,7 +132,10 @@ function sendRowDescription(socket, columns) {
   const message = createMessage(MESSAGE_TYPES.ROW_DESCRIPTION, payload);
   socket.write(message);
 
-  console.log(`Sent RowDescription for ${columns.length} columns`);
+  protocolLogger.sent('RowDescription', `${columns.length} columns`, {
+    columnCount: columns.length,
+    columns: columns.map(col => col.name),
+  });
 }
 
 /**
@@ -168,7 +186,9 @@ function sendDataRow(socket, values, columnTypes = []) {
   const message = createMessage(MESSAGE_TYPES.DATA_ROW, payload);
   socket.write(message);
 
-  console.log(`Sent DataRow with ${values.length} values`);
+  protocolLogger.sent('DataRow', `${values.length} values`, {
+    valueCount: values.length,
+  });
 }
 
 /**
@@ -220,7 +240,7 @@ function getElementTypeFromColumn(columnType) {
 function sendCommandComplete(socket, tag) {
   const message = createMessage(MESSAGE_TYPES.COMMAND_COMPLETE, createPayload(tag));
   socket.write(message);
-  console.log(`Sent CommandComplete: ${tag}`);
+  protocolLogger.sent('CommandComplete', tag, { commandTag: tag });
 }
 
 /**
@@ -230,7 +250,7 @@ function sendCommandComplete(socket, tag) {
 function sendEmptyQueryResponse(socket) {
   const message = createMessage(MESSAGE_TYPES.EMPTY_QUERY_RESPONSE);
   socket.write(message);
-  console.log('Sent EmptyQueryResponse');
+  protocolLogger.sent('EmptyQueryResponse');
 }
 
 /**
@@ -298,12 +318,13 @@ function sendErrorResponse(socket, code, message, additionalFields = {}, options
   const errorMessage = createMessage(MESSAGE_TYPES.ERROR_RESPONSE, errorFieldsBuffer);
   socket.write(errorMessage);
 
-  console.log(`Sent ErrorResponse: ${code} - ${message}`);
-
-  // Log additional details for debugging if present
-  if (options.detail || options.hint) {
-    console.log(`Error detail: ${options.detail || 'N/A'}, hint: ${options.hint || 'N/A'}`);
-  }
+  protocolLogger.protocolError(`${code} - ${message}`, {
+    errorCode: code,
+    severity: options.severity || ERROR_SEVERITY.ERROR,
+    detail: options.detail,
+    hint: options.hint,
+    position: options.position,
+  });
 }
 
 /**
@@ -323,7 +344,7 @@ function sendNoticeResponse(socket, message, additionalFields = {}) {
   const noticeMessage = createMessage(MESSAGE_TYPES.NOTICE_RESPONSE, noticeFieldsBuffer);
   socket.write(noticeMessage);
 
-  console.log(`Sent NoticeResponse: ${message}`);
+  protocolLogger.sent('NoticeResponse', message, { noticeFields });
 }
 
 /**
@@ -337,7 +358,7 @@ function sendNoticeResponse(socket, message, additionalFields = {}) {
 function sendParseComplete(socket) {
   const message = createMessage(MESSAGE_TYPES.PARSE_COMPLETE);
   socket.write(message);
-  console.log('Sent ParseComplete');
+  protocolLogger.sent('ParseComplete');
 }
 
 /**
@@ -347,7 +368,7 @@ function sendParseComplete(socket) {
 function sendBindComplete(socket) {
   const message = createMessage(MESSAGE_TYPES.BIND_COMPLETE);
   socket.write(message);
-  console.log('Sent BindComplete');
+  protocolLogger.sent('BindComplete');
 }
 
 /**
@@ -536,4 +557,7 @@ module.exports = {
 
   // Notifications
   sendNotificationResponse,
+
+  // Configuration
+  configureProtocolLogger,
 };

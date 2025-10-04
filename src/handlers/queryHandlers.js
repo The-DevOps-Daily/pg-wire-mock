@@ -11,6 +11,18 @@ const {
 } = require('../protocol/constants');
 
 const { formatCommandTag } = require('../protocol/utils');
+const { createQueryLogger } = require('../utils/logger');
+
+// Create query logger instance (will be configured by server)
+let queryLogger = createQueryLogger();
+
+/**
+ * Configures the query logger
+ * @param {Object} config - Logger configuration
+ */
+function configureQueryLogger(config) {
+  queryLogger = createQueryLogger(config);
+}
 
 const {
   sendRowDescription,
@@ -128,7 +140,10 @@ const MOCK_SCHEMA = {
  * @param {ConnectionState} connState - Connection state object
  */
 function executeQuery(query, socket, connState) {
-  console.log(`Executing query: ${query}`);
+  queryLogger.queryExecution(query, {
+    connectionId: connState.connectionId,
+    user: connState.getCurrentUser(),
+  });
 
   // Process the query and get results
   const results = processQuery(query, connState);
@@ -1186,4 +1201,5 @@ module.exports = {
   validateQuery,
   getQueryType,
   getTypeOIDFromName,
+  configureQueryLogger,
 };
