@@ -64,7 +64,7 @@ function processMessage(buffer, socket, connState, statsCollector = null) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processStartupMessage(buffer, socket, connState) {
+function processStartupMessage(buffer, socket, connState, statsCollector = null) {
   // Need at least 8 bytes for length + protocol version
   if (buffer.length < 8) {
     return 0;
@@ -117,7 +117,7 @@ function processStartupMessage(buffer, socket, connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processRegularMessage(buffer, socket, connState) {
+function processRegularMessage(buffer, socket, connState, statsCollector = null) {
   // Need at least 5 bytes for message type + length
   if (buffer.length < 5) {
     return 0;
