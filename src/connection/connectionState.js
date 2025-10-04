@@ -275,7 +275,7 @@ class ConnectionState {
     this.portals.clear();
     console.log(
       `Connection closed after ${this.getConnectionDuration()}ms,
-      ${this.queriesExecuted} queries executed`,
+      ${this.queriesExecuted} queries executed`
     );
   }
 
@@ -314,6 +314,131 @@ class ConnectionState {
       `Status:${summary.transactionStatus} Queries:${summary.queriesExecuted} ` +
       `Duration:${Math.round(summary.connectionDuration / 1000)}s`
     );
+  }
+
+  /**
+   * Validates the current connection state
+   * @returns {Object} Validation result with isValid and errors array
+   */
+  validateState() {
+    const errors = [];
+    let isValid = true;
+
+    // Check authentication state consistency
+    if (this.authenticated && !this.protocolVersion) {
+      errors.push('Connection marked as authenticated but missing protocol version');
+      isValid = false;
+    }
+
+    // Check required parameters for authenticated connections
+    if (this.authenticated) {
+      if (!this.getCurrentUser()) {
+        errors.push('Authenticated connection missing user parameter');
+        isValid = false;
+      }
+      if (!this.getCurrentDatabase()) {
+        errors.push('Authenticated connection missing database parameter');
+        isValid = false;
+      }
+    }
+
+    // Validate transaction status
+    if (!Object.values(TRANSACTION_STATUS).includes(this.transactionStatus)) {
+      errors.push(`Invalid transaction status: ${this.transactionStatus}`);
+      isValid = false;
+    }
+
+    // Check connection metadata consistency
+    if (!this.connected && this.authenticated) {
+      errors.push('Connection marked as authenticated but not connected');
+      isValid = false;
+    }
+
+    // Check backend identification
+    if (!this.backendPid || !this.backendSecret) {
+      errors.push('Missing backend identification (PID or secret)');
+      isValid = false;
+    }
+
+    // Check timestamps validity
+    if (!this.connectionTime || !this.lastActivityTime) {
+      errors.push('Missing or invalid timestamp data');
+      isValid = false;
+    }
+
+    // Check for reasonable activity time
+    if (this.lastActivityTime < this.connectionTime) {
+      errors.push('Last activity time is before connection time');
+      isValid = false;
+    }
+
+    return { isValid, errors };
+  }
+
+  /**
+   * Checks if connection is ready for query processing
+   * @returns {boolean} True if ready for queries
+   */
+  isReadyForQuery() {
+    if (!this.connected) return false;
+    if (!this.authenticated) return false;
+    if (this.isInFailedTransaction()) return false;
+
+    const validation = this.validateState();
+    return validation.isValid;
+  }
+
+  /**
+   * Checks if connection can be safely reused by the connection pool
+   * @returns {boolean} True if connection is reusable
+   */
+  isReusable() {
+    // Basic reusability checks
+    if (!this.connected) return false;
+    if (!this.authenticated) return false;
+
+    // Don't reuse connections in transactions
+    if (this.isInTransaction()) return false;
+    if (this.isInFailedTransaction()) return false;
+
+    // Don't reuse connections with active prepared statements or portals
+    if (this.preparedStatements.size > 0) return false;
+    if (this.portals.size > 0) return false;
+
+    // Validate overall state
+    const validation = this.validateState();
+    return validation.isValid;
+  }
+
+  /**
+   * Resets connection state for reuse in connection pool
+   * @returns {boolean} True if reset was successful
+   */
+  resetForReuse() {
+    try {
+      // Clear extended query protocol state
+      this.preparedStatements.clear();
+      this.portals.clear();
+
+      // Reset to idle transaction status
+      this.transactionStatus = TRANSACTION_STATUS.IDLE;
+
+      // Update activity timestamp
+      this.updateActivity();
+
+      // Validate state after reset
+      const validation = this.validateState();
+      if (!validation.isValid) {
+        console.warn('Connection reset failed validation:', validation.errors);
+        return false;
+      }
+
+      console.log(`Connection ${this.backendPid} reset for reuse`);
+      return true;
+    } catch (error) {
+      console.error('Error resetting connection for reuse:', error);
+      return false;
+    }
   }
 }
 
