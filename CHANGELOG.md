@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2024-10-04
+
 ### Added
 
 - **PostgreSQL Array Type Support** - Complete implementation of PostgreSQL array data types
@@ -45,16 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tests for connection draining and force closure
   - Error handling tests during shutdown
   - Configuration and status monitoring tests
-- Project setup with ESLint, Prettier, Jest
-- GitHub Actions CI configuration
-- Husky pre-commit hooks
-- Docker support
-- VS Code configuration
-- GitHub issue and PR templates
-- Security policy
-- Dependabot configuration
-- PostgreSQL Wire Protocol documentation
-- Minor code refactoring and cleanup
+
+### Changed
+
+- Enhanced CI/CD pipeline with security scanning
+- Improved Docker configuration to reduce vulnerabilities
+- Code quality improvements and linting fixes
+
+### Fixed
+
+- Docker security vulnerabilities
+- Linting issues and code formatting
+- Minor bug fixes and stability improvements
 
 ## [1.0.0] - Initial Release
 

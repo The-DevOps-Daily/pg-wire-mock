@@ -1,6 +1,6 @@
 {
   "name": "pg-wire-mock",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A mock PostgreSQL server that speaks the wire protocol for learning and testing",
   "main": "server.js",
   "bin": {
