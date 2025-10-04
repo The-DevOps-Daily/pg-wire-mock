@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Graceful Shutdown System**
+  - Multi-phase shutdown process with connection draining
+  - Client notification system with shutdown notices
+  - Automatic transaction rollback during shutdown
+  - Configurable shutdown and drain timeouts
+  - Force closure of lingering connections after timeout
+  - Comprehensive shutdown status monitoring
+  - Signal handling for SIGTERM, SIGINT, and SIGUSR1
+  - Resource cleanup and state management
+  - Error handling during shutdown process
+- **Enhanced Configuration**
+  - `PG_MOCK_SHUTDOWN_TIMEOUT` environment variable (default: 30000ms)
+  - `PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT` environment variable (default: 10000ms)
+  - New server configuration options for shutdown behavior
+- **API Enhancements**
+  - `isServerShuttingDown()` method to check shutdown status
+  - `getShutdownStatus()` method for detailed shutdown information
+  - `getActiveConnectionCount()` method for connection monitoring
+  - Enhanced `closeConnection()` method with graceful closure support
+- **Documentation**
+  - Comprehensive [Graceful Shutdown Documentation](SHUTDOWN.md)
+  - Updated README with shutdown configuration and best practices
+  - API reference for shutdown methods and monitoring
+- **Testing**
+  - Comprehensive test suite for shutdown behavior
+  - Tests for connection draining and force closure
+  - Error handling tests during shutdown
+  - Configuration and status monitoring tests
 - Project setup with ESLint, Prettier, Jest
 - GitHub Actions CI configuration
 - Husky pre-commit hooks

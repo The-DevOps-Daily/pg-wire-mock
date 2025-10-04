@@ -58,6 +58,8 @@ function parseConfig() {
     connectionTimeout: parseInt(process.env.PG_MOCK_CONNECTION_TIMEOUT) || 300000,
     enableLogging: process.env.PG_MOCK_ENABLE_LOGGING !== 'false',
     logLevel: process.env.PG_MOCK_LOG_LEVEL || 'info',
+    shutdownTimeout: parseInt(process.env.PG_MOCK_SHUTDOWN_TIMEOUT) || 30000,
+    shutdownDrainTimeout: parseInt(process.env.PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT) || 10000,
   };
 
   // Parse command line arguments
@@ -128,6 +130,8 @@ Environment Variables:
   PG_MOCK_CONNECTION_TIMEOUT     Connection timeout in ms
   PG_MOCK_LOG_LEVEL              Log level
   PG_MOCK_ENABLE_LOGGING         Enable logging (true/false)
+  PG_MOCK_SHUTDOWN_TIMEOUT       Graceful shutdown timeout in ms (default: 30000)
+  PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT Connection drain timeout in ms (default: 10000)
 
 Examples:
   node server.js                              # Start with defaults
@@ -201,7 +205,8 @@ async function main() {
 
     if (error.code === 'EADDRINUSE') {
       console.error(
-        `Port ${server?.config?.port || 5432} is already in use. Try another with --port <port>`
+        `Port ${server?.config?.port || 5432} is already in use. ` +
+          'Try another with --port <port>'
       );
     } else if (error.code === 'EACCES') {
       console.error('Permission denied. Try running with sudo or use a port >= 1024');

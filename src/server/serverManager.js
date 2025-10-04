@@ -17,6 +17,8 @@ const { processMessage } = require('../protocol/messageProcessors');
  * @property {number} connectionTimeout - Connection timeout in milliseconds
  * @property {boolean} enableLogging - Enable detailed logging
  * @property {string} logLevel - Log level (error, warn, info, debug)
+ * @property {number} shutdownTimeout - Graceful shutdown timeout in milliseconds
+ * @property {number} shutdownDrainTimeout - Connection draining timeout in milliseconds
  * @property {boolean} enableConnectionPooling - Enable connection pooling (default: true)
  * @property {Object} poolConfig - Connection pool configuration options
  * @property {number} poolConfig.maxConnections - Max connections in pool (default: 50)
@@ -41,6 +43,8 @@ class ServerManager {
       connectionTimeout: 300000, // 5 minutes
       enableLogging: true,
       logLevel: 'info',
+      shutdownTimeout: 30000, // 30 seconds
+      shutdownDrainTimeout: 10000, // 10 seconds
       enableConnectionPooling: true,
       poolConfig: {
         maxConnections: 50,
@@ -60,6 +64,8 @@ class ServerManager {
     this.connectionCount = 0;
     this.isRunning = false;
     this.startTime = null;
+    this.isShuttingDown = false;
+    this.shutdownPromise = null;
 
     // Initialize connection pool if enabled
     this.connectionPool = null;
@@ -139,47 +145,242 @@ class ServerManager {
   }
 
   /**
-   * Stops the PostgreSQL mock server
+   * Stops the PostgreSQL mock server with graceful shutdown
    * @returns {Promise<void>} Promise that resolves when server is stopped
    */
   async stop() {
-    if (!this.isRunning) {
-      return;
+    if (!this.isRunning || this.isShuttingDown) {
+      return this.shutdownPromise || Promise.resolve();
     }
 
+    // Prevent multiple shutdown attempts
+    if (this.shutdownPromise) {
+      return this.shutdownPromise;
+    }
+
+    this.isShuttingDown = true;
+    this.log('info', 'Initiating graceful server shutdown...');
+
+    this.shutdownPromise = this._performGracefulShutdown();
+    return this.shutdownPromise;
+  }
+
+  /**
+   * Performs graceful shutdown with proper connection handling
+   * @returns {Promise<void>} Promise that resolves when shutdown is complete
+   * @private
+   */
+  async _performGracefulShutdown() {
+    const startTime = Date.now();
+    const drainTimeout = this.config.shutdownDrainTimeout;
+
+    try {
+      // Step 1: Stop accepting new connections
+      this.log('info', 'Stopping new connection acceptance...');
+      this.server.close();
+
+      // Step 2: Send shutdown notifications to all clients
+      this.log('info', `Notifying ${this.connections.size} active connections of shutdown...`);
+      await this._notifyClientsOfShutdown();
+
+      // Step 3: Wait for connections to drain naturally
+      this.log('info', `Waiting up to ${drainTimeout}ms for connections to drain...`);
+      await this._drainConnections(drainTimeout);
+
+      // Step 4: Force close any remaining connections
+      const remainingConnections = this.connections.size;
+      if (remainingConnections > 0) {
+        this.log('warn', `Force closing ${remainingConnections} remaining connections...`);
+        await this._forceCloseConnections();
+      }
+
+      // Step 5: Clean up resources
+      this._cleanupResources();
+
+      const shutdownDuration = Date.now() - startTime;
+      this.log('info', `Graceful shutdown completed in ${shutdownDuration}ms`);
+      this.log('info', `Final stats: ${JSON.stringify(this.getStats(), null, 2)}`);
+    } catch (error) {
+      this.log('error', `Error during graceful shutdown: ${error.message}`);
+      // Force cleanup on error
+      this._forceCloseConnections();
+      this._cleanupResources();
+      throw error;
+    } finally {
+      this.isRunning = false;
+      this.isShuttingDown = false;
+      this.shutdownPromise = null;
+    }
+  }
+
+  /**
+   * Notifies all clients that the server is shutting down
+   * @returns {Promise<void>} Promise that resolves when all notifications are sent
+   * @private
+   */
+  async _notifyClientsOfShutdown() {
+    const notificationPromises = [];
+
+    for (const [connectionId, connectionData] of this.connections) {
+      const promise = this._sendShutdownNotification(connectionId, connectionData);
+      notificationPromises.push(promise);
+    }
+
+    await Promise.allSettled(notificationPromises);
+  }
+
+  /**
+   * Sends shutdown notification to a specific client
+   * @param {string} connectionId - Connection identifier
+   * @param {Object} connectionData - Connection data object
+   * @returns {Promise<void>} Promise that resolves when notification is sent
+   * @private
+   */
+  async _sendShutdownNotification(connectionId, connectionData) {
+    try {
+      const { socket, connState } = connectionData;
+
+      if (!socket || socket.destroyed) {
+        return;
+      }
+
+      // Send a notice about server shutdown
+      const { sendNoticeResponse } = require('../protocol/messageBuilders');
+      sendNoticeResponse(socket, 'Server is shutting down. Please disconnect gracefully.');
+
+      // If the connection is in a transaction, roll it back
+      if (connState.isInTransaction()) {
+        this.log('info', `Rolling back transaction for connection ${connectionId}`);
+        connState.rollbackTransaction();
+
+        // Send ReadyForQuery to indicate transaction rollback
+        const { sendReadyForQuery } = require('../protocol/messageBuilders');
+        sendReadyForQuery(socket, connState);
+      }
+
+      this.log('debug', `Shutdown notification sent to connection ${connectionId}`);
+    } catch (error) {
+      this.log('warn', `Failed to send shutdown notification to ${connectionId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Waits for connections to drain naturally
+   * @param {number} timeout - Maximum time to wait in milliseconds
+   * @returns {Promise<void>} Promise that resolves when draining is complete
+   * @private
+   */
+  async _drainConnections(timeout) {
     return new Promise(resolve => {
-      // Clear cleanup interval
-      if (this.cleanupInterval) {
-        clearInterval(this.cleanupInterval);
-        this.cleanupInterval = null;
-      }
+      const startTime = Date.now();
+      const checkInterval = 100; // Check every 100ms
 
-      // Close all connections
-      for (const [connectionId] of this.connections) {
-        this.closeConnection(connectionId, 'Server shutdown');
-      }
+      const checkConnections = () => {
+        const elapsed = Date.now() - startTime;
 
-      // Cleanup connection pool
-      if (this.connectionPool) {
-        try {
-          this.connectionPool.destroy();
-          this.log('info', 'Connection pool cleaned up');
-        } catch (error) {
-          this.log('error', `Error cleaning up connection pool: ${error.message}`);
+        if (this.connections.size === 0) {
+          this.log('info', 'All connections drained successfully');
+          resolve();
+          return;
         }
+
+        if (elapsed >= timeout) {
+          const remainingConnections = this.connections.size;
+          this.log(
+            'warn',
+            `Connection drain timeout reached (${timeout}ms), ` +
+              `${remainingConnections} connections remain`
+          );
+          resolve();
+          return;
+        }
+
+        // Continue checking
+        setTimeout(checkConnections, checkInterval);
+      };
+
+      checkConnections();
+    });
+  }
+
+  /**
+   * Force closes all remaining connections
+   * @returns {Promise<void>} Promise that resolves when all connections are closed
+   * @private
+   */
+  async _forceCloseConnections() {
+    const closePromises = [];
+
+    for (const [connectionId] of this.connections) {
+      const promise = this._forceCloseConnection(connectionId);
+      closePromises.push(promise);
+    }
+
+    await Promise.allSettled(closePromises);
+  }
+
+  /**
+   * Force closes a specific connection
+   * @param {string} connectionId - Connection identifier
+   * @returns {Promise<void>} Promise that resolves when connection is closed
+   * @private
+   */
+  async _forceCloseConnection(connectionId) {
+    try {
+      const connectionData = this.connections.get(connectionId);
+      if (!connectionData) {
+        return;
       }
 
-      // Close server
-      this.server.close(() => {
-        this.isRunning = false;
-        const uptime = Date.now() - this.startTime.getTime();
+      const { socket, connState } = connectionData;
 
-        this.log('info', `Server stopped after ${Math.round(uptime / 1000)}s uptime`);
-        this.log('info', `Final stats: ${JSON.stringify(this.getStats(), null, 2)}`);
+      // Rollback any active transaction
+      if (connState.isInTransaction()) {
+        connState.rollbackTransaction();
+      }
 
-        resolve();
-      });
-    });
+      // Close connection state
+      connState.close();
+
+      // Force close socket
+      if (socket && !socket.destroyed) {
+        socket.destroy();
+      }
+
+      this.connections.delete(connectionId);
+      this.log('debug', `Force closed connection ${connectionId}`);
+    } catch (error) {
+      this.log('error', `Error force closing connection ${connectionId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Cleans up server resources
+   * @private
+   */
+  _cleanupResources() {
+    // Clear cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+
+    // Cleanup connection pool
+    if (this.connectionPool) {
+      try {
+        this.connectionPool.destroy();
+        this.log('info', 'Connection pool cleaned up');
+      } catch (error) {
+        this.log('error', `Error cleaning up connection pool: ${error.message}`);
+      }
+    }
+
+    // Clear all connections
+    this.connections.clear();
+
+    // Reset state
+    this.isRunning = false;
+    this.isShuttingDown = false;
   }
 
   /**
@@ -218,6 +419,14 @@ class ServerManager {
    * @private
    */
   handleNewConnection(socket) {
+    // Reject new connections during shutdown
+    if (this.isShuttingDown) {
+      this.stats.connectionsRejected++;
+      this.log('warn', 'Connection rejected: server is shutting down');
+      socket.end();
+      return;
+    }
+
     // Check connection limit
     if (this.connections.size >= this.config.maxConnections) {
       this.stats.connectionsRejected++;
@@ -368,12 +577,13 @@ class ServerManager {
   }
 
   /**
-   * Closes a connection
+   * Closes a connection gracefully
    * @param {string} connectionId - Connection identifier
    * @param {string} reason - Reason for closure
+   * @param {boolean} force - Whether to force close immediately
    * @private
    */
-  closeConnection(connectionId, reason) {
+  closeConnection(connectionId, reason, force = false) {
     const connectionData = this.connections.get(connectionId);
     if (!connectionData) {
       return;
@@ -388,17 +598,62 @@ class ServerManager {
     );
 
     try {
-      // Return connection to pool if it was pooled and is in good state
-      if (isPooled && this.connectionPool && connState.isValid()) {
+      // Rollback any active transaction before closing
+      if (connState.isInTransaction()) {
+        this.log('debug', `Rolling back transaction for connection ${connectionId}`);
+        connState.rollbackTransaction();
+      }
+
+      // If pooling is enabled and connection is valid, return to pool
+      if (
+        !force &&
+        isPooled &&
+        this.connectionPool &&
+        typeof connState.isValid === 'function' &&
+        connState.isValid()
+      ) {
         this.connectionPool.releaseConnection(connState);
         this.log('debug', `Returned connection ${connectionId} to pool`);
       } else {
+        // Close connection state
         connState.close();
       }
-      socket.destroy();
+
+      if (force) {
+        // Force close immediately
+        if (socket && !socket.destroyed) {
+          socket.destroy();
+        }
+      } else {
+        // Graceful close - try to send a proper close message first
+        if (socket && !socket.destroyed) {
+          try {
+            // Send a notice about connection closure
+            const { sendNoticeResponse } = require('../protocol/messageBuilders');
+            sendNoticeResponse(socket, `Connection closed: ${reason}`);
+
+            // Send ReadyForQuery to indicate clean state
+            const { sendReadyForQuery } = require('../protocol/messageBuilders');
+            sendReadyForQuery(socket, connState);
+
+            // Give a brief moment for the client to process the message
+            setTimeout(() => {
+              if (socket && !socket.destroyed) {
+                socket.end();
+              }
+            }, 100);
+          } catch (error) {
+            this.log('debug', `Error sending graceful close message: ${error.message}`);
+            socket.destroy();
+          }
+        }
+      }
     } catch (error) {
       this.log('error', `Error closing connection ${connectionId}: ${error.message}`);
-      // If there was an error, make sure connection is properly closed
+      // Ensure the socket is closed on error
+      if (socket && !socket.destroyed) {
+        socket.destroy();
+      }
       try {
         connState.close();
       } catch (_) {
@@ -521,6 +776,35 @@ class ServerManager {
    */
   isServerRunning() {
     return this.isRunning;
+  }
+
+  /**
+   * Checks if server is shutting down
+   * @returns {boolean} True if server is shutting down
+   */
+  isServerShuttingDown() {
+    return this.isShuttingDown;
+  }
+
+  /**
+   * Gets the number of active connections
+   * @returns {number} Number of active connections
+   */
+  getActiveConnectionCount() {
+    return this.connections.size;
+  }
+
+  /**
+   * Gets shutdown status information
+   * @returns {Object} Shutdown status information
+   */
+  getShutdownStatus() {
+    return {
+      isShuttingDown: this.isShuttingDown,
+      activeConnections: this.connections.size,
+      shutdownTimeout: this.config.shutdownTimeout,
+      drainTimeout: this.config.shutdownDrainTimeout,
+    };
   }
 
   /**
