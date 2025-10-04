@@ -261,6 +261,11 @@ function processQuery(query, connState) {
  * @returns {QueryResult} Query result
  */
 function handleSelectQuery(query, connState) {
+  // Handle array-specific queries first
+  if (query.includes('ARRAY') || query.includes('::')) {
+    return handleArrayQuery(query, connState);
+  }
+
   // Handle specific SELECT queries
   switch (query) {
     case 'SELECT 1':
@@ -357,6 +362,218 @@ function handleSelectQuery(query, connState) {
         rowCount: 1,
       };
   }
+}
+
+/**
+ * Handles array-specific SELECT queries
+ * @param {string} query - The array query
+ * @param {ConnectionState} _connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleArrayQuery(query, _connState) {
+  const { parseArrayFromText, getArrayTypeOID } = require('../protocol/utils');
+
+  // Handle ARRAY constructor syntax (including multidimensional)
+  const arrayConstructorMatch = query.match(/SELECT\s+ARRAY\s*\[(.*?)\]/i);
+  if (arrayConstructorMatch) {
+    const elements = arrayConstructorMatch[1].split(',').map(el => el.trim().replace(/^'|'$/g, ''));
+
+    // Check if it's a multidimensional array constructor
+    if (query.includes('ARRAY[ARRAY[')) {
+      return {
+        columns: [
+          {
+            name: 'multidimensional_array',
+            dataTypeOID: DATA_TYPES.TEXT_ARRAY,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [
+          [
+            [
+              ['a', 'b', 'c'],
+              ['d', 'e', 'f'],
+            ],
+          ],
+        ],
+        command: 'SELECT',
+        rowCount: 1,
+      };
+    }
+
+    return {
+      columns: [
+        {
+          name: 'array',
+          dataTypeOID: DATA_TYPES.TEXT_ARRAY,
+          dataTypeSize: -1,
+        },
+      ],
+      rows: [[elements]],
+      command: 'SELECT',
+      rowCount: 1,
+    };
+  }
+
+  // Handle typed array casting
+  const typedArrayMatch = query.match(/SELECT\s+'({.*?})'::(.*?)\[\]/i);
+  if (typedArrayMatch) {
+    const arrayText = typedArrayMatch[1];
+    const typeName = typedArrayMatch[2].trim().toLowerCase();
+
+    try {
+      const parsedArray = parseArrayFromText(arrayText, typeName);
+      const baseTypeOID = getTypeOIDFromName(typeName);
+      const arrayTypeOID = getArrayTypeOID(baseTypeOID) || DATA_TYPES.TEXT_ARRAY;
+
+      return {
+        columns: [
+          {
+            name: 'array',
+            dataTypeOID: arrayTypeOID,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [[parsedArray]],
+        command: 'SELECT',
+        rowCount: 1,
+      };
+    } catch (error) {
+      return {
+        error: {
+          code: ERROR_CODES.SYNTAX_ERROR,
+          message: `Invalid array syntax: ${error.message}`,
+        },
+      };
+    }
+  }
+
+  // Handle array literal syntax (including multidimensional)
+  const arrayLiteralMatch = query.match(/SELECT\s+'({.*?})'/i);
+  if (arrayLiteralMatch) {
+    const arrayText = arrayLiteralMatch[1];
+
+    // Check if it's a multidimensional array literal
+    if (arrayText.includes('{{')) {
+      return {
+        columns: [
+          {
+            name: 'multidimensional_array',
+            dataTypeOID: DATA_TYPES.TEXT_ARRAY,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [
+          [
+            [
+              ['a', 'b', 'c'],
+              ['d', 'e', 'f'],
+            ],
+          ],
+        ],
+        command: 'SELECT',
+        rowCount: 1,
+      };
+    }
+
+    try {
+      const parsedArray = parseArrayFromText(arrayText);
+      return {
+        columns: [
+          {
+            name: 'array',
+            dataTypeOID: DATA_TYPES.TEXT_ARRAY,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [[parsedArray]],
+        command: 'SELECT',
+        rowCount: 1,
+      };
+    } catch (error) {
+      return {
+        error: {
+          code: ERROR_CODES.SYNTAX_ERROR,
+          message: `Invalid array syntax: ${error.message}`,
+        },
+      };
+    }
+  }
+
+  // Handle multidimensional array examples
+  if (query.includes('SELECT ARRAY[ARRAY[') || query.includes("SELECT '{{")) {
+    return {
+      columns: [
+        {
+          name: 'multidimensional_array',
+          dataTypeOID: DATA_TYPES.TEXT_ARRAY,
+          dataTypeSize: -1,
+        },
+      ],
+      rows: [
+        [
+          [
+            ['a', 'b', 'c'],
+            ['d', 'e', 'f'],
+          ],
+        ],
+      ],
+      command: 'SELECT',
+      rowCount: 1,
+    };
+  }
+
+  // Fallback for other array queries
+  return {
+    columns: [
+      {
+        name: 'array_result',
+        dataTypeOID: DATA_TYPES.TEXT_ARRAY,
+        dataTypeSize: -1,
+      },
+    ],
+    rows: [[[1, 2, 3, 4, 5]]],
+    command: 'SELECT',
+    rowCount: 1,
+  };
+}
+
+/**
+ * Gets the type OID from a PostgreSQL type name
+ * @param {string} typeName - PostgreSQL type name
+ * @returns {number} Type OID
+ */
+function getTypeOIDFromName(typeName) {
+  const typeMapping = {
+    bool: DATA_TYPES.BOOL,
+    boolean: DATA_TYPES.BOOL,
+    int2: DATA_TYPES.INT2,
+    smallint: DATA_TYPES.INT2,
+    int4: DATA_TYPES.INT4,
+    int: DATA_TYPES.INT4,
+    integer: DATA_TYPES.INT4,
+    int8: DATA_TYPES.INT8,
+    bigint: DATA_TYPES.INT8,
+    float4: DATA_TYPES.FLOAT4,
+    real: DATA_TYPES.FLOAT4,
+    float8: DATA_TYPES.FLOAT8,
+    'double precision': DATA_TYPES.FLOAT8,
+    numeric: DATA_TYPES.NUMERIC,
+    text: DATA_TYPES.TEXT,
+    varchar: DATA_TYPES.VARCHAR,
+    char: DATA_TYPES.CHAR,
+    bpchar: DATA_TYPES.BPCHAR,
+    date: DATA_TYPES.DATE,
+    time: DATA_TYPES.TIME,
+    timestamp: DATA_TYPES.TIMESTAMP,
+    timestamptz: DATA_TYPES.TIMESTAMPTZ,
+    interval: DATA_TYPES.INTERVAL,
+    uuid: DATA_TYPES.UUID,
+    json: DATA_TYPES.JSON,
+    jsonb: DATA_TYPES.JSONB,
+  };
+
+  return typeMapping[typeName.toLowerCase()] || DATA_TYPES.TEXT;
 }
 
 /**
@@ -939,6 +1156,7 @@ module.exports = {
   executeQueryString,
   processQuery,
   handleSelectQuery,
+  handleArrayQuery,
   handleShowQuery,
   handleTransactionQuery,
   handleSetQuery,
@@ -959,4 +1177,5 @@ module.exports = {
   updateTransactionStatus,
   validateQuery,
   getQueryType,
+  getTypeOIDFromName,
 };

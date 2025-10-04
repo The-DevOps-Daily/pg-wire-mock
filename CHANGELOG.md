@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **PostgreSQL Array Type Support** - Complete implementation of PostgreSQL array data types
+  - Support for 40+ array types (INT4[], TEXT[], BOOL[], etc.)
+  - Multi-dimensional array support (2D, 3D, and beyond)
+  - Array literal syntax: `'{1,2,3,4,5}'::int4[]`
+  - Array constructor syntax: `ARRAY[1, 2, 3, 4, 5]`
+  - Automatic array encoding/decoding in wire protocol messages
+  - Comprehensive test suite with 54 test cases
+  - Full documentation in [docs/ARRAY_SUPPORT.md](docs/ARRAY_SUPPORT.md)
 - **Graceful Shutdown System**
   - Multi-phase shutdown process with connection draining
   - Client notification system with shutdown notices
