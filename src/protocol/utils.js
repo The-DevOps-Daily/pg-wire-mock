@@ -356,7 +356,8 @@ function parseArrayFromText(arrayText, elementType = 'text') {
   // Remove outer braces
   const trimmed = arrayText.trim();
   if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
-    throw new Error('Invalid array format: missing outer braces');
+    const { ERROR_MESSAGES } = require('./constants');
+    throw new Error(ERROR_MESSAGES.MISSING_OUTER_BRACES);
   }
 
   const content = trimmed.slice(1, -1);

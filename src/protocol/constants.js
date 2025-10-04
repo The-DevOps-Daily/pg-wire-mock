@@ -244,6 +244,29 @@ const ERROR_CODES = {
   INDEX_CORRUPTED: 'XX002',
 };
 
+// Standardized error messages
+const ERROR_MESSAGES = {
+  EMPTY_QUERY: 'Empty query string',
+  UNTERMINATED_STRING: 'Unterminated quoted string',
+  UNTERMINATED_IDENTIFIER: 'Unterminated quoted identifier',
+  INVALID_MESSAGE_FORMAT: 'Invalid message format',
+  INVALID_ARRAY_FORMAT: 'Invalid array format',
+  MISSING_OUTER_BRACES: 'Invalid array format: missing outer braces',
+  MISMATCHED_BRACES: 'Invalid array format: mismatched braces',
+  FUNCTION_CALL_NOT_SUPPORTED: 'Function call protocol not supported',
+  UNKNOWN_MESSAGE_TYPE: 'Unknown message type',
+  MALFORMED_CANCEL_REQUEST: 'Malformed cancel request received',
+  PORTAL_DOES_NOT_EXIST: 'Portal does not exist',
+  PREPARED_STATEMENT_DOES_NOT_EXIST: 'Prepared statement does not exist',
+  PROTOCOL_ERROR: 'Protocol error',
+  MESSAGE_PROCESSING_ERROR: 'Message processing error',
+  INVALID_PARSE_MESSAGE: 'Invalid Parse message format',
+  INVALID_BIND_MESSAGE: 'Invalid Bind message format',
+  INVALID_DESCRIBE_MESSAGE: 'Invalid Describe message format',
+  INVALID_EXECUTE_MESSAGE: 'Invalid Execute message format',
+  COPY_FAILED: 'COPY failed',
+};
+
 // Default server parameters sent during connection startup
 const DEFAULT_SERVER_PARAMETERS = {
   server_version: '13.0 (Mock)',
@@ -270,5 +293,6 @@ module.exports = {
   FORMAT_CODES,
   ERROR_SEVERITY,
   ERROR_CODES,
+  ERROR_MESSAGES,
   DEFAULT_SERVER_PARAMETERS,
 };
