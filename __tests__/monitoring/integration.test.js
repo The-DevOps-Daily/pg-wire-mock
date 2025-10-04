@@ -136,7 +136,8 @@ describe('Monitoring Integration Tests', () => {
     
     expect(body).toContain('pgwire_connection_errors_total 1');
     expect(body).toContain('pgwire_connection_timeouts_total 1');
-    expect(body).toContain('pgwire_queries_total{query_type="error",status="syntax_error"} 1');
+    expect(body).toContain('pgwire_queries_total{query_type="other",status="success"} 1');
+    expect(body).toContain('pgwire_queries_total{query_type="error",status="runtime_error"} 1');
   });
 
   test('should provide health check information', async () => {
