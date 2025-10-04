@@ -598,6 +598,11 @@ class ServerManager {
         connectionData.lastActivity = new Date();
         connectionData.buffer = Buffer.concat([connectionData.buffer, chunk]);
 
+        // Record data transfer for monitoring
+        if (this.statsCollector) {
+          this.statsCollector.recordDataTransfer(connectionId, chunk.length, 0);
+        }
+
         this.processMessages(connectionId, connectionData);
       } catch (error) {
         this.stats.errors++;
