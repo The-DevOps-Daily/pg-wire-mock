@@ -71,9 +71,8 @@ try {
 console.log('\n📊 Running monitoring tests...');
 try {
   const monitoringOutput = execSync('npm run test:monitoring', { encoding: 'utf8' });
-  const monitoringMatches = monitoringOutput.match(/Tests:\s+(\d+) passed, (\d+) total/);
-  if (monitoringMatches && monitoringMatches[1] === '61') {
-    console.log(`✅ All ${monitoringMatches[1]} monitoring tests passed`);
+  if (monitoringOutput.includes('61 passed, 61 total')) {
+    console.log('✅ All 61 monitoring tests passed');
   } else {
     console.log('❌ Some monitoring tests failed');
     process.exit(1);
