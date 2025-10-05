@@ -701,11 +701,6 @@ class ServerManager {
       return;
     }
 
-    // Record connection destruction for monitoring
-    if (this.statsCollector) {
-      this.statsCollector.recordConnectionDestroyed(connectionId, reason);
-    }
-
     const { socket, connState, isPooled } = connectionData;
     const duration = Date.now() - connectionData.connectedAt.getTime();
 
