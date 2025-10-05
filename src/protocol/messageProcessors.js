@@ -139,7 +139,7 @@ function processRegularMessage(buffer, socket, connState, statsCollector = null)
   try {
     switch (messageType) {
       case MESSAGE_TYPES.QUERY: // 'Q' - Simple Query
-        return processSimpleQuery(buffer, socket, connState, statsCollector);
+        return processSimpleQuery(buffer, socket, connState);
 
       case MESSAGE_TYPES.TERMINATE: // 'X' - Terminate
         return handleTerminate(socket, connState, length);
