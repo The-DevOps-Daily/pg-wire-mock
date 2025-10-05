@@ -32,12 +32,6 @@ const { PrometheusExporter } = require('../monitoring/prometheusExporter');
  * @property {number} poolConfig.maxConnections - Max connections in pool (default: 50)
  * @property {number} poolConfig.minConnections - Min connections in pool (default: 5)
  * @property {number} poolConfig.idleTimeoutMs - Idle connection timeout (default: 300000)
- * @property {boolean} enableMetrics - Enable metrics collection and Prometheus export (default: false)
- * @property {number} metricsPort - Port for Prometheus metrics endpoint (default: 9090)
- * @property {string} metricsHost - Host for metrics endpoint (default: '0.0.0.0')
- * @property {number} slowQueryThreshold - Threshold in ms for slow query tracking (default: 100)
- * @property {number} metricsRetention - Metrics retention period in ms (default: 3600000)
- * @property {number} metricsUpdateInterval - Metrics update interval in ms (default: 5000)
  */
 
 /**
