@@ -224,34 +224,23 @@ describe('Monitoring Integration Tests', () => {
   });
 
   test('should emit events during integration', (done) => {
-    jest.setTimeout(10000); // Increase timeout for this test
-    
     let eventCount = 0;
     const expectedEvents = ['connectionCreated', 'queryCompleted', 'protocolMessage'];
     
-    const handleEvent = () => {
-      eventCount++;
-      if (eventCount === expectedEvents.length) {
-        done();
-      }
-    };
-    
     expectedEvents.forEach(eventType => {
-      statsCollector.on(eventType, handleEvent);
+      statsCollector.on(eventType, () => {
+        eventCount++;
+        if (eventCount === expectedEvents.length) {
+          done();
+        }
+      });
     });
     
     // Trigger events
     statsCollector.recordConnectionCreated('event-conn');
     statsCollector.recordQuery('event-conn', 'SELECT 1', 10, true);
-    statsCollector.recordProtocolMessage('QUERY');
-    
-    // Fallback timeout in case events don't fire
-    setTimeout(() => {
-      if (eventCount < expectedEvents.length) {
-        done(new Error(`Only received ${eventCount} of ${expectedEvents.length} expected events`));
-      }
-    }, 8000);
-  }, 10000);
+    statsCollector.recordProtocolMessage('Query');
+  });
 });
 
 // Helper function to make HTTP requests
