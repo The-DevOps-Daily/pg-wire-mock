@@ -26,7 +26,7 @@ describe('Monitoring Integration Tests', () => {
 
   afterEach(async () => {
     if (statsCollector) {
-      statsCollector.destroy();
+      statsCollector.cleanup();
     }
     if (prometheusExporter) {
       await prometheusExporter.stop();
@@ -39,9 +39,12 @@ describe('Monitoring Integration Tests', () => {
     
     // Connection lifecycle
     statsCollector.recordConnectionCreated(connectionId);
+    statsCollector.recordConnectionAuthenticated(connectionId);
     
     // Query execution
-    statsCollector.recordQuery(connectionId, 'SELECT * FROM users', 10, true);
+    statsCollector.recordQueryStart(connectionId, 'SELECT * FROM users');
+    await new Promise(resolve => setTimeout(resolve, 10)); // Small delay
+    statsCollector.recordQuerySuccess(connectionId, 'SELECT * FROM users', 10);
     
     // Protocol messages
     statsCollector.recordProtocolMessage('Query');
@@ -75,7 +78,8 @@ describe('Monitoring Integration Tests', () => {
       
       // Connection and query activity
       statsCollector.recordConnectionCreated(connectionId);
-      statsCollector.recordQuery(connectionId, 'SELECT 1', 5 + i, true);
+      statsCollector.recordQueryStart(connectionId, 'SELECT 1');
+      statsCollector.recordQuerySuccess(connectionId, 'SELECT 1', 5 + i);
       statsCollector.recordProtocolMessage('Query');
       
       // Update metrics
@@ -99,7 +103,8 @@ describe('Monitoring Integration Tests', () => {
     latencies.forEach((latency, index) => {
       const connectionId = `conn-${index}`;
       statsCollector.recordConnectionCreated(connectionId);
-      statsCollector.recordQuery(connectionId, 'SELECT 1', latency, true);
+      statsCollector.recordQueryStart(connectionId, 'SELECT 1');
+      statsCollector.recordQuerySuccess(connectionId, 'SELECT 1', latency);
     });
     
     const stats = statsCollector.getStats();
@@ -120,12 +125,13 @@ describe('Monitoring Integration Tests', () => {
     const connectionId = 'error-conn';
     
     // Connection errors
-    statsCollector.recordConnectionError();
-    statsCollector.recordConnectionTimeout();
+    statsCollector.recordConnectionError(connectionId, 'AUTH_FAILED');
+    statsCollector.recordConnectionTimeout(connectionId);
     
     // Query errors
     statsCollector.recordConnectionCreated(connectionId);
-    statsCollector.recordQuery(connectionId, 'INVALID SQL', 5, false, 'SYNTAX_ERROR');
+    statsCollector.recordQueryStart(connectionId, 'INVALID SQL');
+    statsCollector.recordQueryError(connectionId, 'INVALID SQL', 'SYNTAX_ERROR');
     
     const stats = statsCollector.getStats();
     prometheusExporter.updateMetrics(stats);
@@ -142,7 +148,8 @@ describe('Monitoring Integration Tests', () => {
   test('should provide health check information', async () => {
     // Generate some activity first
     statsCollector.recordConnectionCreated('health-conn');
-    statsCollector.recordQuery('health-conn', 'SELECT 1', 10, true);
+    statsCollector.recordQueryStart('health-conn', 'SELECT 1');
+    statsCollector.recordQuerySuccess('health-conn', 'SELECT 1', 10);
     
     const stats = statsCollector.getStats();
     prometheusExporter.updateMetrics(stats);
@@ -166,7 +173,8 @@ describe('Monitoring Integration Tests', () => {
     
     // Try to record metrics (should be no-ops)
     disabledStats.recordConnectionCreated('test');
-    disabledStats.recordQuery('test', 'SELECT 1', 10, true);
+    disabledStats.recordQueryStart('test', 'SELECT 1');
+    disabledStats.recordQuerySuccess('test', 'SELECT 1', 10);
     
     const stats = disabledStats.getStats();
     
@@ -175,7 +183,7 @@ describe('Monitoring Integration Tests', () => {
     expect(stats.queries.queryTypes).toEqual({});
     expect(stats.protocol.messageTypes).toEqual({});
     
-    disabledStats.destroy();
+    disabledStats.cleanup();
   });
 
   test('should handle memory cleanup properly', async () => {
