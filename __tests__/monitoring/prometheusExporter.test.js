@@ -14,7 +14,7 @@ describe('PrometheusRegistry', () => {
 
   test('should register metrics correctly', () => {
     registry.register('test_counter', 'counter', 'A test counter', ['label1']);
-
+    
     const metric = registry.metrics.get('test_counter');
     expect(metric).toBeDefined();
     expect(metric.type).toBe('counter');
@@ -30,7 +30,7 @@ describe('PrometheusRegistry', () => {
     test('should increment counter values', () => {
       registry.incrementCounter('test_counter', 5, { status: 'success' });
       registry.incrementCounter('test_counter', 3, { status: 'success' });
-
+      
       const metric = registry.metrics.get('test_counter');
       const value = metric.values.get('status="success"');
       expect(value.value).toBe(8);
@@ -38,7 +38,7 @@ describe('PrometheusRegistry', () => {
 
     test('should set counter values', () => {
       registry.setCounter('test_counter', 100, { status: 'error' });
-
+      
       const metric = registry.metrics.get('test_counter');
       const value = metric.values.get('status="error"');
       expect(value.value).toBe(100);
@@ -47,7 +47,7 @@ describe('PrometheusRegistry', () => {
     test('should handle multiple labels', () => {
       registry.register('multi_counter', 'counter', 'Multi-label counter', ['type', 'status']);
       registry.incrementCounter('multi_counter', 1, { type: 'query', status: 'success' });
-
+      
       const metric = registry.metrics.get('multi_counter');
       const value = metric.values.get('status="success",type="query"');
       expect(value.value).toBe(1);
@@ -61,7 +61,7 @@ describe('PrometheusRegistry', () => {
 
     test('should set gauge values', () => {
       registry.setGauge('test_gauge', 42);
-
+      
       const metric = registry.metrics.get('test_gauge');
       const value = metric.values.get('');
       expect(value.value).toBe(42);
@@ -70,7 +70,7 @@ describe('PrometheusRegistry', () => {
     test('should update gauge values', () => {
       registry.setGauge('test_gauge', 10);
       registry.setGauge('test_gauge', 20);
-
+      
       const metric = registry.metrics.get('test_gauge');
       const value = metric.values.get('');
       expect(value.value).toBe(20);
@@ -86,10 +86,10 @@ describe('PrometheusRegistry', () => {
       registry.observeHistogram('test_histogram', 0.1);
       registry.observeHistogram('test_histogram', 0.5);
       registry.observeHistogram('test_histogram', 1.5);
-
+      
       const metric = registry.metrics.get('test_histogram');
       const data = metric.values.get('');
-
+      
       expect(data.count).toBe(3);
       expect(data.sum).toBe(2.1);
       expect(data.buckets.get(0.25)).toBe(1); // 0.1 <= 0.25
@@ -100,10 +100,10 @@ describe('PrometheusRegistry', () => {
     test('should handle bucket boundaries correctly', () => {
       registry.observeHistogram('test_histogram', 0.005); // Exactly on bucket boundary
       registry.observeHistogram('test_histogram', 0.01);  // Exactly on bucket boundary
-
+      
       const metric = registry.metrics.get('test_histogram');
       const data = metric.values.get('');
-
+      
       expect(data.buckets.get(0.005)).toBe(1);
       expect(data.buckets.get(0.01)).toBe(2);
     });
@@ -114,9 +114,9 @@ describe('PrometheusRegistry', () => {
       registry.register('requests_total', 'counter', 'Total requests', ['method']);
       registry.incrementCounter('requests_total', 10, { method: 'GET' });
       registry.incrementCounter('requests_total', 5, { method: 'POST' });
-
+      
       const output = registry.export();
-
+      
       expect(output).toContain('# HELP requests_total Total requests');
       expect(output).toContain('# TYPE requests_total counter');
       expect(output).toContain('requests_total{method="GET"} 10');
@@ -126,9 +126,9 @@ describe('PrometheusRegistry', () => {
     test('should export gauge metrics in Prometheus format', () => {
       registry.register('active_connections', 'gauge', 'Active connections');
       registry.setGauge('active_connections', 25);
-
+      
       const output = registry.export();
-
+      
       expect(output).toContain('# HELP active_connections Active connections');
       expect(output).toContain('# TYPE active_connections gauge');
       expect(output).toContain('active_connections 25');
@@ -138,9 +138,9 @@ describe('PrometheusRegistry', () => {
       registry.register('request_duration', 'histogram', 'Request duration');
       registry.observeHistogram('request_duration', 0.1);
       registry.observeHistogram('request_duration', 0.5);
-
+      
       const output = registry.export();
-
+      
       expect(output).toContain('# HELP request_duration Request duration');
       expect(output).toContain('# TYPE request_duration histogram');
       expect(output).toContain('request_duration_bucket{le="0.25"} 1');
@@ -153,9 +153,9 @@ describe('PrometheusRegistry', () => {
     test('should handle metrics without labels', () => {
       registry.register('simple_counter', 'counter', 'Simple counter');
       registry.incrementCounter('simple_counter', 1);
-
+      
       const output = registry.export();
-
+      
       expect(output).toContain('simple_counter 1');
       expect(output).not.toContain('simple_counter{');
     });
@@ -163,9 +163,9 @@ describe('PrometheusRegistry', () => {
     test('should sort labels consistently', () => {
       registry.register('sorted_counter', 'counter', 'Sorted counter', ['z', 'a', 'm']);
       registry.incrementCounter('sorted_counter', 1, { z: 'zvalue', a: 'avalue', m: 'mvalue' });
-
+      
       const output = registry.export();
-
+      
       // The actual order depends on the implementation - let's check what we get
       expect(output).toMatch(/sorted_counter\{.*=".*",.*=".*",.*=".*"\} 1/);
       expect(output).toContain('a="avalue"');
@@ -177,11 +177,11 @@ describe('PrometheusRegistry', () => {
   test('should clear all metrics', () => {
     registry.register('test_counter', 'counter', 'Test counter');
     registry.incrementCounter('test_counter', 5);
-
+    
     expect(registry.metrics.get('test_counter').values.size).toBe(1);
-
+    
     registry.clear();
-
+    
     expect(registry.metrics.get('test_counter').values.size).toBe(0);
   });
 });
@@ -213,24 +213,24 @@ describe('PrometheusExporter', () => {
 
   test('should start and stop HTTP server', async () => {
     await exporter.start();
-
+    
     // Test that server is running
     const response = await makeHttpRequest(`http://localhost:${testPort}/metrics`);
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/plain');
-
+    
     await exporter.stop();
-
+    
     // Test that server is stopped
     await expect(makeHttpRequest(`http://localhost:${testPort}/metrics`)).rejects.toThrow();
   });
 
   test('should serve metrics endpoint', async () => {
     await exporter.start();
-
+    
     const response = await makeHttpRequest(`http://localhost:${testPort}/metrics`);
     const body = response.body;
-
+    
     expect(body).toContain('# HELP pgwire_connections_total');
     expect(body).toContain('# TYPE pgwire_connections_total counter');
     expect(body).toContain('# HELP pgwire_queries_total');
@@ -239,10 +239,10 @@ describe('PrometheusExporter', () => {
 
   test('should serve health endpoint', async () => {
     await exporter.start();
-
+    
     const response = await makeHttpRequest(`http://localhost:${testPort}/health`);
     const body = JSON.parse(response.body);
-
+    
     expect(response.statusCode).toBe(200);
     expect(body).toHaveProperty('status', 'healthy');
     expect(body).toHaveProperty('timestamp');
@@ -251,7 +251,7 @@ describe('PrometheusExporter', () => {
 
   test('should return 404 for unknown endpoints', async () => {
     await exporter.start();
-
+    
     const response = await makeHttpRequest(`http://localhost:${testPort}/unknown`);
     expect(response.statusCode).toBe(404);
   });
@@ -347,12 +347,12 @@ describe('PrometheusExporter', () => {
   test('should handle start errors gracefully', async () => {
     // Start first exporter
     await exporter.start();
-
+    
     // Try to start second exporter on same port
     const exporter2 = new PrometheusExporter({ port: testPort, host: 'localhost' });
-
+    
     await expect(exporter2.start()).rejects.toThrow();
-
+    
     await exporter2.stop(); // Should not throw even if not started
   });
 

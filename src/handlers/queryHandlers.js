@@ -56,7 +56,7 @@ const MOCK_SCHEMA = {
           column_name: 'id',
           data_type: 'integer',
           is_nullable: 'NO',
-          column_default: 'nextval(\'users_id_seq\'::regclass)',
+          column_default: "nextval('users_id_seq'::regclass)",
           ordinal_position: 1,
         },
         {
@@ -94,7 +94,7 @@ const MOCK_SCHEMA = {
           column_name: 'id',
           data_type: 'integer',
           is_nullable: 'NO',
-          column_default: 'nextval(\'posts_id_seq\'::regclass)',
+          column_default: "nextval('posts_id_seq'::regclass)",
           ordinal_position: 1,
         },
         {
@@ -317,99 +317,99 @@ function handleSelectQuery(query, connState) {
 
   // Handle specific SELECT queries
   switch (query) {
-  case 'SELECT 1':
-  case 'SELECT 1;':
-    return {
-      columns: [
-        {
-          name: '?column?',
-          dataTypeOID: DATA_TYPES.INT4,
-          dataTypeSize: 4,
-        },
-      ],
-      rows: [['1']],
-      command: 'SELECT',
-      rowCount: 1,
-    };
+    case 'SELECT 1':
+    case 'SELECT 1;':
+      return {
+        columns: [
+          {
+            name: '?column?',
+            dataTypeOID: DATA_TYPES.INT4,
+            dataTypeSize: 4,
+          },
+        ],
+        rows: [['1']],
+        command: 'SELECT',
+        rowCount: 1,
+      };
 
-  case 'SELECT VERSION()':
-  case 'SELECT VERSION();':
-    return {
-      columns: [
-        {
-          name: 'version',
-          dataTypeOID: DATA_TYPES.TEXT,
-          dataTypeSize: -1,
-        },
-      ],
-      rows: [['PostgreSQL Wire Protocol Mock Server 1.0']],
-      command: 'SELECT',
-      rowCount: 1,
-    };
+    case 'SELECT VERSION()':
+    case 'SELECT VERSION();':
+      return {
+        columns: [
+          {
+            name: 'version',
+            dataTypeOID: DATA_TYPES.TEXT,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [['PostgreSQL Wire Protocol Mock Server 1.0']],
+        command: 'SELECT',
+        rowCount: 1,
+      };
 
-  case 'SELECT CURRENT_USER':
-  case 'SELECT CURRENT_USER;': {
-    const currentUser = connState.parameters.get('user') || 'postgres';
-    return {
-      columns: [
-        {
-          name: 'current_user',
-          dataTypeOID: DATA_TYPES.NAME,
-          dataTypeSize: 64,
-        },
-      ],
-      rows: [[currentUser]],
-      command: 'SELECT',
-      rowCount: 1,
-    };
-  }
+    case 'SELECT CURRENT_USER':
+    case 'SELECT CURRENT_USER;': {
+      const currentUser = connState.parameters.get('user') || 'postgres';
+      return {
+        columns: [
+          {
+            name: 'current_user',
+            dataTypeOID: DATA_TYPES.NAME,
+            dataTypeSize: 64,
+          },
+        ],
+        rows: [[currentUser]],
+        command: 'SELECT',
+        rowCount: 1,
+      };
+    }
 
-  case 'SELECT CURRENT_DATABASE()':
-  case 'SELECT CURRENT_DATABASE();': {
-    const currentDb = connState.parameters.get('database') || 'postgres';
-    return {
-      columns: [
-        {
-          name: 'current_database',
-          dataTypeOID: DATA_TYPES.NAME,
-          dataTypeSize: 64,
-        },
-      ],
-      rows: [[currentDb]],
-      command: 'SELECT',
-      rowCount: 1,
-    };
-  }
+    case 'SELECT CURRENT_DATABASE()':
+    case 'SELECT CURRENT_DATABASE();': {
+      const currentDb = connState.parameters.get('database') || 'postgres';
+      return {
+        columns: [
+          {
+            name: 'current_database',
+            dataTypeOID: DATA_TYPES.NAME,
+            dataTypeSize: 64,
+          },
+        ],
+        rows: [[currentDb]],
+        command: 'SELECT',
+        rowCount: 1,
+      };
+    }
 
-  case 'SELECT NOW()':
-  case 'SELECT NOW();':
-    return {
-      columns: [
-        {
-          name: 'now',
-          dataTypeOID: DATA_TYPES.TIMESTAMPTZ,
-          dataTypeSize: 8,
-        },
-      ],
-      rows: [[new Date().toISOString()]],
-      command: 'SELECT',
-      rowCount: 1,
-    };
+    case 'SELECT NOW()':
+    case 'SELECT NOW();':
+      return {
+        columns: [
+          {
+            name: 'now',
+            dataTypeOID: DATA_TYPES.TIMESTAMPTZ,
+            dataTypeSize: 8,
+          },
+        ],
+        rows: [[new Date().toISOString()]],
+        command: 'SELECT',
+        rowCount: 1,
+      };
 
-  default:
-    // Generic SELECT response for unknown queries
-    return {
-      columns: [
-        {
-          name: 'result',
-          dataTypeOID: DATA_TYPES.TEXT,
-          dataTypeSize: -1,
-        },
-      ],
-      rows: [['Mock response for: ' + query.substring(0, 50)]],
-      command: 'SELECT',
-      rowCount: 1,
-    };
+    default:
+      // Generic SELECT response for unknown queries
+      return {
+        columns: [
+          {
+            name: 'result',
+            dataTypeOID: DATA_TYPES.TEXT,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [['Mock response for: ' + query.substring(0, 50)]],
+        command: 'SELECT',
+        rowCount: 1,
+      };
   }
 }
 
@@ -550,7 +550,7 @@ function handleArrayQuery(query, _connState) {
   }
 
   // Handle multidimensional array examples
-  if (query.includes('SELECT ARRAY[ARRAY[') || query.includes('SELECT \'{{')) {
+  if (query.includes('SELECT ARRAY[ARRAY[') || query.includes("SELECT '{{")) {
     return {
       columns: [
         {
@@ -633,67 +633,67 @@ function getTypeOIDFromName(typeName) {
  */
 function handleShowQuery(query, _connState) {
   switch (query) {
-  case 'SHOW DOCS':
-  case 'SHOW DOCS;':
-    return {
-      columns: [
-        {
-          name: 'docs',
-          dataTypeOID: DATA_TYPES.TEXT,
-          dataTypeSize: -1,
-        },
-      ],
-      rows: [['https://www.postgresql.org/docs/']],
-      command: 'SHOW',
-      rowCount: 1,
-    };
+    case 'SHOW DOCS':
+    case 'SHOW DOCS;':
+      return {
+        columns: [
+          {
+            name: 'docs',
+            dataTypeOID: DATA_TYPES.TEXT,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [['https://www.postgresql.org/docs/']],
+        command: 'SHOW',
+        rowCount: 1,
+      };
 
-  case 'SHOW SERVER_VERSION':
-  case 'SHOW SERVER_VERSION;':
-    return {
-      columns: [
-        {
-          name: 'server_version',
-          dataTypeOID: DATA_TYPES.TEXT,
-          dataTypeSize: -1,
-        },
-      ],
-      rows: [['13.0 (Mock)']],
-      command: 'SHOW',
-      rowCount: 1,
-    };
+    case 'SHOW SERVER_VERSION':
+    case 'SHOW SERVER_VERSION;':
+      return {
+        columns: [
+          {
+            name: 'server_version',
+            dataTypeOID: DATA_TYPES.TEXT,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [['13.0 (Mock)']],
+        command: 'SHOW',
+        rowCount: 1,
+      };
 
-  case 'SHOW TIMEZONE':
-  case 'SHOW TIMEZONE;':
-  case 'SHOW TIME ZONE':
-  case 'SHOW TIME ZONE;':
-    return {
-      columns: [
-        {
-          name: 'TimeZone',
-          dataTypeOID: DATA_TYPES.TEXT,
-          dataTypeSize: -1,
-        },
-      ],
-      rows: [['UTC']],
-      command: 'SHOW',
-      rowCount: 1,
-    };
+    case 'SHOW TIMEZONE':
+    case 'SHOW TIMEZONE;':
+    case 'SHOW TIME ZONE':
+    case 'SHOW TIME ZONE;':
+      return {
+        columns: [
+          {
+            name: 'TimeZone',
+            dataTypeOID: DATA_TYPES.TEXT,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [['UTC']],
+        command: 'SHOW',
+        rowCount: 1,
+      };
 
-  default:
-    // Generic SHOW response
-    return {
-      columns: [
-        {
-          name: 'setting',
-          dataTypeOID: DATA_TYPES.TEXT,
-          dataTypeSize: -1,
-        },
-      ],
-      rows: [['Mock setting value']],
-      command: 'SHOW',
-      rowCount: 1,
-    };
+    default:
+      // Generic SHOW response
+      return {
+        columns: [
+          {
+            name: 'setting',
+            dataTypeOID: DATA_TYPES.TEXT,
+            dataTypeSize: -1,
+          },
+        ],
+        rows: [['Mock setting value']],
+        command: 'SHOW',
+        rowCount: 1,
+      };
   }
 }
 
@@ -705,25 +705,25 @@ function handleShowQuery(query, _connState) {
  */
 function handleTransactionQuery(command, connState) {
   switch (command) {
-  case 'BEGIN':
-    connState.transactionStatus = TRANSACTION_STATUS.IN_TRANSACTION;
-    return { command: 'BEGIN', rowCount: 0 };
+    case 'BEGIN':
+      connState.transactionStatus = TRANSACTION_STATUS.IN_TRANSACTION;
+      return { command: 'BEGIN', rowCount: 0 };
 
-  case 'COMMIT':
-    connState.transactionStatus = TRANSACTION_STATUS.IDLE;
-    return { command: 'COMMIT', rowCount: 0 };
+    case 'COMMIT':
+      connState.transactionStatus = TRANSACTION_STATUS.IDLE;
+      return { command: 'COMMIT', rowCount: 0 };
 
-  case 'ROLLBACK':
-    connState.transactionStatus = TRANSACTION_STATUS.IDLE;
-    return { command: 'ROLLBACK', rowCount: 0 };
+    case 'ROLLBACK':
+      connState.transactionStatus = TRANSACTION_STATUS.IDLE;
+      return { command: 'ROLLBACK', rowCount: 0 };
 
-  default:
-    return {
-      error: {
-        code: ERROR_CODES.SYNTAX_ERROR,
-        message: `Unknown transaction command: ${command}`,
-      },
-    };
+    default:
+      return {
+        error: {
+          code: ERROR_CODES.SYNTAX_ERROR,
+          message: `Unknown transaction command: ${command}`,
+        },
+      };
   }
 }
 
@@ -862,13 +862,13 @@ function updateTransactionStatus(connState, command) {
   const upperCommand = command.toUpperCase();
 
   switch (upperCommand) {
-  case 'BEGIN':
-    connState.transactionStatus = TRANSACTION_STATUS.IN_TRANSACTION;
-    break;
-  case 'COMMIT':
-  case 'ROLLBACK':
-    connState.transactionStatus = TRANSACTION_STATUS.IDLE;
-    break;
+    case 'BEGIN':
+      connState.transactionStatus = TRANSACTION_STATUS.IN_TRANSACTION;
+      break;
+    case 'COMMIT':
+    case 'ROLLBACK':
+      connState.transactionStatus = TRANSACTION_STATUS.IDLE;
+      break;
     // Other commands don't change transaction status
   }
 }

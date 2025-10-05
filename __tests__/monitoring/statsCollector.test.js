@@ -17,7 +17,7 @@ describe('RingBuffer', () => {
     buffer.push(1);
     buffer.push(2);
     buffer.push(3);
-
+    
     expect(buffer.count).toBe(3);
     expect(buffer.buffer).toEqual([1, 2, 3]);
   });
@@ -28,7 +28,7 @@ describe('RingBuffer', () => {
     buffer.push(2);
     buffer.push(3);
     buffer.push(4); // Should overwrite first element
-
+    
     expect(buffer.count).toBe(3);
     expect(buffer.buffer).toEqual([4, 2, 3]);
   });
@@ -36,7 +36,7 @@ describe('RingBuffer', () => {
   test('should calculate percentiles correctly', () => {
     const buffer = new RingBuffer(10);
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(v => buffer.push(v));
-
+    
     expect(buffer.getPercentile(50)).toBe(5);
     expect(buffer.getPercentile(90)).toBe(9);
     expect(buffer.getPercentile(100)).toBe(10);
@@ -51,7 +51,7 @@ describe('RingBuffer', () => {
   test('should return stats object', () => {
     const buffer = new RingBuffer(10);
     [1, 2, 3, 4, 5].forEach(v => buffer.push(v));
-
+    
     const stats = buffer.getStats();
     expect(stats).toHaveProperty('count', 5);
     expect(stats).toHaveProperty('p50', 3);
@@ -277,7 +277,7 @@ describe('StatsCollector', () => {
 
     test('should include connection idle times in stats', (done) => {
       collector.recordConnectionCreated('conn_1');
-
+      
       // Wait a bit then get stats
       setTimeout(() => {
         const stats = collector.getStats();
@@ -292,7 +292,7 @@ describe('StatsCollector', () => {
   describe('Configuration', () => {
     test('should disable metrics when configured', () => {
       const disabledCollector = new StatsCollector({ enableMetrics: false });
-
+      
       disabledCollector.recordConnectionCreated('conn_1');
       disabledCollector.recordQuery('conn_1', 'SELECT 1', 25, true);
 
@@ -331,7 +331,7 @@ describe('StatsCollector', () => {
         expect(data).toHaveProperty('connectionId', 'conn_1');
         expect(data).toHaveProperty('reason', 'test');
         eventsReceived++;
-
+        
         if (eventsReceived === 2) {
           done();
         }
@@ -392,7 +392,7 @@ describe('StatsCollector', () => {
         // Trigger cleanup
         intervalCallback();
         expect(testCollector.queryMetrics.slowQueries).toHaveLength(0);
-
+        
         testCollector.destroy();
         global.setInterval = originalSetInterval;
         done();

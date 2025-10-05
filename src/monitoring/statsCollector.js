@@ -24,7 +24,7 @@ class RingBuffer {
 
   getPercentile(percentile) {
     if (this.count === 0) return 0;
-
+    
     const values = this.buffer.slice(0, this.count).sort((a, b) => a - b);
     const index = Math.ceil((percentile / 100) * values.length) - 1;
     return values[Math.max(0, index)];
@@ -47,7 +47,7 @@ class RingBuffer {
 class StatsCollector extends EventEmitter {
   constructor(config = {}) {
     super();
-
+    
     this.config = {
       enableMetrics: true,
       slowQueryThreshold: 100, // ms
@@ -319,7 +319,7 @@ class StatsCollector extends EventEmitter {
    */
   getStats() {
     const now = Date.now();
-
+    
     return {
       timestamp: now,
       connections: {
@@ -349,7 +349,7 @@ class StatsCollector extends EventEmitter {
   extractQueryType(query) {
     const trimmed = query.trim().toUpperCase();
     const firstWord = trimmed.split(/\s+/)[0];
-
+    
     if (['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'SHOW', 'BEGIN', 'COMMIT', 'ROLLBACK'].includes(firstWord)) {
       return firstWord;
     }
@@ -363,7 +363,7 @@ class StatsCollector extends EventEmitter {
    */
   classifyError(error) {
     const message = error.message || error.toString();
-
+    
     if (message.includes('syntax') || message.includes('parse')) {
       return 'SYNTAX_ERROR';
     }
@@ -380,7 +380,7 @@ class StatsCollector extends EventEmitter {
   startCleanup() {
     this.cleanupInterval = setInterval(() => {
       const cutoff = Date.now() - this.config.retentionPeriod;
-
+      
       // Clean up slow queries
       this.queryMetrics.slowQueries = this.queryMetrics.slowQueries.filter(
         sq => sq.timestamp > cutoff
