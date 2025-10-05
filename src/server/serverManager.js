@@ -112,24 +112,6 @@ class ServerManager {
     // Cleanup interval
     this.cleanupInterval = null;
 
-    // Initialize monitoring components
-    this.statsCollector = null;
-    this.prometheusExporter = null;
-    this.metricsInterval = null;
-
-    if (this.config.enableMetrics) {
-      this.statsCollector = new StatsCollector({
-        enableMetrics: this.config.enableMetrics,
-        slowQueryThreshold: this.config.slowQueryThreshold,
-        retentionPeriod: this.config.metricsRetention,
-      });
-
-      this.prometheusExporter = new PrometheusExporter({
-        port: this.config.metricsPort,
-        host: this.config.metricsHost,
-      });
-    }
-
     // Initialize centralized logging system
     this.logger = createLogger('server');
     this._configureAllLoggers();
