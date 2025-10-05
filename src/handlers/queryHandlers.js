@@ -138,44 +138,35 @@ const MOCK_SCHEMA = {
  * @param {string} query - The SQL query to execute
  * @param {Socket} socket - Client socket for sending responses
  * @param {ConnectionState} connState - Connection state object
- * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  */
-function executeQuery(query, socket, connState, statsCollector = null) {
-  const startTime = Date.now();
-  let success = true;
-  let error = null;
-
+function executeQuery(query, socket, connState) {
   queryLogger.queryExecution(query, {
     connectionId: connState.connectionId,
     user: connState.getCurrentUser(),
   });
 
-  try {
-    // Process the query and get results
-    const results = processQuery(query, connState);
+  // Process the query and get results
+  const results = processQuery(query, connState);
 
-    // Handle query errors
-    if (results.error) {
-      success = false;
-      error = results.error;
-
-      sendErrorResponse(
-        socket,
-        results.error.code,
-        results.error.message,
-        results.error.additionalFields,
-        {
-          detail: results.error.detail,
-          hint: results.error.hint,
-          position: results.error.position,
-          context: results.error.context,
-          schema: results.error.schema,
-          table: results.error.table,
-        }
-      );
-      connState.transactionStatus = TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
-      return;
-    }
+  // Handle query errors
+  if (results.error) {
+    sendErrorResponse(
+      socket,
+      results.error.code,
+      results.error.message,
+      results.error.additionalFields,
+      {
+        detail: results.error.detail,
+        hint: results.error.hint,
+        position: results.error.position,
+        context: results.error.context,
+        schema: results.error.schema,
+        table: results.error.table,
+      }
+    );
+    connState.transactionStatus = TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
+    return;
+  }
 
   // Send result data if query returns rows
   if (results.columns && results.columns.length > 0) {
