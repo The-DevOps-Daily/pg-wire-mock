@@ -52,14 +52,6 @@ const DEFAULT_CONFIG = {
   // Shutdown settings
   shutdownTimeout: 30000,
   shutdownDrainTimeout: 10000,
-
-  // Monitoring settings
-  enableMetrics: false,
-  metricsPort: 9090,
-  metricsHost: '0.0.0.0',
-  slowQueryThreshold: 100, // milliseconds
-  metricsRetention: 3600000, // 1 hour in milliseconds
-  metricsUpdateInterval: 5000, // 5 seconds
 };
 
 /**
