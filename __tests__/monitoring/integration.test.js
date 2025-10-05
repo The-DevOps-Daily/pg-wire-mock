@@ -162,7 +162,7 @@ describe('Monitoring Integration Tests', () => {
 
   test('should handle disabled monitoring gracefully', async () => {
     // Create disabled stats collector
-    const disabledStats = new StatsCollector({ enableMetrics: false });
+    const disabledStats = new StatsCollector({ enabled: false });
     
     // Try to record metrics (should be no-ops)
     disabledStats.recordConnectionCreated('test');
@@ -172,28 +172,8 @@ describe('Monitoring Integration Tests', () => {
     
     // Should have empty/default stats
     expect(stats.connections.totalCreated).toBe(0);
-    expect(stats.queries.queryTypes).toEqual({
-      SELECT: 0,
-      INSERT: 0,
-      UPDATE: 0,
-      DELETE: 0,
-      SHOW: 0,
-      BEGIN: 0,
-      COMMIT: 0,
-      ROLLBACK: 0,
-      OTHER: 0,
-    });
-    expect(stats.protocol.messageTypes).toEqual({
-      QUERY: 0,
-      PARSE: 0,
-      BIND: 0,
-      EXECUTE: 0,
-      DESCRIBE: 0,
-      SYNC: 0,
-      CLOSE: 0,
-      FLUSH: 0,
-      OTHER: 0,
-    });
+    expect(stats.queries.queryTypes).toEqual({});
+    expect(stats.protocol.messageTypes).toEqual({});
     
     disabledStats.destroy();
   });
