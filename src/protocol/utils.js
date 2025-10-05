@@ -255,47 +255,47 @@ function validateMessageLength(messageLength, bufferLength, messageType) {
 
   // Type-specific length validations
   switch (messageType) {
-  case 'Q': // Query - must have at least null terminator
-    if (messageLength < 5) {
-      // 4 bytes length + 1 byte null terminator minimum
-      return {
-        isValid: false,
-        error: 'Query message too short to contain valid query string',
-        code: 'INVALID_QUERY_LENGTH',
-      };
-    }
-    break;
+    case 'Q': // Query - must have at least null terminator
+      if (messageLength < 5) {
+        // 4 bytes length + 1 byte null terminator minimum
+        return {
+          isValid: false,
+          error: 'Query message too short to contain valid query string',
+          code: 'INVALID_QUERY_LENGTH',
+        };
+      }
+      break;
 
-  case 'X': // Terminate - should be exactly 4 bytes (just length)
-    if (messageLength !== 4) {
-      return {
-        isValid: false,
-        error: 'Terminate message should have exactly 4 bytes length',
-        code: 'INVALID_TERMINATE_LENGTH',
-      };
-    }
-    break;
+    case 'X': // Terminate - should be exactly 4 bytes (just length)
+      if (messageLength !== 4) {
+        return {
+          isValid: false,
+          error: 'Terminate message should have exactly 4 bytes length',
+          code: 'INVALID_TERMINATE_LENGTH',
+        };
+      }
+      break;
 
-  case 'S': // Sync - should be exactly 4 bytes (just length)
-    if (messageLength !== 4) {
-      return {
-        isValid: false,
-        error: 'Sync message should have exactly 4 bytes length',
-        code: 'INVALID_SYNC_LENGTH',
-      };
-    }
-    break;
+    case 'S': // Sync - should be exactly 4 bytes (just length)
+      if (messageLength !== 4) {
+        return {
+          isValid: false,
+          error: 'Sync message should have exactly 4 bytes length',
+          code: 'INVALID_SYNC_LENGTH',
+        };
+      }
+      break;
 
-  case 'P': // Parse - needs at least statement name, query, and param count
-    if (messageLength < 7) {
-      // 4 + 1 (null) + 1 (null) + 2 (param count) minimum
-      return {
-        isValid: false,
-        error: 'Parse message too short for minimum required fields',
-        code: 'INVALID_PARSE_LENGTH',
-      };
-    }
-    break;
+    case 'P': // Parse - needs at least statement name, query, and param count
+      if (messageLength < 7) {
+        // 4 + 1 (null) + 1 (null) + 2 (param count) minimum
+        return {
+          isValid: false,
+          error: 'Parse message too short for minimum required fields',
+          code: 'INVALID_PARSE_LENGTH',
+        };
+      }
+      break;
   }
 
   return { isValid: true };
@@ -707,28 +707,28 @@ function parseArrayElement(element, elementType, wasQuoted = true) {
 
   // Type conversion based on element type
   switch (elementType.toLowerCase()) {
-  case 'int4':
-  case 'integer':
-  case 'int':
-    return parseInt(value, 10);
-  case 'int8':
-  case 'bigint':
-    // For bigint, return as string to avoid precision loss in JavaScript
-    return value;
-  case 'int2':
-  case 'smallint':
-    return parseInt(value, 10);
-  case 'float4':
-  case 'real':
-  case 'float8':
-  case 'double precision':
-  case 'numeric':
-    return parseFloat(value);
-  case 'bool':
-  case 'boolean':
-    return value.toLowerCase() === 't' || value.toLowerCase() === 'true';
-  default:
-    return value;
+    case 'int4':
+    case 'integer':
+    case 'int':
+      return parseInt(value, 10);
+    case 'int8':
+    case 'bigint':
+      // For bigint, return as string to avoid precision loss in JavaScript
+      return value;
+    case 'int2':
+    case 'smallint':
+      return parseInt(value, 10);
+    case 'float4':
+    case 'real':
+    case 'float8':
+    case 'double precision':
+    case 'numeric':
+      return parseFloat(value);
+    case 'bool':
+    case 'boolean':
+      return value.toLowerCase() === 't' || value.toLowerCase() === 'true';
+    default:
+      return value;
   }
 }
 

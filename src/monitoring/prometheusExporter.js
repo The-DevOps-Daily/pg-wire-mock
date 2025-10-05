@@ -130,7 +130,7 @@ class PrometheusRegistry {
 
       if (metric.type === 'histogram') {
         for (const [key, data] of metric.values) {
-          const labelStr = Object.keys(data.labels).length > 0 ?
+          const labelStr = Object.keys(data.labels).length > 0 ? 
             `{${Object.keys(data.labels).map(k => `${k}="${data.labels[k]}"`).join(',')}}` : '';
 
           // Export buckets
@@ -144,7 +144,7 @@ class PrometheusRegistry {
         }
       } else {
         for (const [key, data] of metric.values) {
-          const labelStr = Object.keys(data.labels).length > 0 ?
+          const labelStr = Object.keys(data.labels).length > 0 ? 
             `{${Object.keys(data.labels).map(k => `${k}="${data.labels[k]}"`).join(',')}}` : '';
           output += `${name}${labelStr} ${data.value}\n`;
         }
@@ -344,7 +344,7 @@ class PrometheusExporter {
 
     this.registry.setCounter('pgwire_protocol_extended_usage_total', stats.protocol.extendedProtocolUsage);
     this.registry.setCounter('pgwire_protocol_simple_usage_total', stats.protocol.simpleProtocolUsage);
-
+    
     this.registry.setCounter('pgwire_prepared_statements_total', stats.protocol.preparedStatementHits, {
       result: 'hit'
     });

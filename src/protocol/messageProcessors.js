@@ -138,50 +138,50 @@ function processRegularMessage(buffer, socket, connState, statsCollector = null)
 
   try {
     switch (messageType) {
-    case MESSAGE_TYPES.QUERY: // 'Q' - Simple Query
-      return processSimpleQuery(buffer, socket, connState, statsCollector);
+      case MESSAGE_TYPES.QUERY: // 'Q' - Simple Query
+        return processSimpleQuery(buffer, socket, connState, statsCollector);
 
-    case MESSAGE_TYPES.TERMINATE: // 'X' - Terminate
-      return handleTerminate(socket, connState, length);
+      case MESSAGE_TYPES.TERMINATE: // 'X' - Terminate
+        return handleTerminate(socket, connState, length);
 
-    case MESSAGE_TYPES.PARSE: // 'P' - Parse (Extended Query)
-      return processParse(buffer, socket, connState);
+      case MESSAGE_TYPES.PARSE: // 'P' - Parse (Extended Query)
+        return processParse(buffer, socket, connState);
 
-    case MESSAGE_TYPES.BIND: // 'B' - Bind (Extended Query)
-      return processBind(buffer, socket, connState);
+      case MESSAGE_TYPES.BIND: // 'B' - Bind (Extended Query)
+        return processBind(buffer, socket, connState);
 
-    case MESSAGE_TYPES.DESCRIBE: // 'D' - Describe
-      return processDescribe(buffer, socket, connState);
+      case MESSAGE_TYPES.DESCRIBE: // 'D' - Describe
+        return processDescribe(buffer, socket, connState);
 
-    case MESSAGE_TYPES.EXECUTE: // 'E' - Execute
-      return processExecute(buffer, socket, connState, statsCollector);
+      case MESSAGE_TYPES.EXECUTE: // 'E' - Execute
+        return processExecute(buffer, socket, connState, statsCollector);
 
-    case MESSAGE_TYPES.SYNC: // 'S' - Sync
-      return processSync(buffer, socket, connState);
+      case MESSAGE_TYPES.SYNC: // 'S' - Sync
+        return processSync(buffer, socket, connState);
 
-    case MESSAGE_TYPES.PASSWORD_MESSAGE: // 'p' - Password Message
-      return processPasswordMessage(buffer, socket, connState);
+      case MESSAGE_TYPES.PASSWORD_MESSAGE: // 'p' - Password Message
+        return processPasswordMessage(buffer, socket, connState);
 
-    case MESSAGE_TYPES.COPY_DATA: // 'd' - Copy Data
-      return processCopyData(buffer, socket, connState);
+      case MESSAGE_TYPES.COPY_DATA: // 'd' - Copy Data
+        return processCopyData(buffer, socket, connState);
 
-    case MESSAGE_TYPES.COPY_DONE: // 'c' - Copy Done
-      return processCopyDone(buffer, socket, connState);
+      case MESSAGE_TYPES.COPY_DONE: // 'c' - Copy Done
+        return processCopyDone(buffer, socket, connState);
 
-    case MESSAGE_TYPES.COPY_FAIL: // 'f' - Copy Fail
-      return processCopyFail(buffer, socket, connState);
+      case MESSAGE_TYPES.COPY_FAIL: // 'f' - Copy Fail
+        return processCopyFail(buffer, socket, connState);
 
-    case MESSAGE_TYPES.FUNCTION_CALL: // 'F' - Function Call
-      return processFunctionCall(buffer, socket, connState);
+      case MESSAGE_TYPES.FUNCTION_CALL: // 'F' - Function Call
+        return processFunctionCall(buffer, socket, connState);
 
-    default:
-      console.warn(`Unknown message type: ${messageType}`);
-      sendErrorResponse(
-        socket,
-        ERROR_CODES.PROTOCOL_VIOLATION,
-        `${ERROR_MESSAGES.UNKNOWN_MESSAGE_TYPE}: ${messageType}`
-      );
-      return length + 1;
+      default:
+        console.warn(`Unknown message type: ${messageType}`);
+        sendErrorResponse(
+          socket,
+          ERROR_CODES.PROTOCOL_VIOLATION,
+          `${ERROR_MESSAGES.UNKNOWN_MESSAGE_TYPE}: ${messageType}`
+        );
+        return length + 1;
     }
   } catch (error) {
     console.error(`Error processing ${messageType} message:`, error);
@@ -542,7 +542,7 @@ function processExecute(buffer, socket, connState, statsCollector = null) {
 
     // Execute the query from the portal
     connState.incrementQueryCount();
-    executeQuery(portal.query || 'SELECT \'Extended query result\'', socket, connState, statsCollector);
+    executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState, statsCollector);
 
     return length + 1;
   } catch (error) {

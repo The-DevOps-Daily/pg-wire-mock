@@ -87,42 +87,42 @@ function parseConfig() {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     switch (arg) {
-    case '--port':
-    case '-p':
-      config.port = parseInt(args[++i]) || config.port;
-      break;
-    case '--host':
-    case '-h':
-      config.host = args[++i] || config.host;
-      break;
-    case '--max-connections':
-      config.maxConnections = parseInt(args[++i]) || config.maxConnections;
-      break;
-    case '--log-level':
-      config.logLevel = args[++i] || config.logLevel;
-      break;
-    case '--quiet':
-    case '-q':
-      config.enableLogging = false;
-      break;
-    case '--help':
-      printUsage();
-      process.exit(0);
-      break;
-    case '--version':
-      console.log('PostgreSQL Wire Protocol Mock Server v1.0.0');
-      process.exit(0);
-      break;
-    case '--validate-config':
-      validateConfigurationCommand();
-      process.exit(0);
-      break;
-    default:
-      if (arg.startsWith('-')) {
-        console.error(`Unknown option: ${arg}`);
+      case '--port':
+      case '-p':
+        config.port = parseInt(args[++i]) || config.port;
+        break;
+      case '--host':
+      case '-h':
+        config.host = args[++i] || config.host;
+        break;
+      case '--max-connections':
+        config.maxConnections = parseInt(args[++i]) || config.maxConnections;
+        break;
+      case '--log-level':
+        config.logLevel = args[++i] || config.logLevel;
+        break;
+      case '--quiet':
+      case '-q':
+        config.enableLogging = false;
+        break;
+      case '--help':
         printUsage();
-        process.exit(1);
-      }
+        process.exit(0);
+        break;
+      case '--version':
+        console.log('PostgreSQL Wire Protocol Mock Server v1.0.0');
+        process.exit(0);
+        break;
+      case '--validate-config':
+        validateConfigurationCommand();
+        process.exit(0);
+        break;
+      default:
+        if (arg.startsWith('-')) {
+          console.error(`Unknown option: ${arg}`);
+          printUsage();
+          process.exit(1);
+        }
     }
   }
 
