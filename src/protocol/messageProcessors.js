@@ -504,10 +504,9 @@ function processDescribe(buffer, socket, connState) {
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
- * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  * @returns {number} Bytes processed
  */
-function processExecute(buffer, socket, connState, statsCollector = null) {
+function processExecute(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
 
   try {
@@ -524,11 +523,6 @@ function processExecute(buffer, socket, connState, statsCollector = null) {
 
     console.log(`Execute: portal="${portalName || '(unnamed)'}", limit=${rowLimit}`);
 
-    // Record protocol message for monitoring
-    if (statsCollector) {
-      statsCollector.recordProtocolMessage('EXECUTE', true);
-    }
-
     // Get the portal
     const portal = connState.getPortal(portalName);
     if (!portal) {
@@ -542,7 +536,7 @@ function processExecute(buffer, socket, connState, statsCollector = null) {
 
     // Execute the query from the portal
     connState.incrementQueryCount();
-    executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState, statsCollector);
+    executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState);
 
     return length + 1;
   } catch (error) {
