@@ -45,14 +45,13 @@ const { executeQueryString, executeQuery } = require('../handlers/queryHandlers'
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
- * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processMessage(buffer, socket, connState, statsCollector = null) {
+function processMessage(buffer, socket, connState) {
   if (!connState.authenticated) {
-    return processStartupMessage(buffer, socket, connState, statsCollector);
+    return processStartupMessage(buffer, socket, connState);
   } else {
-    return processRegularMessage(buffer, socket, connState, statsCollector);
+    return processRegularMessage(buffer, socket, connState);
   }
 }
 
