@@ -567,15 +567,6 @@ class ServerManager {
       `New connection: ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`
     );
 
-    // Record connection creation for monitoring
-    if (this.statsCollector) {
-      this.statsCollector.recordConnectionCreated(connectionId, {
-        remoteAddress: socket.remoteAddress,
-        remotePort: socket.remotePort,
-        isPooled: !!this.connectionPool,
-      });
-    }
-
     // Set connection timeout
     socket.setTimeout(this.config.connectionTimeout);
 
