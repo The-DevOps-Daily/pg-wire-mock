@@ -109,11 +109,10 @@ describe('Monitoring Integration Tests', () => {
     const response = await makeHttpRequest(`http://localhost:${testPort}/metrics`);
     const body = response.body;
     
-    // Check that queries were recorded properly  
+    // Check that queries were recorded properly
     expect(body).toContain('pgwire_queries_total{query_type="select",status="success"} 10');
+    expect(body).toContain('pgwire_query_duration_seconds_count 10');
     expect(body).toContain('pgwire_slow_queries_total 4'); // Latencies >= 100ms
-    // Note: Query duration histogram may not be populated in this test since
-    // the histogram update happens in the Prometheus exporter
   });
 
   test('should handle error scenarios gracefully', async () => {
@@ -228,7 +227,7 @@ describe('Monitoring Integration Tests', () => {
     jest.setTimeout(10000); // Increase timeout for this test
     
     let eventCount = 0;
-    const expectedEvents = ['connectionCreated', 'queryExecuted'];
+    const expectedEvents = ['connectionCreated', 'queryCompleted', 'protocolMessage'];
     
     const handleEvent = () => {
       eventCount++;
@@ -244,7 +243,7 @@ describe('Monitoring Integration Tests', () => {
     // Trigger events
     statsCollector.recordConnectionCreated('event-conn');
     statsCollector.recordQuery('event-conn', 'SELECT 1', 10, true);
-    // Note: Protocol message recording doesn't emit events
+    statsCollector.recordProtocolMessage('QUERY');
     
     // Fallback timeout in case events don't fire
     setTimeout(() => {

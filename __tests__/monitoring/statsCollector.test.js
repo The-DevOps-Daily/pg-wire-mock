@@ -275,7 +275,7 @@ describe('StatsCollector', () => {
       expect(stats.protocol.messageTypes.QUERY).toBe(1);
     });
 
-    test('should include connection idle times in stats', (done) => {
+    test('should include connection idle times in stats', () => {
       collector.recordConnectionCreated('conn_1');
       
       // Wait a bit then get stats
@@ -284,7 +284,6 @@ describe('StatsCollector', () => {
         const connection = stats.connections.details[0];
         expect(connection).toHaveProperty('idleTime');
         expect(connection.idleTime).toBeGreaterThan(0);
-        done();
       }, 10);
     });
   });
