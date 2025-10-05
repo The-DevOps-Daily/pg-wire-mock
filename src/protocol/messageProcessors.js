@@ -268,10 +268,9 @@ function handleStartupPacket(buffer, socket, connState, length) {
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
- * @param {StatsCollector} statsCollector - Optional stats collector for monitoring
  * @returns {number} Bytes processed
  */
-function processSimpleQuery(buffer, socket, connState, statsCollector = null) {
+function processSimpleQuery(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
 
   // Extract query string (remove message type, length, and null terminator)
@@ -280,16 +279,11 @@ function processSimpleQuery(buffer, socket, connState, statsCollector = null) {
 
   console.log(`Executing simple query: ${query}`);
 
-  // Record protocol message for monitoring
-  if (statsCollector) {
-    statsCollector.recordProtocolMessage('QUERY', false);
-  }
-
   // Increment query counter
   connState.incrementQueryCount();
 
   // Execute the query string (handles multiple statements)
-  executeQueryString(query, socket, connState, statsCollector);
+  executeQueryString(query, socket, connState);
 
   sendReadyForQuery(socket, connState);
   return length + 1;
