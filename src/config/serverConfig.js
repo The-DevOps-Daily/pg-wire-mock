@@ -49,6 +49,17 @@ const DEFAULT_CONFIG = {
   allowPasswordAuthentication: true,
   allowCleartextPasswords: false,
 
+  // SSL/TLS settings
+  enableSSL: false,
+  sslPort: null, // Use same port as regular connection if null
+  sslCertPath: './certs/server.crt',
+  sslKeyPath: './certs/server.key',
+  sslCaPath: null, // Optional CA certificate path
+  sslRejectUnauthorized: false, // For self-signed certificates in development
+  sslMinVersion: 'TLSv1.2',
+  sslMaxVersion: 'TLSv1.3',
+  sslCipherSuites: null, // Use default cipher suites if null
+
   // Shutdown settings
   shutdownTimeout: 30000,
   shutdownDrainTimeout: 10000,
@@ -74,6 +85,14 @@ const ENV_MAPPING = {
   PG_MOCK_ENABLE_EXTENDED_PROTOCOL: { key: 'enableExtendedProtocol', type: 'boolean' },
   PG_MOCK_ENABLE_COPY_PROTOCOL: { key: 'enableCopyProtocol', type: 'boolean' },
   PG_MOCK_REQUIRE_AUTHENTICATION: { key: 'requireAuthentication', type: 'boolean' },
+  PG_MOCK_ENABLE_SSL: { key: 'enableSSL', type: 'boolean' },
+  PG_MOCK_SSL_PORT: { key: 'sslPort', type: 'number' },
+  PG_MOCK_SSL_CERT_PATH: { key: 'sslCertPath', type: 'string' },
+  PG_MOCK_SSL_KEY_PATH: { key: 'sslKeyPath', type: 'string' },
+  PG_MOCK_SSL_CA_PATH: { key: 'sslCaPath', type: 'string' },
+  PG_MOCK_SSL_REJECT_UNAUTHORIZED: { key: 'sslRejectUnauthorized', type: 'boolean' },
+  PG_MOCK_SSL_MIN_VERSION: { key: 'sslMinVersion', type: 'string' },
+  PG_MOCK_SSL_MAX_VERSION: { key: 'sslMaxVersion', type: 'string' },
   PG_MOCK_SHUTDOWN_TIMEOUT: { key: 'shutdownTimeout', type: 'number' },
   PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT: { key: 'shutdownDrainTimeout', type: 'number' },
 };
@@ -171,6 +190,29 @@ function validateConfig(config) {
     errors.push('maxQueryLength must be at least 1024 bytes');
   }
 
+  // Validate SSL settings if SSL is enabled
+  if (config.enableSSL) {
+    if (config.sslCertPath && typeof config.sslCertPath !== 'string') {
+      errors.push('sslCertPath must be a string');
+    }
+    if (config.sslKeyPath && typeof config.sslKeyPath !== 'string') {
+      errors.push('sslKeyPath must be a string');
+    }
+    if (
+      config.sslPort &&
+      (!Number.isInteger(config.sslPort) || config.sslPort < 1 || config.sslPort > 65535)
+    ) {
+      errors.push('sslPort must be an integer between 1 and 65535');
+    }
+    const validTlsVersions = ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'];
+    if (config.sslMinVersion && !validTlsVersions.includes(config.sslMinVersion)) {
+      errors.push(`sslMinVersion must be one of: ${validTlsVersions.join(', ')}`);
+    }
+    if (config.sslMaxVersion && !validTlsVersions.includes(config.sslMaxVersion)) {
+      errors.push(`sslMaxVersion must be one of: ${validTlsVersions.join(', ')}`);
+    }
+  }
+
   return {
     isValid: errors.length === 0,
     errors,
@@ -266,6 +308,27 @@ function getConfigDocumentation() {
       type: 'string',
       default: DEFAULT_CONFIG.defaultUser,
       description: 'Default user name',
+    },
+    {
+      key: 'enableSSL',
+      env: 'PG_MOCK_ENABLE_SSL',
+      type: 'boolean',
+      default: DEFAULT_CONFIG.enableSSL,
+      description: 'Enable SSL/TLS support',
+    },
+    {
+      key: 'sslCertPath',
+      env: 'PG_MOCK_SSL_CERT_PATH',
+      type: 'string',
+      default: DEFAULT_CONFIG.sslCertPath,
+      description: 'Path to SSL certificate file',
+    },
+    {
+      key: 'sslKeyPath',
+      env: 'PG_MOCK_SSL_KEY_PATH',
+      type: 'string',
+      default: DEFAULT_CONFIG.sslKeyPath,
+      description: 'Path to SSL private key file',
     },
   ];
 }

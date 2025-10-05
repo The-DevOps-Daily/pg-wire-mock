@@ -12,6 +12,8 @@
     "start:quiet": "node server.js --quiet",
     "start:port": "node server.js --port 5433",
     "start:all": "node server.js --host 0.0.0.0 --port 5432",
+    "generate-certs": "node scripts/generate-certs.js",
+    "generate-certs:force": "node scripts/generate-certs.js --force",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",

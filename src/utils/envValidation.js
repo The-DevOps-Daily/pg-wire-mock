@@ -113,6 +113,48 @@ const VALIDATION_RULES = {
     max: 60000,
     description: 'Shutdown drain timeout must be between 1000ms and 60000ms',
   },
+  PG_MOCK_ENABLE_SSL: {
+    type: 'boolean',
+    description: 'Enable SSL/TLS support must be true, false, 1, or 0',
+  },
+  PG_MOCK_SSL_PORT: {
+    type: 'number',
+    min: 1,
+    max: 65535,
+    description: 'SSL port number must be between 1 and 65535',
+  },
+  PG_MOCK_SSL_CERT_PATH: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 500,
+    description: 'SSL certificate path must be a valid file path',
+  },
+  PG_MOCK_SSL_KEY_PATH: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 500,
+    description: 'SSL private key path must be a valid file path',
+  },
+  PG_MOCK_SSL_CA_PATH: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 500,
+    description: 'SSL CA certificate path must be a valid file path',
+  },
+  PG_MOCK_SSL_REJECT_UNAUTHORIZED: {
+    type: 'boolean',
+    description: 'SSL reject unauthorized must be true, false, 1, or 0',
+  },
+  PG_MOCK_SSL_MIN_VERSION: {
+    type: 'enum',
+    values: ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'],
+    description: 'SSL minimum version must be one of: TLSv1, TLSv1.1, TLSv1.2, TLSv1.3',
+  },
+  PG_MOCK_SSL_MAX_VERSION: {
+    type: 'enum',
+    values: ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'],
+    description: 'SSL maximum version must be one of: TLSv1, TLSv1.1, TLSv1.2, TLSv1.3',
+  },
 };
 
 /**

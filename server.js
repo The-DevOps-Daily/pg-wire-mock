@@ -80,6 +80,16 @@ function parseConfig() {
     logLevel: coreConfig.logLevel,
     shutdownTimeout: coreConfig.shutdownTimeout,
     shutdownDrainTimeout: coreConfig.shutdownDrainTimeout,
+    // SSL/TLS configuration
+    enableSSL: coreConfig.enableSSL,
+    sslPort: coreConfig.sslPort,
+    sslCertPath: coreConfig.sslCertPath,
+    sslKeyPath: coreConfig.sslKeyPath,
+    sslCaPath: coreConfig.sslCaPath,
+    sslRejectUnauthorized: coreConfig.sslRejectUnauthorized,
+    sslMinVersion: coreConfig.sslMinVersion,
+    sslMaxVersion: coreConfig.sslMaxVersion,
+    sslCipherSuites: coreConfig.sslCipherSuites,
   };
 
   // Parse command line arguments
@@ -157,6 +167,9 @@ Environment Variables:
   PG_MOCK_ENABLE_LOGGING         Enable logging (true/false)
   PG_MOCK_SHUTDOWN_TIMEOUT       Graceful shutdown timeout in ms (default: 30000)
   PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT Connection drain timeout in ms (default: 10000)
+  PG_MOCK_ENABLE_SSL             Enable SSL/TLS support (true/false)
+  PG_MOCK_SSL_CERT_PATH          Path to SSL certificate file
+  PG_MOCK_SSL_KEY_PATH           Path to SSL private key file
 
 Examples:
   node server.js                              # Start with defaults
