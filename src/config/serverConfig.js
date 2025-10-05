@@ -306,34 +306,6 @@ function getConfigDocumentation() {
       default: DEFAULT_CONFIG.defaultUser,
       description: 'Default user name',
     },
-    {
-      key: 'enableMetrics',
-      env: 'PG_MOCK_ENABLE_METRICS',
-      type: 'boolean',
-      default: DEFAULT_CONFIG.enableMetrics,
-      description: 'Enable Prometheus metrics collection and export',
-    },
-    {
-      key: 'metricsPort',
-      env: 'PG_MOCK_METRICS_PORT',
-      type: 'number',
-      default: DEFAULT_CONFIG.metricsPort,
-      description: 'Port for Prometheus metrics endpoint',
-    },
-    {
-      key: 'metricsHost',
-      env: 'PG_MOCK_METRICS_HOST',
-      type: 'string',
-      default: DEFAULT_CONFIG.metricsHost,
-      description: 'Host address for metrics endpoint',
-    },
-    {
-      key: 'slowQueryThreshold',
-      env: 'PG_MOCK_SLOW_QUERY_THRESHOLD',
-      type: 'number',
-      default: DEFAULT_CONFIG.slowQueryThreshold,
-      description: 'Threshold in milliseconds for slow query tracking',
-    },
   ];
 }
 
