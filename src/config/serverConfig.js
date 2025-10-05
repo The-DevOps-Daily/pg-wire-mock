@@ -187,29 +187,6 @@ function validateConfig(config) {
     errors.push('maxQueryLength must be at least 1024 bytes');
   }
 
-  // Validate monitoring settings
-  if (config.enableMetrics) {
-    if (!Number.isInteger(config.metricsPort) || config.metricsPort < 1 || config.metricsPort > 65535) {
-      errors.push('metricsPort must be an integer between 1 and 65535');
-    }
-
-    if (!config.metricsHost || typeof config.metricsHost !== 'string') {
-      errors.push('metricsHost must be a non-empty string');
-    }
-
-    if (!Number.isInteger(config.slowQueryThreshold) || config.slowQueryThreshold < 0) {
-      errors.push('slowQueryThreshold must be a non-negative integer');
-    }
-
-    if (!Number.isInteger(config.metricsRetention) || config.metricsRetention < 60000) {
-      errors.push('metricsRetention must be at least 60000ms (1 minute)');
-    }
-
-    if (!Number.isInteger(config.metricsUpdateInterval) || config.metricsUpdateInterval < 1000) {
-      errors.push('metricsUpdateInterval must be at least 1000ms');
-    }
-  }
-
   return {
     isValid: errors.length === 0,
     errors,
