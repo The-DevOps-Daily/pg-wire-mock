@@ -44,9 +44,9 @@ describe('Monitoring Integration Tests', () => {
     statsCollector.recordQuery(connectionId, 'SELECT * FROM users', 10, true);
     
     // Protocol messages
-    statsCollector.recordProtocolMessage('QUERY');
-    statsCollector.recordProtocolMessage('PARSE');
-    statsCollector.recordProtocolMessage('EXECUTE');
+    statsCollector.recordProtocolMessage('Query');
+    statsCollector.recordProtocolMessage('Parse');
+    statsCollector.recordProtocolMessage('Execute');
     
     // Update Prometheus metrics and start server
     const stats = statsCollector.getStats();
@@ -76,7 +76,7 @@ describe('Monitoring Integration Tests', () => {
       // Connection and query activity
       statsCollector.recordConnectionCreated(connectionId);
       statsCollector.recordQuery(connectionId, 'SELECT 1', 5 + i, true);
-      statsCollector.recordProtocolMessage('QUERY');
+      statsCollector.recordProtocolMessage('Query');
       
       // Update metrics
       const stats = statsCollector.getStats();
@@ -188,8 +188,11 @@ describe('Monitoring Integration Tests', () => {
       PARSE: 0,
       BIND: 0,
       EXECUTE: 0,
+      DESCRIBE: 0,
       SYNC: 0,
-      TERMINATE: 0,
+      CLOSE: 0,
+      FLUSH: 0,
+      OTHER: 0,
     });
     
     disabledStats.destroy();
