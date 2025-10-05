@@ -155,8 +155,9 @@ describe('Monitoring Integration Tests', () => {
     expect(healthData).toHaveProperty('status', 'healthy');
     expect(healthData).toHaveProperty('timestamp');
     expect(healthData).toHaveProperty('lastUpdate');
-    // The health endpoint may not include metrics in its response
-    // so we'll just check that basic health info is present
+    expect(healthData).toHaveProperty('metrics');
+    expect(healthData.metrics).toHaveProperty('totalConnections', 1);
+    expect(healthData.metrics).toHaveProperty('totalQueries', 1);
   });
 
   test('should handle disabled monitoring gracefully', async () => {
