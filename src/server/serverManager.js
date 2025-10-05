@@ -13,8 +13,6 @@ const {
 const { configureProtocolLogger } = require('../protocol/messageBuilders');
 const { configureQueryLogger } = require('../handlers/queryHandlers');
 const { createLogger } = require('../utils/logger');
-const { StatsCollector } = require('../monitoring/statsCollector');
-const { PrometheusExporter } = require('../monitoring/prometheusExporter');
 
 /**
  * Configuration options for the server
