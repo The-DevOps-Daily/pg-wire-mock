@@ -77,21 +77,15 @@ try {
 console.log('\n📊 Running monitoring tests...');
 try {
   const monitoringOutput = execSync('npm run test:monitoring', { encoding: 'utf8' });
-  if (monitoringOutput.includes('61 passed, 61 total') && monitoringOutput.includes('Test Suites: 3 passed, 3 total')) {
+  if (monitoringOutput.includes('61 passed, 61 total')) {
     console.log('✅ All 61 monitoring tests passed');
   } else {
     console.log('❌ Some monitoring tests failed');
     process.exit(1);
   }
 } catch (error) {
-  // Jest may exit with code 1 due to worker process warning but tests can still pass
-  const monitoringOutput = error.stdout ? error.stdout.toString() : '';
-  if (monitoringOutput.includes('61 passed, 61 total') && monitoringOutput.includes('Test Suites: 3 passed, 3 total')) {
-    console.log('✅ All 61 monitoring tests passed (with warnings)');
-  } else {
-    console.log('❌ Monitoring tests failed');
-    process.exit(1);
-  }
+  console.log('❌ Monitoring tests failed');
+  process.exit(1);
 }
 
 console.log('\n🎉 All CI/CD validation checks passed!');
