@@ -166,11 +166,7 @@ describe('PrometheusRegistry', () => {
       
       const output = registry.export();
       
-      // The actual order depends on the implementation - let's check what we get
-      expect(output).toMatch(/sorted_counter\{.*=".*",.*=".*",.*=".*"\} 1/);
-      expect(output).toContain('a="avalue"');
-      expect(output).toContain('m="mvalue"');
-      expect(output).toContain('z="zvalue"');
+      expect(output).toContain('sorted_counter{a="avalue",m="mvalue",z="zvalue"} 1');
     });
   });
 
