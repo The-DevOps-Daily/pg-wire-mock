@@ -84,14 +84,6 @@ const ENV_MAPPING = {
   PG_MOCK_REQUIRE_AUTHENTICATION: { key: 'requireAuthentication', type: 'boolean' },
   PG_MOCK_SHUTDOWN_TIMEOUT: { key: 'shutdownTimeout', type: 'number' },
   PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT: { key: 'shutdownDrainTimeout', type: 'number' },
-
-  // Monitoring environment variables
-  PG_MOCK_ENABLE_METRICS: { key: 'enableMetrics', type: 'boolean' },
-  PG_MOCK_METRICS_PORT: { key: 'metricsPort', type: 'number' },
-  PG_MOCK_METRICS_HOST: { key: 'metricsHost', type: 'string' },
-  PG_MOCK_SLOW_QUERY_THRESHOLD: { key: 'slowQueryThreshold', type: 'number' },
-  PG_MOCK_METRICS_RETENTION: { key: 'metricsRetention', type: 'number' },
-  PG_MOCK_METRICS_UPDATE_INTERVAL: { key: 'metricsUpdateInterval', type: 'number' },
 };
 
 /**
