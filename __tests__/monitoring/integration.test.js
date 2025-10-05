@@ -109,10 +109,11 @@ describe('Monitoring Integration Tests', () => {
     const response = await makeHttpRequest(`http://localhost:${testPort}/metrics`);
     const body = response.body;
     
-    // Check that queries were recorded properly
-    expect(body).toContain('pgwire_queries_total{query_type="select",status="success"} 10');
+    // Check histogram buckets
+    expect(body).toContain('pgwire_query_duration_seconds_bucket{le="0.01"} 2'); // 5ms, 10ms
+    expect(body).toContain('pgwire_query_duration_seconds_bucket{le="0.1"} 7'); // up to 100ms
+    expect(body).toContain('pgwire_query_duration_seconds_bucket{le="1"} 9'); // up to 1000ms
     expect(body).toContain('pgwire_query_duration_seconds_count 10');
-    expect(body).toContain('pgwire_slow_queries_total 4'); // Latencies >= 100ms
   });
 
   test('should handle error scenarios gracefully', async () => {
