@@ -143,7 +143,7 @@ class PrometheusRegistry {
           output += `${name}_count${labelStr} ${data.count}\n`;
         }
       } else {
-        for (const [, data] of metric.values) {
+        for (const [key, data] of metric.values) {
           const labelStr = Object.keys(data.labels).length > 0 ?
             `{${Object.keys(data.labels).map(k => `${k}="${data.labels[k]}"`).join(',')}}` : '';
           output += `${name}${labelStr} ${data.value}\n`;
