@@ -90,8 +90,6 @@ function generateCertificate(keyPath, certPath) {
     `/emailAddress=${CERT_CONFIG.emailAddress}`,
   ].join('');
 
-  // Complex command with process substitution (not used due to cross-platform issues)
-
   try {
     // For cross-platform compatibility, use a simpler command without process substitution
     const simpleCommand = [
@@ -228,10 +226,24 @@ function main() {
 
     // Check if certificates already exist
     if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-      const answer = process.argv.includes('--force')
-        ? 'y'
-        : require('readline-sync')?.question('Certificates already exist. Overwrite? (y/N): ') ||
-          'n';
+      let answer = 'n';
+
+      if (process.argv.includes('--force')) {
+        answer = 'y';
+      } else {
+        try {
+          const readlineSync = require('readline-sync');
+          answer = readlineSync.question('Certificates already exist. Overwrite? (y/N): ') || 'n';
+        } catch (error) {
+          console.log(
+            '⚠️  Interactive prompt not available. Use --force flag to overwrite certificates.'
+          );
+          console.log('✓ Using existing certificates');
+          displayCertificateInfo(certPath);
+          displayUsageInstructions();
+          return;
+        }
+      }
 
       if (answer.toLowerCase() !== 'y') {
         console.log('✓ Using existing certificates');

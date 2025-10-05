@@ -294,7 +294,8 @@ certificate verify failed
 
 ```javascript
 ssl: {
-  rejectUnauthorized: false;
+  rejectUnauthorized: false, // For self-signed certificates
+},
 }
 ```
 

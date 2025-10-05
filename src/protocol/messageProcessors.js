@@ -14,6 +14,141 @@ const {
 
 const { parseParameters, getMessageType } = require('./utils');
 const { createProtocolLogger } = require('../utils/logger');
+const fs = require('fs');
+
+// WeakMap to store SSL upgrade state for sockets
+const sslUpgradeState = new WeakMap();
+
+/**
+ * SSL upgrade state management
+ */
+const SSLState = {
+  /**
+   * Mark a socket for SSL upgrade
+   * @param {Socket} socket - The socket to mark
+   * @param {Object} config - SSL configuration
+   */
+  markForUpgrade(socket, config) {
+    sslUpgradeState.set(socket, {
+      needsSSLUpgrade: true,
+      sslConfig: config,
+      markedAt: Date.now(),
+    });
+  },
+
+  /**
+   * Check if a socket needs SSL upgrade
+   * @param {Socket} socket - The socket to check
+   * @returns {boolean} True if socket needs SSL upgrade
+   */
+  needsUpgrade(socket) {
+    const state = sslUpgradeState.get(socket);
+    return state?.needsSSLUpgrade || false;
+  },
+
+  /**
+   * Get SSL configuration for a socket
+   * @param {Socket} socket - The socket
+   * @returns {Object|null} SSL configuration or null
+   */
+  getConfig(socket) {
+    const state = sslUpgradeState.get(socket);
+    return state?.sslConfig || null;
+  },
+
+  /**
+   * Clear SSL state for a socket
+   * @param {Socket} socket - The socket to clear
+   */
+  clear(socket) {
+    sslUpgradeState.delete(socket);
+  },
+
+  /**
+   * Mark SSL upgrade as completed
+   * @param {Socket} socket - The socket
+   */
+  markCompleted(socket) {
+    const state = sslUpgradeState.get(socket);
+    if (state) {
+      state.needsSSLUpgrade = false;
+      state.completedAt = Date.now();
+    }
+  },
+};
+
+/**
+ * Validates SSL certificate files
+ * @param {Object} config - SSL configuration
+ * @returns {Object} Validation result with success flag and SSL options
+ */
+function validateSSLCertificates(config) {
+  const result = {
+    success: false,
+    sslOptions: {},
+    error: null,
+  };
+
+  try {
+    // Check if SSL is enabled
+    if (!config?.enableSSL) {
+      result.error = 'SSL not enabled';
+      return result;
+    }
+
+    // Validate certificate file exists and is readable
+    if (!config.sslCertPath || !fs.existsSync(config.sslCertPath)) {
+      result.error = `SSL certificate file not found: ${config.sslCertPath}`;
+      return result;
+    }
+
+    // Validate key file exists and is readable
+    if (!config.sslKeyPath || !fs.existsSync(config.sslKeyPath)) {
+      result.error = `SSL key file not found: ${config.sslKeyPath}`;
+      return result;
+    }
+
+    // Try to read the certificate files
+    try {
+      result.sslOptions.cert = fs.readFileSync(config.sslCertPath);
+      result.sslOptions.key = fs.readFileSync(config.sslKeyPath);
+    } catch (readError) {
+      result.error = `Failed to read SSL certificates: ${readError.message}`;
+      return result;
+    }
+
+    // Add other SSL options
+    result.sslOptions.rejectUnauthorized = config.sslRejectUnauthorized || false;
+
+    if (config.sslCaPath && fs.existsSync(config.sslCaPath)) {
+      try {
+        result.sslOptions.ca = fs.readFileSync(config.sslCaPath);
+      } catch (caError) {
+        // CA is optional, so just log warning
+        console.warn(`Warning: Could not read CA file: ${caError.message}`);
+      }
+    }
+
+    // Set TLS version constraints
+    if (config.sslMinVersion) {
+      result.sslOptions.minVersion = config.sslMinVersion;
+    }
+    if (config.sslMaxVersion) {
+      result.sslOptions.maxVersion = config.sslMaxVersion;
+    }
+
+    // Set cipher suites if specified
+    if (config.sslCipherSuites) {
+      result.sslOptions.ciphers = config.sslCipherSuites;
+    }
+
+    result.success = true;
+    return result;
+  } catch (error) {
+    result.error = `SSL validation error: ${error.message}`;
+    return result;
+  }
+}
 
 // Create protocol logger instance (will be configured by server)
 let protocolLogger = createProtocolLogger();
@@ -206,19 +341,25 @@ function processRegularMessage(buffer, socket, connState) {
  * @returns {number} Bytes processed
  */
 function handleSSLRequest(socket, config = null) {
-  const sslEnabled = config?.enableSSL || false;
+  // First validate SSL configuration and certificates
+  const validation = validateSSLCertificates(config);
 
-  if (sslEnabled) {
+  if (validation.success) {
     console.log('SSL request received - accepting');
     socket.write(Buffer.from('S')); // Accept SSL
 
-    // Mark socket for SSL upgrade - the actual upgrade will happen in ServerManager
-    socket.__needsSSLUpgrade = true;
-    socket.__sslConfig = config;
+    // Store validated SSL options with the socket state
+    SSLState.markForUpgrade(socket, {
+      ...config,
+      validatedSSLOptions: validation.sslOptions,
+    });
+
+    // Emit event for SSL upgrade request
+    socket.emit('sslUpgradeRequested');
 
     return 8; // SSL request is always 8 bytes
   } else {
-    console.log('SSL request received - rejecting (SSL not enabled)');
+    console.log(`SSL request received - rejecting (${validation.error})`);
     socket.write(Buffer.from('N')); // Reject SSL
     return 8; // SSL request is always 8 bytes
   }
@@ -715,4 +856,6 @@ module.exports = {
   handleStartupPacket,
   handleTerminate,
   configureMessageProcessorLogger,
+  SSLState,
+  validateSSLCertificates,
 };

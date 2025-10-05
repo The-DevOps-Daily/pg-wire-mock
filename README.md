@@ -83,11 +83,18 @@ psql -h localhost -p 5432 -U postgres
 npm run generate-certs
 
 # Start server with SSL enabled
+# Bash/Linux/macOS:
 export PG_MOCK_ENABLE_SSL=true
 export PORT=5433
 npm run dev
 
-# Connect with SSL
+# PowerShell (Windows):
+$env:PG_MOCK_ENABLE_SSL = "true"
+$env:PORT = "5433"
+npm run dev
+
+# Connect with SSL (in a separate terminal)
+# Strict SSL mode:
 psql "sslmode=require host=localhost port=5433 dbname=postgres user=postgres"
 ```
 
@@ -172,33 +179,39 @@ Options:
 
 ### Environment Variables
 
-```bash
+F```bash
+
 # Server settings
+
 export PG_MOCK_PORT=5432
 export PG_MOCK_HOST=localhost
 export PG_MOCK_MAX_CONNECTIONS=100
 export PG_MOCK_CONNECTION_TIMEOUT=300000
 
 # Logging settings
+
 export PG_MOCK_ENABLE_LOGGING=true
 export PG_MOCK_LOG_LEVEL=info
 
 # Shutdown settings
+
 export PG_MOCK_SHUTDOWN_TIMEOUT=30000
 export PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT=10000
 
 # Database settings
+
 export PG_MOCK_SERVER_VERSION="13.0 (Mock)"
 export PG_MOCK_DEFAULT_DATABASE=postgres
 export PG_MOCK_DEFAULT_USER=postgres
 export PG_MOCK_DEFAULT_TIMEZONE=UTC
-```
+
+````
 
 View current configuration:
 
 ```bash
 npm run config
-```
+````
 
 ## 🔧 Development
 

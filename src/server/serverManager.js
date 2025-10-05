@@ -11,6 +11,7 @@ const { ConnectionPool } = require('../connection/connectionPool');
 const {
   processMessage,
   configureMessageProcessorLogger,
+  SSLState,
 } = require('../protocol/messageProcessors');
 const { configureProtocolLogger } = require('../protocol/messageBuilders');
 const { configureQueryLogger } = require('../handlers/queryHandlers');
@@ -558,7 +559,7 @@ class ServerManager {
 
     // Handle SSL upgrade requests
     socket.on('sslUpgradeRequested', () => {
-      if (this.config.enableSSL && socket.__needsSSLUpgrade) {
+      if (this.config.enableSSL && SSLState.needsUpgrade(socket)) {
         this.upgradeToSSL(connectionId, connectionData);
       }
     });
@@ -625,13 +626,14 @@ class ServerManager {
     try {
       this.log('info', `Upgrading connection ${connectionId} to SSL/TLS`);
 
-      // Prepare SSL options
-      const sslOptions = this.getSSLOptions();
+      // Get pre-validated SSL options from the socket state
+      const sslConfig = SSLState.getConfig(socket);
+      const sslOptions = sslConfig?.validatedSSLOptions;
 
-      if (!sslOptions.key || !sslOptions.cert) {
-        this.log('error', `SSL certificates not found for connection ${connectionId}`);
-        socket.write(Buffer.from('N')); // Change response to reject SSL
-        socket.__needsSSLUpgrade = false;
+      if (!sslOptions) {
+        // This should not happen since certificates were validated before accepting SSL
+        this.log('error', `No validated SSL options found for connection ${connectionId}`);
+        this.closeConnection(connectionId, 'SSL configuration error');
         return;
       }
 
@@ -650,9 +652,8 @@ class ServerManager {
         connectionData.socket = tlsSocket;
         connectionData.isSSL = true;
 
-        // Clear SSL upgrade flags
-        socket.__needsSSLUpgrade = false;
-        delete socket.__sslConfig;
+        // Clear SSL upgrade state
+        SSLState.markCompleted(socket);
 
         // Set up new event handlers for TLS socket
         this.setupSSLConnectionEventHandlers(connectionId, connectionData);
