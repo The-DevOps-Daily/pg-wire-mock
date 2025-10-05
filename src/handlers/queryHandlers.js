@@ -12,6 +12,7 @@ const {
 
 const { formatCommandTag } = require('../protocol/utils');
 const { createQueryLogger } = require('../utils/logger');
+const { ErrorFactory, wrapError, formatErrorForLogging } = require('../utils/errorHandler');
 
 // Create query logger instance (will be configured by server)
 let queryLogger = createQueryLogger();
@@ -150,18 +151,35 @@ function executeQuery(query, socket, connState) {
 
   // Handle query errors
   if (results.error) {
+    // Log the error with full details
+    queryLogger.error('Query execution failed', formatErrorForLogging(results.error));
+
+    // Convert error to protocol format
+    const errorDetails = results.error.toProtocolFormat
+      ? results.error.toProtocolFormat()
+      : results.error;
+
     sendErrorResponse(
       socket,
-      results.error.code,
-      results.error.message,
-      results.error.additionalFields,
+      errorDetails.code,
+      errorDetails.message,
+      errorDetails.additionalFields || {},
       {
-        detail: results.error.detail,
-        hint: results.error.hint,
-        position: results.error.position,
-        context: results.error.context,
-        schema: results.error.schema,
-        table: results.error.table,
+        severity: errorDetails.severity,
+        detail: errorDetails.detail,
+        hint: errorDetails.hint,
+        position: errorDetails.position,
+        internalPosition: errorDetails.internalPosition,
+        internalQuery: errorDetails.internalQuery,
+        context: errorDetails.context,
+        schema: errorDetails.schema,
+        table: errorDetails.table,
+        column: errorDetails.column,
+        dataType: errorDetails.dataType,
+        constraint: errorDetails.constraint,
+        file: errorDetails.file,
+        line: errorDetails.line,
+        routine: errorDetails.routine,
       }
     );
     connState.transactionStatus = TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
@@ -265,14 +283,15 @@ function processQuery(query, connState) {
     }
   } catch (error) {
     console.error('Error processing query:', error);
+
+    // Wrap the error with enhanced details
+    const wrappedError = wrapError(
+      error,
+      'An unexpected error occurred while processing the query'
+    );
+
     return {
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: `Internal server error: ${error.message}`,
-        additionalFields: {
-          D: 'An unexpected error occurred while processing the query',
-        },
-      },
+      error: wrappedError,
     };
   }
 }
@@ -463,10 +482,10 @@ function handleArrayQuery(query, _connState) {
       };
     } catch (error) {
       return {
-        error: {
-          code: ERROR_CODES.SYNTAX_ERROR,
-          message: `Invalid array syntax: ${error.message}`,
-        },
+        error: ErrorFactory.invalidArrayFormat(`Invalid array syntax: ${error.message}`, {
+          detail: `Failed to parse array literal: ${arrayText}`,
+          context: `While parsing typed array cast to ${typeName}[]`,
+        }),
       };
     }
   }
@@ -515,10 +534,10 @@ function handleArrayQuery(query, _connState) {
       };
     } catch (error) {
       return {
-        error: {
-          code: ERROR_CODES.SYNTAX_ERROR,
-          message: `Invalid array syntax: ${error.message}`,
-        },
+        error: ErrorFactory.invalidArrayFormat(`Invalid array syntax: ${error.message}`, {
+          detail: `Failed to parse array literal: ${arrayText}`,
+          context: 'While parsing array literal syntax',
+        }),
       };
     }
   }
@@ -695,7 +714,7 @@ function handleTransactionQuery(command, connState) {
       return {
         error: {
           code: ERROR_CODES.SYNTAX_ERROR,
-          message: `Unknown transaction command: ${command}`,
+          message: `${ERROR_MESSAGES.UNKNOWN_TRANSACTION_COMMAND}: ${command}`,
         },
       };
   }
@@ -722,7 +741,7 @@ function handleSetQuery(query, _connState) {
   return {
     error: {
       code: ERROR_CODES.SYNTAX_ERROR,
-      message: 'Invalid SET command syntax',
+      message: ERROR_MESSAGES.INVALID_SET_SYNTAX,
     },
   };
 }
@@ -856,10 +875,7 @@ function validateQuery(query) {
   if (!query || query.trim().length === 0) {
     return {
       isValid: false,
-      error: {
-        code: ERROR_CODES.SYNTAX_ERROR,
-        message: ERROR_MESSAGES.EMPTY_QUERY,
-      },
+      error: ErrorFactory.emptyQuery(),
     };
   }
 
@@ -868,22 +884,20 @@ function validateQuery(query) {
   const doubleQuotes = (query.match(/"/g) || []).length;
 
   if (singleQuotes % 2 !== 0) {
+    // Find position of unterminated string
+    const lastQuotePos = query.lastIndexOf("'");
     return {
       isValid: false,
-      error: {
-        code: ERROR_CODES.SYNTAX_ERROR,
-        message: ERROR_MESSAGES.UNTERMINATED_STRING,
-      },
+      error: ErrorFactory.unterminatedString(lastQuotePos + 1),
     };
   }
 
   if (doubleQuotes % 2 !== 0) {
+    // Find position of unterminated identifier
+    const lastQuotePos = query.lastIndexOf('"');
     return {
       isValid: false,
-      error: {
-        code: ERROR_CODES.SYNTAX_ERROR,
-        message: ERROR_MESSAGES.UNTERMINATED_IDENTIFIER,
-      },
+      error: ErrorFactory.unterminatedIdentifier(lastQuotePos + 1),
     };
   }
 
