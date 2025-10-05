@@ -56,8 +56,9 @@ try {
 console.log('\n🧪 Running tests...');
 try {
   const testOutput = execSync('npm test', { encoding: 'utf8' });
-  if (testOutput.includes('157 passed, 157 total')) {
-    console.log('✅ All 157 tests passed');
+  const testMatches = testOutput.match(/Tests:\s+(\d+) passed, (\d+) total/);
+  if (testMatches && testMatches[1] === testMatches[2]) {
+    console.log(`✅ All ${testMatches[1]} tests passed`);
   } else {
     console.log('❌ Some tests failed');
     process.exit(1);
