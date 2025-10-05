@@ -38,7 +38,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run tests
-        run: npm test || (if [ $? -eq 1 ]; then echo "Tests passed with warnings (common Jest issue)"; else exit $?; fi)
+        run: npm test
       - name: Run monitoring tests specifically
         run: npm run test:monitoring
       - name: Generate coverage report
