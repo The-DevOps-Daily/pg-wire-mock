@@ -17,6 +17,7 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Transaction management (BEGIN/COMMIT/ROLLBACK)
   - Prepared statements and portals
   - Error handling with proper SQLSTATE codes
+  - **SSL/TLS encryption support** (NEW!) - [See SSL Documentation](docs/SSL_SUPPORT.md)
   - **PostgreSQL array type support** (NEW!) - [See Array Documentation](docs/ARRAY_SUPPORT.md)
 
 - **Comprehensive Query Support**
@@ -73,6 +74,21 @@ npm run start:all
 
 ```bash
 psql -h localhost -p 5432 -U postgres
+```
+
+### SSL/TLS Connections (NEW!)
+
+```bash
+# Generate test certificates
+npm run generate-certs
+
+# Start server with SSL enabled
+export PG_MOCK_ENABLE_SSL=true
+export PORT=5433
+npm run dev
+
+# Connect with SSL
+psql "sslmode=require host=localhost port=5433 dbname=postgres user=postgres"
 ```
 
 ### Try Some Queries

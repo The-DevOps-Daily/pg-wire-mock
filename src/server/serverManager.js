@@ -4,6 +4,8 @@
  */
 
 const Net = require('net');
+const tls = require('tls');
+const fs = require('fs');
 const { ConnectionState } = require('../connection/connectionState');
 const { ConnectionPool } = require('../connection/connectionPool');
 const {
@@ -553,6 +555,13 @@ class ServerManager {
       }
       this.connections.delete(connectionId);
     });
+
+    // Handle SSL upgrade requests
+    socket.on('sslUpgradeRequested', () => {
+      if (this.config.enableSSL && socket.__needsSSLUpgrade) {
+        this.upgradeToSSL(connectionId, connectionData);
+      }
+    });
   }
 
   /**
@@ -566,7 +575,7 @@ class ServerManager {
 
     while (connectionData.buffer.length > 0) {
       try {
-        const processed = processMessage(connectionData.buffer, socket, connState);
+        const processed = processMessage(connectionData.buffer, socket, connState, this.config);
 
         if (processed === 0) {
           break; // Need more data
@@ -602,6 +611,165 @@ class ServerManager {
         break;
       }
     }
+  }
+
+  /**
+   * Upgrades a connection to SSL/TLS
+   * @param {string} connectionId - Connection identifier
+   * @param {Object} connectionData - Connection data object
+   * @private
+   */
+  upgradeToSSL(connectionId, connectionData) {
+    const { socket } = connectionData;
+
+    try {
+      this.log('info', `Upgrading connection ${connectionId} to SSL/TLS`);
+
+      // Prepare SSL options
+      const sslOptions = this.getSSLOptions();
+
+      if (!sslOptions.key || !sslOptions.cert) {
+        this.log('error', `SSL certificates not found for connection ${connectionId}`);
+        socket.write(Buffer.from('N')); // Change response to reject SSL
+        socket.__needsSSLUpgrade = false;
+        return;
+      }
+
+      // Create TLS socket wrapping the existing socket
+      const tlsSocket = new tls.TLSSocket(socket, {
+        ...sslOptions,
+        isServer: true,
+        server: this.server,
+      });
+
+      // Set up TLS socket event handlers
+      tlsSocket.on('secure', () => {
+        this.log('info', `SSL connection established for ${connectionId}`);
+
+        // Update connection data with TLS socket
+        connectionData.socket = tlsSocket;
+        connectionData.isSSL = true;
+
+        // Clear SSL upgrade flags
+        socket.__needsSSLUpgrade = false;
+        delete socket.__sslConfig;
+
+        // Set up new event handlers for TLS socket
+        this.setupSSLConnectionEventHandlers(connectionId, connectionData);
+      });
+
+      tlsSocket.on('error', error => {
+        this.log('error', `SSL error for connection ${connectionId}: ${error.message}`);
+        this.closeConnection(connectionId, `SSL error: ${error.message}`);
+      });
+
+      tlsSocket.on('close', () => {
+        this.log('debug', `SSL connection ${connectionId} closed`);
+      });
+    } catch (error) {
+      this.log('error', `Failed to upgrade connection ${connectionId} to SSL: ${error.message}`);
+      this.closeConnection(connectionId, `SSL upgrade failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Gets SSL/TLS options from configuration
+   * @returns {Object} SSL options object
+   * @private
+   */
+  getSSLOptions() {
+    const sslOptions = {
+      rejectUnauthorized: this.config.sslRejectUnauthorized,
+    };
+
+    // Add certificate and key if paths are provided
+    try {
+      if (this.config.sslCertPath && fs.existsSync(this.config.sslCertPath)) {
+        sslOptions.cert = fs.readFileSync(this.config.sslCertPath);
+      } else {
+        this.log('warn', `SSL certificate file not found: ${this.config.sslCertPath}`);
+      }
+
+      if (this.config.sslKeyPath && fs.existsSync(this.config.sslKeyPath)) {
+        sslOptions.key = fs.readFileSync(this.config.sslKeyPath);
+      } else {
+        this.log('warn', `SSL key file not found: ${this.config.sslKeyPath}`);
+      }
+
+      // Add CA certificate if provided
+      if (this.config.sslCaPath && fs.existsSync(this.config.sslCaPath)) {
+        sslOptions.ca = fs.readFileSync(this.config.sslCaPath);
+      }
+
+      // Set TLS version constraints
+      if (this.config.sslMinVersion) {
+        sslOptions.minVersion = this.config.sslMinVersion;
+      }
+      if (this.config.sslMaxVersion) {
+        sslOptions.maxVersion = this.config.sslMaxVersion;
+      }
+
+      // Set cipher suites if specified
+      if (this.config.sslCipherSuites) {
+        sslOptions.ciphers = this.config.sslCipherSuites;
+      }
+    } catch (error) {
+      this.log('error', `Error reading SSL certificates: ${error.message}`);
+    }
+
+    return sslOptions;
+  }
+
+  /**
+   * Sets up event handlers for SSL connections
+   * @param {string} connectionId - Connection identifier
+   * @param {Object} connectionData - Connection data object
+   * @private
+   */
+  setupSSLConnectionEventHandlers(connectionId, connectionData) {
+    const { socket } = connectionData; // This is now the TLS socket
+
+    // Handle incoming data on TLS socket
+    socket.on('data', chunk => {
+      try {
+        this.stats.bytesReceived += chunk.length;
+        connectionData.lastActivity = new Date();
+        connectionData.buffer = Buffer.concat([connectionData.buffer, chunk]);
+
+        this.processMessages(connectionId, connectionData);
+      } catch (error) {
+        this.stats.errors++;
+        this.log('error', `Error processing SSL data for ${connectionId}: ${error.message}`);
+        this.closeConnection(connectionId, `SSL protocol error: ${error.message}`);
+      }
+    });
+
+    // Handle connection end
+    socket.on('end', () => {
+      this.log('info', `SSL connection ${connectionId} ended by client`);
+      this.closeConnection(connectionId, 'Client disconnected');
+    });
+
+    // Handle connection errors
+    socket.on('error', error => {
+      this.stats.errors++;
+      this.log('error', `SSL connection ${connectionId} error: ${error.message}`);
+      this.closeConnection(connectionId, `SSL socket error: ${error.message}`);
+    });
+
+    // Handle connection timeout
+    socket.on('timeout', () => {
+      this.log('warn', `SSL connection ${connectionId} timed out`);
+      this.closeConnection(connectionId, 'SSL connection timeout');
+    });
+
+    // Handle connection close
+    socket.on('close', hadError => {
+      if (hadError) {
+        this.log('warn', `SSL connection ${connectionId} closed with error`);
+      }
+      this.connections.delete(connectionId);
+    });
   }
 
   /**

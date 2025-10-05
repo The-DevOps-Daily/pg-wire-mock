@@ -45,11 +45,12 @@ const { executeQueryString, executeQuery } = require('../handlers/queryHandlers'
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration (optional)
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processMessage(buffer, socket, connState) {
+function processMessage(buffer, socket, connState, config = null) {
   if (!connState.authenticated) {
-    return processStartupMessage(buffer, socket, connState);
+    return processStartupMessage(buffer, socket, connState, config);
   } else {
     return processRegularMessage(buffer, socket, connState);
   }
@@ -61,9 +62,10 @@ function processMessage(buffer, socket, connState) {
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration (optional)
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processStartupMessage(buffer, socket, connState) {
+function processStartupMessage(buffer, socket, connState, config = null) {
   // Need at least 8 bytes for length + protocol version
   if (buffer.length < 8) {
     return 0;
@@ -86,7 +88,7 @@ function processStartupMessage(buffer, socket, connState) {
   try {
     // Handle SSL request
     if (protocolVersion === SSL_REQUEST_CODE) {
-      return handleSSLRequest(socket);
+      return handleSSLRequest(socket, config);
     }
 
     // Handle cancel request
@@ -200,12 +202,26 @@ function processRegularMessage(buffer, socket, connState) {
 /**
  * Handles SSL request messages
  * @param {Socket} socket - Client socket
+ * @param {Object} config - Server configuration (optional)
  * @returns {number} Bytes processed
  */
-function handleSSLRequest(socket) {
-  console.log('SSL request received - rejecting');
-  socket.write(Buffer.from('N')); // Reject SSL
-  return 8; // SSL request is always 8 bytes
+function handleSSLRequest(socket, config = null) {
+  const sslEnabled = config?.enableSSL || false;
+
+  if (sslEnabled) {
+    console.log('SSL request received - accepting');
+    socket.write(Buffer.from('S')); // Accept SSL
+
+    // Mark socket for SSL upgrade - the actual upgrade will happen in ServerManager
+    socket.__needsSSLUpgrade = true;
+    socket.__sslConfig = config;
+
+    return 8; // SSL request is always 8 bytes
+  } else {
+    console.log('SSL request received - rejecting (SSL not enabled)');
+    socket.write(Buffer.from('N')); // Reject SSL
+    return 8; // SSL request is always 8 bytes
+  }
 }
 
 /**
