@@ -7,12 +7,21 @@ describe('Server Configuration', () => {
   // Save original process.env and argv
   const originalEnv = process.env;
   const originalArgv = process.argv;
+  const originalExit = process.exit;
 
   beforeEach(() => {
     // Reset process.env and argv before each test
     jest.resetModules();
     process.env = { ...originalEnv };
     process.argv = [...originalArgv];
+
+    // Mock process.exit to prevent tests from terminating
+    process.exit = jest.fn();
+  });
+
+  afterEach(() => {
+    // Restore process.exit after each test
+    process.exit = originalExit;
   });
 
   afterAll(() => {
@@ -33,6 +42,15 @@ describe('Server Configuration', () => {
       logLevel: 'info',
       shutdownTimeout: 30000,
       shutdownDrainTimeout: 10000,
+      enableSSL: false,
+      sslPort: null,
+      sslCertPath: './certs/server.crt',
+      sslKeyPath: './certs/server.key',
+      sslCaPath: null,
+      sslRejectUnauthorized: false,
+      sslMinVersion: 'TLSv1.2',
+      sslMaxVersion: 'TLSv1.3',
+      sslCipherSuites: null,
     });
   });
 
@@ -53,6 +71,15 @@ describe('Server Configuration', () => {
       logLevel: 'debug',
       shutdownTimeout: 30000,
       shutdownDrainTimeout: 10000,
+      enableSSL: false,
+      sslPort: null,
+      sslCertPath: './certs/server.crt',
+      sslKeyPath: './certs/server.key',
+      sslCaPath: null,
+      sslRejectUnauthorized: false,
+      sslMinVersion: 'TLSv1.2',
+      sslMaxVersion: 'TLSv1.3',
+      sslCipherSuites: null,
     });
   });
 
@@ -81,6 +108,15 @@ describe('Server Configuration', () => {
       logLevel: 'error',
       shutdownTimeout: 30000,
       shutdownDrainTimeout: 10000,
+      enableSSL: false,
+      sslPort: null,
+      sslCertPath: './certs/server.crt',
+      sslKeyPath: './certs/server.key',
+      sslCaPath: null,
+      sslRejectUnauthorized: false,
+      sslMinVersion: 'TLSv1.2',
+      sslMaxVersion: 'TLSv1.3',
+      sslCipherSuites: null,
     });
   });
 
