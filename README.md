@@ -32,6 +32,11 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Modular, well-organized codebase
   - Connection management and pooling
   - Configurable logging and monitoring
+  - **Advanced Query Logging & Analysis** (NEW!) - [See Query Logging Guide](docs/QUERY_LOGGING.md)
+    - High-precision execution time tracking
+    - Parameter logging with automatic sanitization
+    - Slow query detection and analytics
+    - File-based logging with automatic rotation
   - Statistics and performance tracking
   - Graceful shutdown handling with connection draining
 
@@ -189,9 +194,16 @@ export PG_MOCK_MAX_CONNECTIONS=100
 export PG_MOCK_CONNECTION_TIMEOUT=300000
 
 # Logging settings
-
 export PG_MOCK_ENABLE_LOGGING=true
 export PG_MOCK_LOG_LEVEL=info
+
+# Query logging settings (NEW!)
+export PG_MOCK_QUERY_DETAILED_LOGGING=true
+export PG_MOCK_QUERY_LOG_PARAMETERS=true
+export PG_MOCK_QUERY_LOG_EXECUTION_TIME=true
+export PG_MOCK_QUERY_SLOW_THRESHOLD=1000
+export PG_MOCK_QUERY_ANALYTICS=true
+export PG_MOCK_QUERY_FILE_LOGGING=false
 
 # Shutdown settings
 
@@ -334,6 +346,27 @@ Debug logging shows:
 - Query processing steps
 - Buffer management details
 - Performance statistics
+
+### Query Logging Example
+
+With query logging enabled, you'll see detailed execution information:
+
+```
+[2025-10-06T10:30:45.123Z] [INFO] [QUERY] Query Started [session-abc123] {
+  "query": "SELECT * FROM users WHERE email = $1",
+  "queryType": "SELECT",
+  "connectionId": "conn-1",
+  "user": "postgres"
+}
+
+[2025-10-06T10:30:45.135Z] [INFO] [QUERY] Query Completed [session-abc123] {
+  "executionTime": "12.456ms",
+  "rowCount": 1,
+  "command": "SELECT"
+}
+```
+
+See the [Query Logging Guide](docs/QUERY_LOGGING.md) for complete configuration options.
 
 ## 📚 Learning the Protocol
 

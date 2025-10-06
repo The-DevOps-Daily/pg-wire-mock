@@ -135,19 +135,35 @@ const MOCK_SCHEMA = {
  */
 
 /**
- * Executes a single SQL query and sends appropriate protocol messages
+ * Executes a single SQL query and sends appropriate response
  * @param {string} query - The SQL query to execute
  * @param {Socket} socket - Client socket for sending responses
  * @param {ConnectionState} connState - Connection state object
  */
 function executeQuery(query, socket, connState) {
-  queryLogger.queryExecution(query, {
+  // Start detailed query logging session
+  const querySession = queryLogger.queryStart(query, {
     connectionId: connState.connectionId,
     user: connState.getCurrentUser(),
+    database: connState.getCurrentDatabase(),
+    transactionStatus: connState.transactionStatus,
   });
 
-  // Process the query and get results
-  const results = processQuery(query, connState);
+  let results;
+  try {
+    // Process the query and get results
+    results = processQuery(query, connState);
+  } catch (error) {
+    // Handle unexpected processing errors
+    results = {
+      error: error instanceof Error ? error : new Error(String(error)),
+      command: 'UNKNOWN',
+      rowCount: 0,
+    };
+  }
+
+  // Complete query logging with results
+  queryLogger.queryComplete(querySession, results);
 
   // Handle query errors
   if (results.error) {
