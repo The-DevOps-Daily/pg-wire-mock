@@ -13,7 +13,7 @@ const {
 } = require('./constants');
 
 const { parseParameters, getMessageType } = require('./utils');
-const { createProtocolLogger } = require('../utils/logger');
+const { createProtocolLogger, createQueryLogger } = require('../utils/logger');
 const fs = require('fs');
 
 // WeakMap to store SSL upgrade state for sockets
@@ -152,6 +152,9 @@ function validateSSLCertificates(config) {
 
 // Create protocol logger instance (will be configured by server)
 let protocolLogger = createProtocolLogger();
+
+// Create query logger instance (will be configured by server)
+let queryLogger = createQueryLogger();
 
 /**
  * Configures the protocol logger for message processors
@@ -531,7 +534,7 @@ function processBind(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
 
   try {
-    // Basic Bind implementation
+    // Enhanced Bind implementation with parameter parsing
     let offset = 5; // Skip message type and length
 
     // Read portal name
@@ -546,10 +549,6 @@ function processBind(buffer, socket, connState) {
     const statementName = buffer.slice(stmtStart, offset).toString('utf8');
     offset++; // Skip null terminator
 
-    console.log(
-      `Bind: portal="${portalName || '(unnamed)'}", statement="${statementName || '(unnamed)'}"`
-    );
-
     // Get the prepared statement
     const statement = connState.getPreparedStatement(statementName);
     if (!statement) {
@@ -561,10 +560,85 @@ function processBind(buffer, socket, connState) {
       return length + 1;
     }
 
-    // Store the portal (simplified - not parsing parameters and formats)
+    let parameters = [];
+    let parameterFormats = [];
+    
+    try {
+      // Read parameter format codes count
+      if (offset + 2 <= buffer.length) {
+        const formatCount = buffer.readInt16BE(offset);
+        offset += 2;
+
+        // Read format codes (0 = text, 1 = binary)
+        for (let i = 0; i < formatCount && offset + 2 <= buffer.length; i++) {
+          parameterFormats.push(buffer.readInt16BE(offset));
+          offset += 2;
+        }
+      }
+
+      // Read parameter count
+      if (offset + 2 <= buffer.length) {
+        const paramCount = buffer.readInt16BE(offset);
+        offset += 2;
+
+        // Read parameters
+        for (let i = 0; i < paramCount && offset + 4 <= buffer.length; i++) {
+          const paramLength = buffer.readInt32BE(offset);
+          offset += 4;
+
+          if (paramLength === -1) {
+            // NULL parameter
+            parameters.push(null);
+          } else if (paramLength >= 0 && offset + paramLength <= buffer.length) {
+            // Read parameter value
+            const format = parameterFormats[i] || parameterFormats[0] || 0; // Default to text
+            let paramValue;
+            
+            if (format === 0) {
+              // Text format
+              paramValue = buffer.slice(offset, offset + paramLength).toString('utf8');
+            } else {
+              // Binary format - store as hex string for logging
+              paramValue = buffer.slice(offset, offset + paramLength).toString('hex');
+            }
+            
+            parameters.push(paramValue);
+            offset += paramLength;
+          } else {
+            // Invalid parameter length
+            parameters.push('<invalid>');
+            break;
+          }
+        }
+      }
+    } catch (paramError) {
+      // If parameter parsing fails, continue with empty parameters
+      console.warn('Parameter parsing failed:', paramError.message);
+      parameters = [];
+    }
+
+    console.log(
+      `Bind: portal="${portalName || '(unnamed)'}", ` +
+      `statement="${statementName || '(unnamed)'}", parameters=${parameters.length}`
+    );
+
+    // Log query with parameters using the enhanced query logger
+    if (parameters.length > 0) {
+      queryLogger.queryWithParameters(statement.query, parameters, {
+        connectionId: connState.connectionId,
+        user: connState.getCurrentUser(),
+        database: connState.getCurrentDatabase(),
+        statementName: statementName || '(unnamed)',
+        portalName: portalName || '(unnamed)',
+      });
+    }
+
+    // Store the portal with parameters
     connState.addPortal(portalName, {
       statement: statementName,
       query: statement.query,
+      parameters,
+      parameterFormats,
       boundAt: new Date(),
     });
 
@@ -686,6 +760,17 @@ function processExecute(buffer, socket, connState) {
 
     // Execute the query from the portal
     connState.incrementQueryCount();
+    
+    // Log parameters if available
+    if (portal.parameters && portal.parameters.length > 0) {
+      queryLogger.queryWithParameters(portal.query, portal.parameters, {
+        connectionId: connState.connectionId,
+        user: connState.getCurrentUser(),
+        database: connState.getCurrentDatabase(),
+        portalName: portalName || '(unnamed)',
+      });
+    }
+    
     executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState);
 
     return length + 1;

@@ -23,6 +23,23 @@ const DEFAULT_CONFIG = {
   enableLogging: true,
   logLevel: 'info', // error, warn, info, debug
 
+  // Query logging settings
+  queryLogging: {
+    enableDetailedLogging: true,      // Enable detailed query logging
+    logParameters: true,              // Log query parameters (with sanitization)
+    logExecutionTime: true,           // Log query execution times
+    maxQueryLength: 500,              // Maximum query length to log (truncate longer queries)
+    sanitizeParameters: true,         // Sanitize sensitive data in parameters
+    logSlowQueries: true,             // Enable slow query logging
+    slowQueryThreshold: 1000,         // Slow query threshold in milliseconds
+    enableAnalytics: true,            // Track query analytics
+    enableFileLogging: false,         // Enable file-based query logging
+    logDirectory: './logs',           // Directory for log files
+    maxLogFileSize: 10485760,         // Max log file size in bytes (10MB)
+    maxLogFiles: 5,                   // Maximum number of log files to keep
+    logRotationPattern: 'YYYY-MM-DD', // Log rotation pattern
+  },
+
   // Protocol settings
   protocolVersion: '3.0',
   serverVersion: '13.0 (Mock)',
@@ -95,6 +112,20 @@ const ENV_MAPPING = {
   PG_MOCK_SSL_MAX_VERSION: { key: 'sslMaxVersion', type: 'string' },
   PG_MOCK_SHUTDOWN_TIMEOUT: { key: 'shutdownTimeout', type: 'number' },
   PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT: { key: 'shutdownDrainTimeout', type: 'number' },
+
+  // Query logging environment variables
+  PG_MOCK_QUERY_DETAILED_LOGGING: { key: 'queryLogging.enableDetailedLogging', type: 'boolean' },
+  PG_MOCK_QUERY_LOG_PARAMETERS: { key: 'queryLogging.logParameters', type: 'boolean' },
+  PG_MOCK_QUERY_LOG_EXECUTION_TIME: { key: 'queryLogging.logExecutionTime', type: 'boolean' },
+  PG_MOCK_QUERY_MAX_LENGTH: { key: 'queryLogging.maxQueryLength', type: 'number' },
+  PG_MOCK_QUERY_SANITIZE_PARAMS: { key: 'queryLogging.sanitizeParameters', type: 'boolean' },
+  PG_MOCK_QUERY_LOG_SLOW: { key: 'queryLogging.logSlowQueries', type: 'boolean' },
+  PG_MOCK_QUERY_SLOW_THRESHOLD: { key: 'queryLogging.slowQueryThreshold', type: 'number' },
+  PG_MOCK_QUERY_ANALYTICS: { key: 'queryLogging.enableAnalytics', type: 'boolean' },
+  PG_MOCK_QUERY_FILE_LOGGING: { key: 'queryLogging.enableFileLogging', type: 'boolean' },
+  PG_MOCK_QUERY_LOG_DIR: { key: 'queryLogging.logDirectory', type: 'string' },
+  PG_MOCK_QUERY_MAX_FILE_SIZE: { key: 'queryLogging.maxLogFileSize', type: 'number' },
+  PG_MOCK_QUERY_MAX_FILES: { key: 'queryLogging.maxLogFiles', type: 'number' },
 };
 
 /**

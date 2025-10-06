@@ -115,12 +115,21 @@ class ServerManager {
       level: this.config.logLevel,
     };
 
+    // Enhanced query logger configuration
+    const queryLogConfig = {
+      ...logConfig,
+      queryLogging: this.config.queryLogging,
+    };
+
     // Configure all component loggers
     configureProtocolLogger(logConfig);
     configureMessageProcessorLogger(logConfig);
-    configureQueryLogger(logConfig);
+    configureQueryLogger(queryLogConfig);
 
-    this.logger.info('All component loggers configured', { config: logConfig });
+    this.logger.info('All component loggers configured', {
+      config: logConfig,
+      queryLogging: this.config.queryLogging,
+    });
   }
 
   /**
@@ -884,6 +893,26 @@ class ServerManager {
   }
 
   /**
+   * Gets query analytics from the query logger
+   * @returns {Object} Query analytics data
+   */
+  getQueryAnalytics() {
+    try {
+      return {
+        message: 'Query analytics available through query logger',
+        note: 'Use queryLogger.getAnalytics() method for detailed analytics',
+        queryLoggingEnabled: this.config.queryLogging.enableAnalytics,
+        config: this.config.queryLogging,
+      };
+    } catch (error) {
+      return {
+        error: 'Failed to retrieve query analytics',
+        message: error.message,
+      };
+    }
+  }
+
+  /**
    * Gets server statistics
    * @returns {Object} Server statistics
    */
@@ -895,11 +924,13 @@ class ServerManager {
       activeConnections: this.connections.size,
       uptime: uptime,
       uptimeString: this.formatUptime(uptime),
+      queryLogging: this.getQueryAnalytics(),
       config: {
         port: this.config.port,
         host: this.config.host,
         maxConnections: this.config.maxConnections,
         enableConnectionPooling: this.config.enableConnectionPooling,
+        queryLogging: this.config.queryLogging,
       },
     };
 
