@@ -17,11 +17,11 @@ const LOG_LEVELS = {
  * Default logging configuration
  */
 const DEFAULT_CONFIG = {
-  enableLogging: true,
-  logLevel: 'info',
-  includeTimestamp: true,
+  enableLogging: process.env.NODE_ENV !== 'test',
+  logLevel: process.env.NODE_ENV === 'test' ? 'error' : process.env.LOG_LEVEL || 'info',
+  includeTimestamp: process.env.NODE_ENV !== 'test',
   includeLevel: true,
-  colorOutput: true,
+  colorOutput: process.env.NODE_ENV !== 'test',
 };
 
 /**
@@ -105,6 +105,11 @@ function createLogger(config = {}) {
    * @param {Object} meta - Additional metadata
    */
   function log(level, message, meta = {}) {
+    // Skip all logging in test environment unless it's an error
+    if (process.env.NODE_ENV === 'test' && level !== 'error') {
+      return;
+    }
+
     if (!loggerConfig.enableLogging) {
       return;
     }

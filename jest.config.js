@@ -7,5 +7,6 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.js', '!**/node_modules/**'],
   coverageReporters: ['text', 'lcov'],
   testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
-  verbose: true,
+  verbose: false,
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 };
