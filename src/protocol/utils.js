@@ -359,35 +359,276 @@ function getValidatedMessageType(buffer, isAuthenticated = false) {
 }
 
 /**
- * Calculates MD5 hash for PostgreSQL authentication
- * @param {string} password - User password
- * @param {string} username - Username
- * @param {Buffer} salt - 4-byte salt from server
- * @returns {string} MD5 hash string in PostgreSQL format
- */
-function calculateMD5Hash(password, username, salt) {
-  const crypto = require('crypto');
-
-  // First hash: md5(password + username)
-  const firstHash = crypto.createHash('md5');
-  firstHash.update(password + username);
-  const pwdHash = firstHash.digest('hex');
-
-  // Second hash: md5(firstHash + salt)
-  const secondHash = crypto.createHash('md5');
-  secondHash.update(pwdHash);
-  secondHash.update(salt);
-
-  return 'md5' + secondHash.digest('hex');
-}
-
-/**
  * Generates a random 32-bit integer for backend secrets
  * @returns {number} Random 32-bit integer
  */
 function generateBackendSecret() {
   const crypto = require('crypto');
   return crypto.randomInt(0, 2147483647);
+}
+
+/**
+ * SCRAM-SHA-256 Authentication Utilities
+ */
+
+/**
+ * Generates a cryptographically secure random nonce for SCRAM
+ * @param {number} length - Length of the nonce in bytes (default: 18)
+ * @returns {string} Base64-encoded nonce
+ */
+function generateScramNonce(length = 18) {
+  const crypto = require('crypto');
+  return crypto.randomBytes(length).toString('base64');
+}
+
+/**
+ * Performs PBKDF2 key derivation for SCRAM-SHA-256
+ * @param {string} password - Password to derive key from
+ * @param {Buffer} salt - Salt for key derivation
+ * @param {number} iterations - Number of iterations
+ * @param {number} keyLength - Desired key length in bytes (default: 32 for SHA-256)
+ * @returns {Buffer} Derived key
+ */
+function pbkdf2ScramSha256(password, salt, iterations, keyLength = 32) {
+  const crypto = require('crypto');
+  return crypto.pbkdf2Sync(password, salt, iterations, keyLength, 'sha256');
+}
+
+/**
+ * Computes HMAC-SHA-256
+ * @param {Buffer|string} key - HMAC key
+ * @param {Buffer|string} data - Data to authenticate
+ * @returns {Buffer} HMAC digest
+ */
+function hmacSha256(key, data) {
+  const crypto = require('crypto');
+  const hmac = crypto.createHmac('sha256', key);
+  hmac.update(data);
+  return hmac.digest();
+}
+
+/**
+ * Computes SHA-256 hash
+ * @param {Buffer|string} data - Data to hash
+ * @returns {Buffer} Hash digest
+ */
+function sha256(data) {
+  const crypto = require('crypto');
+  const hash = crypto.createHash('sha256');
+  hash.update(data);
+  return hash.digest();
+}
+
+/**
+ * Normalizes username for SCRAM (applies SASLprep if needed)
+ * @param {string} username - Username to normalize
+ * @returns {string} Normalized username
+ */
+function normalizeScramUsername(username) {
+  // For now, just return the username as-is
+  // In a full implementation, you'd apply SASLprep normalization
+  // which handles Unicode normalization and prohibited characters
+  return username;
+}
+
+/**
+ * Normalizes password for SCRAM (applies SASLprep if needed)
+ * @param {string} password - Password to normalize
+ * @returns {string} Normalized password
+ */
+function normalizeScramPassword(password) {
+  // For now, just return the password as-is
+  // In a full implementation, you'd apply SASLprep normalization
+  return password;
+}
+
+/**
+ * Generates SCRAM server credentials for a user
+ * @param {string} password - User's password
+ * @param {number} iterations - Iteration count (default: 4096)
+ * @returns {Object} Server credentials with salt, iterations, serverKey, storedKey
+ */
+function generateScramCredentials(password, iterations = 4096) {
+  const crypto = require('crypto');
+  const salt = crypto.randomBytes(16); // 16-byte salt
+  const normalizedPassword = normalizeScramPassword(password);
+
+  // Compute SaltedPassword = PBKDF2(Normalize(password), salt, iterations)
+  const saltedPassword = pbkdf2ScramSha256(normalizedPassword, salt, iterations);
+
+  // Compute ClientKey = HMAC(SaltedPassword, "Client Key")
+  const clientKey = hmacSha256(saltedPassword, 'Client Key');
+
+  // Compute StoredKey = SHA-256(ClientKey)
+  const storedKey = sha256(clientKey);
+
+  // Compute ServerKey = HMAC(SaltedPassword, "Server Key")
+  const serverKey = hmacSha256(saltedPassword, 'Server Key');
+
+  return {
+    salt: salt.toString('base64'),
+    iterations,
+    storedKey: storedKey.toString('base64'),
+    serverKey: serverKey.toString('base64'),
+  };
+}
+
+/**
+ * Verifies SCRAM client proof
+ * @param {string} clientProof - Client proof from authentication exchange
+ * @param {string} storedKey - Stored key from server credentials
+ * @param {string} authMessage - Authentication message
+ * @returns {boolean} True if proof is valid
+ */
+function verifyScramClientProof(clientProof, storedKey, authMessage) {
+  try {
+    console.log('=== DETAILED PROOF VERIFICATION ===');
+    console.log('Client proof (base64):', clientProof);
+    console.log('Stored key (base64):', storedKey);
+    console.log('Auth message:', authMessage);
+
+    const clientProofBuffer = Buffer.from(clientProof, 'base64');
+    const storedKeyBuffer = Buffer.from(storedKey, 'base64');
+    const authMessageBuffer = Buffer.from(authMessage, 'utf8');
+
+    console.log('Client proof buffer:', clientProofBuffer.toString('hex'));
+    console.log('Stored key buffer:', storedKeyBuffer.toString('hex'));
+    console.log('Auth message buffer:', authMessageBuffer.toString('hex'));
+
+    // Compute ClientSignature = HMAC(StoredKey, AuthMessage)
+    const clientSignature = hmacSha256(storedKeyBuffer, authMessageBuffer);
+    console.log('Computed client signature:', clientSignature.toString('hex'));
+
+    // Compute ClientKey = ClientProof XOR ClientSignature
+    const clientKey = Buffer.alloc(clientSignature.length);
+    for (let i = 0; i < clientSignature.length; i++) {
+      clientKey[i] = clientProofBuffer[i] ^ clientSignature[i];
+    }
+    console.log('Computed client key:', clientKey.toString('hex'));
+
+    // Verify StoredKey = SHA-256(ClientKey)
+    const computedStoredKey = sha256(clientKey);
+    console.log('Computed stored key:', computedStoredKey.toString('hex'));
+    console.log('Expected stored key:', storedKeyBuffer.toString('hex'));
+
+    const isValid = computedStoredKey.equals(storedKeyBuffer);
+    console.log('Keys match:', isValid);
+    console.log('=== END PROOF VERIFICATION ===');
+
+    return isValid;
+  } catch (error) {
+    console.log('Error in proof verification:', error);
+    return false;
+  }
+}
+
+/**
+ * Generates SCRAM server signature
+ * @param {string} serverKey - Server key from credentials
+ * @param {string} authMessage - Authentication message
+ * @returns {string} Base64-encoded server signature
+ */
+function generateScramServerSignature(serverKey, authMessage) {
+  const serverKeyBuffer = Buffer.from(serverKey, 'base64');
+  const authMessageBuffer = Buffer.from(authMessage, 'utf8');
+
+  // Compute ServerSignature = HMAC(ServerKey, AuthMessage)
+  const serverSignature = hmacSha256(serverKeyBuffer, authMessageBuffer);
+
+  return serverSignature.toString('base64');
+}
+
+/**
+ * Parses SCRAM client initial message
+ * @param {string} message - Client initial message
+ * @returns {Object} Parsed message with username, nonce, and extensions
+ */
+function parseScramClientInitial(message) {
+  const parts = message.split(',');
+  const result = {
+    username: null,
+    nonce: null,
+    channelBinding: 'n', // Default to no channel binding
+    extensions: {},
+  };
+
+  for (const part of parts) {
+    if (part.startsWith('n=')) {
+      result.username = part.substring(2);
+    } else if (part.startsWith('r=')) {
+      result.nonce = part.substring(2);
+    } else if (part.startsWith('c=')) {
+      result.channelBinding = part.substring(2);
+    } else if (part.includes('=')) {
+      const [key, value] = part.split('=', 2);
+      result.extensions[key] = value;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Parses SCRAM client final message
+ * @param {string} message - Client final message
+ * @returns {Object} Parsed message with channelBinding, nonce, and proof
+ */
+function parseScramClientFinal(message) {
+  const parts = message.split(',');
+  const result = {
+    channelBinding: null,
+    nonce: null,
+    proof: null,
+    extensions: {},
+  };
+
+  for (const part of parts) {
+    if (part.startsWith('c=')) {
+      result.channelBinding = part.substring(2);
+    } else if (part.startsWith('r=')) {
+      result.nonce = part.substring(2);
+    } else if (part.startsWith('p=')) {
+      result.proof = part.substring(2);
+    } else if (part.includes('=')) {
+      const [key, value] = part.split('=', 2);
+      result.extensions[key] = value;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Builds SCRAM server first message
+ * @param {string} clientNonce - Client nonce from initial message
+ * @param {string} serverNonce - Server-generated nonce
+ * @param {string} salt - Base64-encoded salt
+ * @param {number} iterations - Iteration count
+ * @returns {string} Server first message
+ */
+function buildScramServerFirst(clientNonce, serverNonce, salt, iterations) {
+  const combinedNonce = clientNonce + serverNonce;
+  return `r=${combinedNonce},s=${salt},i=${iterations}`;
+}
+
+/**
+ * Builds SCRAM server final message
+ * @param {string} serverSignature - Base64-encoded server signature
+ * @returns {string} Server final message
+ */
+function buildScramServerFinal(serverSignature) {
+  return `v=${serverSignature}`;
+}
+
+/**
+ * Builds SCRAM authentication message for signature computation
+ * @param {string} clientInitialBare - Client initial message without GS2 header
+ * @param {string} serverFirst - Server first message
+ * @param {string} clientFinalWithoutProof - Client final message without proof
+ * @returns {string} Authentication message
+ */
+function buildScramAuthMessage(clientInitialBare, serverFirst, clientFinalWithoutProof) {
+  return `${clientInitialBare},${serverFirst},${clientFinalWithoutProof}`;
 }
 
 /**
@@ -863,7 +1104,6 @@ module.exports = {
   createPayload,
   validateMessage,
   getMessageType,
-  calculateMD5Hash,
   generateBackendSecret,
   formatCommandTag,
   isValidProtocolVersion,
@@ -879,4 +1119,19 @@ module.exports = {
   getArrayTypeOID,
   getBaseTypeOID,
   isArrayType,
+  // SCRAM-SHA-256 utilities
+  generateScramNonce,
+  pbkdf2ScramSha256,
+  hmacSha256,
+  sha256,
+  normalizeScramUsername,
+  normalizeScramPassword,
+  generateScramCredentials,
+  verifyScramClientProof,
+  generateScramServerSignature,
+  parseScramClientInitial,
+  parseScramClientFinal,
+  buildScramServerFirst,
+  buildScramServerFinal,
+  buildScramAuthMessage,
 };

@@ -90,6 +90,12 @@ function parseConfig() {
     sslMinVersion: coreConfig.sslMinVersion,
     sslMaxVersion: coreConfig.sslMaxVersion,
     sslCipherSuites: coreConfig.sslCipherSuites,
+    // Authentication configuration
+    requireAuthentication: coreConfig.requireAuthentication,
+    authMethod: coreConfig.authMethod,
+    scramIterations: coreConfig.scramIterations,
+    username: coreConfig.username,
+    password: coreConfig.password,
   };
 
   // Parse command line arguments

@@ -16,6 +16,16 @@ class ConnectionState {
     this.authenticated = false;
     this.protocolVersion = null;
 
+    // SCRAM authentication state
+    this.scramState = null; // 'initial', 'first-sent', 'ended', 'error'
+    this.scramMechanism = null; // Selected SASL mechanism
+    this.scramClientNonce = null;
+    this.scramServerNonce = null;
+    this.scramClientInitialBare = null;
+    this.scramServerFirst = null;
+    this.scramCredentials = null; // Server-side credentials for user
+    this.scramAuthMessage = null;
+
     // Connection parameters from startup packet
     this.parameters = new Map();
 

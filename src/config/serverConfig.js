@@ -25,18 +25,18 @@ const DEFAULT_CONFIG = {
 
   // Query logging settings
   queryLogging: {
-    enableDetailedLogging: true,      // Enable detailed query logging
-    logParameters: true,              // Log query parameters (with sanitization)
-    logExecutionTime: true,           // Log query execution times
-    maxQueryLength: 500,              // Maximum query length to log (truncate longer queries)
-    sanitizeParameters: true,         // Sanitize sensitive data in parameters
-    logSlowQueries: true,             // Enable slow query logging
-    slowQueryThreshold: 1000,         // Slow query threshold in milliseconds
-    enableAnalytics: true,            // Track query analytics
-    enableFileLogging: false,         // Enable file-based query logging
-    logDirectory: './logs',           // Directory for log files
-    maxLogFileSize: 10485760,         // Max log file size in bytes (10MB)
-    maxLogFiles: 5,                   // Maximum number of log files to keep
+    enableDetailedLogging: true, // Enable detailed query logging
+    logParameters: true, // Log query parameters (with sanitization)
+    logExecutionTime: true, // Log query execution times
+    maxQueryLength: 500, // Maximum query length to log (truncate longer queries)
+    sanitizeParameters: true, // Sanitize sensitive data in parameters
+    logSlowQueries: true, // Enable slow query logging
+    slowQueryThreshold: 1000, // Slow query threshold in milliseconds
+    enableAnalytics: true, // Track query analytics
+    enableFileLogging: false, // Enable file-based query logging
+    logDirectory: './logs', // Directory for log files
+    maxLogFileSize: 10485760, // Max log file size in bytes (10MB)
+    maxLogFiles: 5, // Maximum number of log files to keep
     logRotationPattern: 'YYYY-MM-DD', // Log rotation pattern
   },
 
@@ -61,10 +61,12 @@ const DEFAULT_CONFIG = {
   enableFunctionCalls: false,
   enableNotifications: false,
 
-  // Security settings (for future use)
-  requireAuthentication: false,
-  allowPasswordAuthentication: true,
-  allowCleartextPasswords: false,
+  // Security settings
+  requireAuthentication: true, // Enable authentication by default when auth method is set
+  authMethod: 'trust', // trust, scram-sha-256
+  scramIterations: 4096, // SCRAM iteration count
+  username: 'postgres', // Mock username for authentication
+  password: 'password', // Mock password for authentication
 
   // SSL/TLS settings
   enableSSL: false,
@@ -102,6 +104,10 @@ const ENV_MAPPING = {
   PG_MOCK_ENABLE_EXTENDED_PROTOCOL: { key: 'enableExtendedProtocol', type: 'boolean' },
   PG_MOCK_ENABLE_COPY_PROTOCOL: { key: 'enableCopyProtocol', type: 'boolean' },
   PG_MOCK_REQUIRE_AUTHENTICATION: { key: 'requireAuthentication', type: 'boolean' },
+  PG_MOCK_AUTH_METHOD: { key: 'authMethod', type: 'string' },
+  PG_MOCK_SCRAM_ITERATIONS: { key: 'scramIterations', type: 'number' },
+  PG_MOCK_USERNAME: { key: 'username', type: 'string' },
+  PG_MOCK_PASSWORD: { key: 'password', type: 'string' },
   PG_MOCK_ENABLE_SSL: { key: 'enableSSL', type: 'boolean' },
   PG_MOCK_SSL_PORT: { key: 'sslPort', type: 'number' },
   PG_MOCK_SSL_CERT_PATH: { key: 'sslCertPath', type: 'string' },

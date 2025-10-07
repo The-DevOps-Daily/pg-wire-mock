@@ -10,9 +10,23 @@ const {
   MESSAGE_TYPES,
   ERROR_CODES,
   ERROR_MESSAGES,
+  SASL_MECHANISMS,
+  SCRAM_STATES,
 } = require('./constants');
 
-const { parseParameters, getMessageType } = require('./utils');
+const {
+  parseParameters,
+  getMessageType,
+  generateScramNonce,
+  generateScramCredentials,
+  parseScramClientInitial,
+  parseScramClientFinal,
+  buildScramServerFirst,
+  buildScramServerFinal,
+  buildScramAuthMessage,
+  verifyScramClientProof,
+  generateScramServerSignature,
+} = require('./utils');
 const { createProtocolLogger, createQueryLogger } = require('../utils/logger');
 const fs = require('fs');
 
@@ -173,6 +187,9 @@ const {
   sendParseComplete,
   sendBindComplete,
   sendRowDescription,
+  sendAuthenticationSASL,
+  sendAuthenticationSASLContinue,
+  sendAuthenticationSASLFinal,
 } = require('./messageBuilders');
 
 const { executeQueryString, executeQuery } = require('../handlers/queryHandlers');
@@ -187,10 +204,19 @@ const { executeQueryString, executeQuery } = require('../handlers/queryHandlers'
  * @returns {number} Bytes processed (0 if need more data)
  */
 function processMessage(buffer, socket, connState, config = null) {
+  // Special handling for SCRAM authentication
+  // During SCRAM, we receive password messages ('p') with SASL data even before authentication is complete
+  if (!connState.authenticated && connState.scramState && buffer.length >= 5) {
+    const messageType = String.fromCharCode(buffer[0]);
+    if (messageType === 'p') {
+      return processRegularMessage(buffer, socket, connState, config);
+    }
+  }
+
   if (!connState.authenticated) {
     return processStartupMessage(buffer, socket, connState, config);
   } else {
-    return processRegularMessage(buffer, socket, connState);
+    return processRegularMessage(buffer, socket, connState, config);
   }
 }
 
@@ -236,7 +262,7 @@ function processStartupMessage(buffer, socket, connState, config = null) {
 
     // Handle regular startup packet
     if (protocolVersion === PROTOCOL_VERSION_3_0) {
-      return handleStartupPacket(buffer, socket, connState, length);
+      return handleStartupPacket(buffer, socket, connState, length, config);
     }
 
     throw new Error(`Unsupported protocol version: ${protocolVersion}`);
@@ -254,9 +280,10 @@ function processStartupMessage(buffer, socket, connState, config = null) {
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration (optional)
  * @returns {number} Bytes processed (0 if need more data)
  */
-function processRegularMessage(buffer, socket, connState) {
+function processRegularMessage(buffer, socket, connState, _config = null) {
   // Need at least 5 bytes for message type + length
   if (buffer.length < 5) {
     return 0;
@@ -299,7 +326,7 @@ function processRegularMessage(buffer, socket, connState) {
         return processSync(buffer, socket, connState);
 
       case MESSAGE_TYPES.PASSWORD_MESSAGE: // 'p' - Password Message
-        return processPasswordMessage(buffer, socket, connState);
+        return processPasswordMessage(buffer, socket, connState, _config);
 
       case MESSAGE_TYPES.COPY_DATA: // 'd' - Copy Data
         return processCopyData(buffer, socket, connState);
@@ -395,9 +422,10 @@ function handleCancelRequest(buffer, socket, length) {
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
  * @param {number} length - Message length
+ * @param {Object} config - Server configuration
  * @returns {number} Bytes processed
  */
-function handleStartupPacket(buffer, socket, connState, length) {
+function handleStartupPacket(buffer, socket, connState, length, config = {}) {
   // Parse parameters from startup packet
   const parameters = parseParameters(buffer, 8, length);
 
@@ -406,14 +434,31 @@ function handleStartupPacket(buffer, socket, connState, length) {
     connState.setParameter(key, value);
   }
 
-  // Authenticate the connection
-  connState.authenticate(PROTOCOL_VERSION_3_0);
+  // Determine authentication method from config
+  const authMethod = config.authMethod || 'trust';
+  const requireAuth = config.requireAuthentication !== false; // Default to true unless explicitly false
 
-  // Send authentication sequence
-  sendAuthenticationOK(socket);
-  sendParameterStatus(socket, connState);
-  sendBackendKeyData(socket, connState);
-  sendReadyForQuery(socket, connState);
+  // Only skip authentication if method is trust AND authentication is not required
+  if (authMethod === 'trust' && !requireAuth) {
+    connState.authenticate(PROTOCOL_VERSION_3_0);
+    sendAuthenticationOK(socket);
+    sendParameterStatus(socket, connState);
+    sendBackendKeyData(socket, connState);
+    sendReadyForQuery(socket, connState);
+    return length;
+  }
+
+  // Start authentication process - only SCRAM-SHA-256 and trust are supported
+  if (authMethod === 'scram-sha-256') {
+    startScramAuthentication(socket, connState, config);
+  } else {
+    // Default to trust authentication for any other method
+    connState.authenticate(PROTOCOL_VERSION_3_0);
+    sendAuthenticationOK(socket);
+    sendParameterStatus(socket, connState);
+    sendBackendKeyData(socket, connState);
+    sendReadyForQuery(socket, connState);
+  }
 
   return length;
 }
@@ -743,9 +788,7 @@ function processExecute(buffer, socket, connState) {
     offset++; // Skip null terminator
 
     // Read row limit
-    const rowLimit = buffer.readInt32BE(offset);
-
-    console.log(`Execute: portal="${portalName || '(unnamed)'}", limit=${rowLimit}`);
+    // const rowLimit = buffer.readInt32BE(offset);
 
     // Get the portal
     const portal = connState.getPortal(portalName);
@@ -813,23 +856,28 @@ function processSync(buffer, socket, connState) {
  * @param {Buffer} buffer - Message buffer
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration (optional)
  * @returns {number} Bytes processed
  */
-function processPasswordMessage(buffer, socket, connState) {
+function processPasswordMessage(buffer, socket, connState, config = {}) {
   const length = buffer.readInt32BE(1);
 
-  // Extract password (null-terminated) - not used in this mock implementation
-  // const password = buffer.slice(5, length).toString('utf8').replace(/\0$/, '');
+  // Check if this is a SASL message during SCRAM authentication
+  if (connState.scramState === SCRAM_STATES.INITIAL) {
+    // This is SASL initial response
+    return processSASLInitialResponse(buffer, socket, connState, config);
+  } else if (connState.scramState === SCRAM_STATES.FIRST_SENT) {
+    // This is SASL response
+    return processSASLResponse(buffer, socket, connState);
+  }
 
-  console.log(`Password message received for user: ${connState.getCurrentUser()}`);
-
-  // In a real implementation, we'd validate the password
-  // For now, just accept any password
-  sendAuthenticationOK(socket);
-  sendParameterStatus(socket, connState);
-  sendBackendKeyData(socket, connState);
-  sendReadyForQuery(socket, connState);
-
+  // Only SCRAM authentication is supported for password messages
+  // If we reach here, it means we received a password message outside of SCRAM flow
+  sendErrorResponse(
+    socket,
+    ERROR_CODES.PROTOCOL_VIOLATION,
+    'password authentication not supported, use SCRAM-SHA-256'
+  );
   return length + 1;
 }
 
@@ -921,6 +969,217 @@ function processFunctionCall(buffer, socket, _connState) {
   return length + 1;
 }
 
+/**
+ * Authentication Handlers
+ */
+
+/**
+ * Starts SCRAM-SHA-256 authentication
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration
+ */
+function startScramAuthentication(socket, connState, _config) {
+  const mechanisms = [SASL_MECHANISMS.SCRAM_SHA_256];
+  connState.scramState = SCRAM_STATES.INITIAL;
+  connState.scramMechanism = SASL_MECHANISMS.SCRAM_SHA_256;
+
+  sendAuthenticationSASL(socket, mechanisms);
+  protocolLogger.sent('SCRAM Authentication Started', `mechanisms: ${mechanisms.join(', ')}`);
+}
+
+/**
+ * Processes SASL initial response for SCRAM
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration
+ * @returns {number} Bytes processed
+ */
+function processSASLInitialResponse(buffer, socket, connState, config) {
+  const length = buffer.readInt32BE(1);
+
+  try {
+    // Read mechanism name (null-terminated)
+    let offset = 5;
+    const mechanismStart = offset;
+    while (offset < buffer.length && buffer[offset] !== 0) offset++;
+    const mechanism = buffer.slice(mechanismStart, offset).toString('utf8');
+    offset++; // Skip null terminator
+
+    // Read initial response length
+    const responseLength = buffer.readInt32BE(offset);
+    offset += 4;
+
+    // Read initial response data
+    const initialResponse = buffer.slice(offset, offset + responseLength).toString('utf8');
+
+    if (mechanism !== SASL_MECHANISMS.SCRAM_SHA_256) {
+      connState.scramState = SCRAM_STATES.ERROR;
+      sendErrorResponse(
+        socket,
+        ERROR_CODES.FEATURE_NOT_SUPPORTED,
+        ERROR_MESSAGES.SCRAM_MECHANISM_NOT_SUPPORTED
+      );
+      return length + 1;
+    }
+
+    // Parse client initial message
+    const clientInitial = parseScramClientInitial(initialResponse);
+    console.log('Parsed client initial:', clientInitial);
+
+    // For SCRAM, if username is empty in the SASL message, use the one from connection parameters
+    const username = clientInitial.username || connState.getCurrentUser();
+    console.log('Using username:', username);
+
+    if (!username || !clientInitial.nonce) {
+      connState.scramState = SCRAM_STATES.ERROR;
+      sendErrorResponse(
+        socket,
+        ERROR_CODES.SCRAM_INVALID_AUTHORIZATION_MESSAGE,
+        ERROR_MESSAGES.SCRAM_INVALID_AUTHORIZATION_MESSAGE
+      );
+      return length + 1;
+    }
+
+    // Validate username against configured username
+    const expectedUsername = config.username || 'postgres';
+    if (username !== expectedUsername) {
+      connState.scramState = SCRAM_STATES.ERROR;
+      sendErrorResponse(
+        socket,
+        ERROR_CODES.INVALID_AUTHORIZATION_SPECIFICATION,
+        `role "${username}" does not exist`
+      );
+      return length + 1;
+    }
+
+    // Store SCRAM state
+    connState.scramMechanism = mechanism;
+    connState.scramClientNonce = clientInitial.nonce;
+    connState.scramServerNonce = generateScramNonce();
+    // Use the actual client-first-message-bare that was sent by the client
+    // The format is "n,,<client-first-message-bare>" so we skip the first 3 characters
+    connState.scramClientInitialBare = initialResponse.substring(3);
+
+    // Generate mock credentials (in real implementation, fetch from user store)
+    const iterations = config.scramIterations || 4096;
+    const mockPassword = config.password || 'password'; // Use configured password
+    connState.scramCredentials = generateScramCredentials(mockPassword, iterations);
+
+    // Build server first message
+    const serverFirst = buildScramServerFirst(
+      connState.scramClientNonce,
+      connState.scramServerNonce,
+      connState.scramCredentials.salt,
+      connState.scramCredentials.iterations
+    );
+
+    connState.scramServerFirst = serverFirst;
+    connState.scramState = SCRAM_STATES.FIRST_SENT;
+
+    sendAuthenticationSASLContinue(socket, serverFirst);
+
+    return length + 1;
+  } catch (error) {
+    console.error('Error processing SASL initial response:', error);
+    connState.scramState = SCRAM_STATES.ERROR;
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.SCRAM_INVALID_AUTHORIZATION_MESSAGE,
+      ERROR_MESSAGES.SCRAM_INVALID_AUTHORIZATION_MESSAGE
+    );
+    return length + 1;
+  }
+}
+
+/**
+ * Processes SASL response for SCRAM
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @returns {number} Bytes processed
+ */
+function processSASLResponse(buffer, socket, connState) {
+  const length = buffer.readInt32BE(1);
+
+  // Read response data
+  const responseData = buffer.slice(5, length + 1).toString('utf8');
+
+  if (connState.scramState !== SCRAM_STATES.FIRST_SENT) {
+    console.log('ERROR: Invalid SCRAM state:', connState.scramState);
+    sendErrorResponse(socket, ERROR_CODES.PROTOCOL_VIOLATION, ERROR_MESSAGES.PROTOCOL_ERROR);
+    return length + 1;
+  }
+
+  // Parse client final message
+  const clientFinal = parseScramClientFinal(responseData);
+
+  if (!clientFinal.nonce || !clientFinal.proof) {
+    console.log('ERROR: Missing nonce or proof in client final');
+    connState.scramState = SCRAM_STATES.ERROR;
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.SCRAM_INVALID_AUTHORIZATION_MESSAGE,
+      ERROR_MESSAGES.SCRAM_INVALID_AUTHORIZATION_MESSAGE
+    );
+    return length + 1;
+  }
+
+  // Verify nonce
+  const expectedNonce = connState.scramClientNonce + connState.scramServerNonce;
+
+  if (clientFinal.nonce !== expectedNonce) {
+    console.log('ERROR: Nonce mismatch');
+    sendErrorResponse(socket, ERROR_CODES.SCRAM_INVALID_NONCE, ERROR_MESSAGES.SCRAM_INVALID_NONCE);
+    return length + 1;
+  }
+
+  // Build auth message
+  const clientFinalWithoutProof = responseData.substring(0, responseData.lastIndexOf(',p='));
+
+  const authMessage = buildScramAuthMessage(
+    connState.scramClientInitialBare,
+    connState.scramServerFirst,
+    clientFinalWithoutProof
+  );
+
+  const isValidProof = verifyScramClientProof(
+    clientFinal.proof,
+    connState.scramCredentials.storedKey,
+    authMessage
+  );
+
+  if (!isValidProof) {
+    console.log('ERROR: Invalid client proof - authentication failed');
+    connState.scramState = SCRAM_STATES.ERROR;
+    sendErrorResponse(socket, ERROR_CODES.SCRAM_INVALID_PROOF, ERROR_MESSAGES.SCRAM_INVALID_PROOF);
+    return length + 1;
+  }
+
+  // Generate server signature
+  const serverSignature = generateScramServerSignature(
+    connState.scramCredentials.serverKey,
+    authMessage
+  );
+
+  const serverFinal = buildScramServerFinal(serverSignature);
+
+  connState.scramState = SCRAM_STATES.ENDED;
+
+  // Send SASL final with server verification
+  sendAuthenticationSASLFinal(socket, serverFinal);
+
+  // Complete authentication
+  connState.authenticate(PROTOCOL_VERSION_3_0);
+  sendAuthenticationOK(socket);
+  sendParameterStatus(socket, connState);
+  sendBackendKeyData(socket, connState);
+  sendReadyForQuery(socket, connState);
+
+  return length + 1;
+}
+
 module.exports = {
   processMessage,
   processStartupMessage,
@@ -943,4 +1202,8 @@ module.exports = {
   configureMessageProcessorLogger,
   SSLState,
   validateSSLCertificates,
+  // Authentication functions
+  startScramAuthentication,
+  processSASLInitialResponse,
+  processSASLResponse,
 };
