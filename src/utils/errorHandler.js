@@ -165,7 +165,7 @@ const ErrorFactory = {
       ERROR_CODES.UNDEFINED_FUNCTION,
       `function ${functionName}${argTypeStr} does not exist`,
       {
-        hint: 'Check that the function name is spelled correctly and that you are passing the correct argument types.',
+        hint: 'Check the function name and that you are passing the correct argument types.',
         routine: functionName,
         ...options,
       }

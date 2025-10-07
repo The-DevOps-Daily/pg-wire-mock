@@ -562,7 +562,7 @@ function processBind(buffer, socket, connState) {
 
     let parameters = [];
     let parameterFormats = [];
-    
+
     try {
       // Read parameter format codes count
       if (offset + 2 <= buffer.length) {
@@ -593,7 +593,7 @@ function processBind(buffer, socket, connState) {
             // Read parameter value
             const format = parameterFormats[i] || parameterFormats[0] || 0; // Default to text
             let paramValue;
-            
+
             if (format === 0) {
               // Text format
               paramValue = buffer.slice(offset, offset + paramLength).toString('utf8');
@@ -601,7 +601,7 @@ function processBind(buffer, socket, connState) {
               // Binary format - store as hex string for logging
               paramValue = buffer.slice(offset, offset + paramLength).toString('hex');
             }
-            
+
             parameters.push(paramValue);
             offset += paramLength;
           } else {
@@ -619,7 +619,7 @@ function processBind(buffer, socket, connState) {
 
     console.log(
       `Bind: portal="${portalName || '(unnamed)'}", ` +
-      `statement="${statementName || '(unnamed)'}", parameters=${parameters.length}`
+        `statement="${statementName || '(unnamed)'}", parameters=${parameters.length}`
     );
 
     // Log query with parameters using the enhanced query logger
@@ -760,7 +760,7 @@ function processExecute(buffer, socket, connState) {
 
     // Execute the query from the portal
     connState.incrementQueryCount();
-    
+
     // Log parameters if available
     if (portal.parameters && portal.parameters.length > 0) {
       queryLogger.queryWithParameters(portal.query, portal.parameters, {
@@ -770,7 +770,7 @@ function processExecute(buffer, socket, connState) {
         portalName: portalName || '(unnamed)',
       });
     }
-    
+
     executeQuery(portal.query || "SELECT 'Extended query result'", socket, connState);
 
     return length + 1;
