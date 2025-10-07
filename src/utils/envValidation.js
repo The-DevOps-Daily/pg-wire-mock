@@ -155,6 +155,32 @@ const VALIDATION_RULES = {
     values: ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'],
     description: 'SSL maximum version must be one of: TLSv1, TLSv1.1, TLSv1.2, TLSv1.3',
   },
+  // Authentication method and SCRAM iterations
+  PG_MOCK_AUTH_METHOD: {
+    type: 'enum',
+    values: ['trust', 'scram-sha-256'],
+    description: 'Authentication method must be one of: trust, scram-sha-256',
+  },
+  PG_MOCK_SCRAM_ITERATIONS: {
+    type: 'number',
+    min: 1000,
+    max: 100000,
+    recommended: { min: 4096, max: 10000 },
+    description: 'SCRAM iterations must be between 1000 and 100000',
+  },
+  PG_MOCK_USERNAME: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 63,
+    pattern: /^[a-zA-Z_][a-zA-Z0-9_$]*$/,
+    description: 'Mock username must be a valid PostgreSQL identifier',
+  },
+  PG_MOCK_PASSWORD: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 255,
+    description: 'Mock password must be between 1 and 255 characters',
+  },
 };
 
 /**

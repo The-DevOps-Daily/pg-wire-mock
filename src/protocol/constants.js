@@ -64,6 +64,20 @@ const AUTH_METHODS = {
   SASL_FINAL: 12, // SASL final
 };
 
+// SASL mechanism constants for SCRAM authentication
+const SASL_MECHANISMS = {
+  SCRAM_SHA_256: 'SCRAM-SHA-256',
+  SCRAM_SHA_256_PLUS: 'SCRAM-SHA-256-PLUS',
+};
+
+// SCRAM authentication states
+const SCRAM_STATES = {
+  INITIAL: 'initial',
+  FIRST_SENT: 'first-sent',
+  ENDED: 'ended',
+  ERROR: 'error',
+};
+
 // Transaction status constants
 const TRANSACTION_STATUS = {
   IDLE: 'I', // Idle (not in a transaction block)
@@ -521,6 +535,15 @@ const ERROR_CODES = {
   INTERNAL_ERROR: 'XX000',
   DATA_CORRUPTED: 'XX001',
   INDEX_CORRUPTED: 'XX002',
+
+  // SCRAM Authentication Error Codes
+  SCRAM_INVALID_PROOF: '28000', // Invalid authentication specification
+  SCRAM_INVALID_AUTHORIZATION_MESSAGE: '28000', // Invalid authorization message
+  SCRAM_CHANNEL_BINDING_NOT_SUPPORTED: '0A000', // Feature not supported
+  SCRAM_CHANNEL_BINDING_REQUIRED: '28000', // Channel binding required
+  SCRAM_UNKNOWN_ATTRIBUTE: '08P01', // Protocol violation
+  SCRAM_INVALID_NONCE: '08P01', // Protocol violation
+  SCRAM_ITERATION_COUNT_MISMATCH: '08P01', // Protocol violation
 };
 
 // Standardized error messages
@@ -584,6 +607,16 @@ const ERROR_MESSAGES = {
   OUT_OF_MEMORY: 'out of memory',
   QUERY_TOO_LONG: 'query string is too long',
 
+  // SCRAM Authentication errors
+  SCRAM_INVALID_PROOF: 'authentication failed',
+  SCRAM_INVALID_AUTHORIZATION_MESSAGE: 'invalid SCRAM authorization message',
+  SCRAM_CHANNEL_BINDING_NOT_SUPPORTED: 'channel binding not supported',
+  SCRAM_CHANNEL_BINDING_REQUIRED: 'channel binding required but not provided',
+  SCRAM_UNKNOWN_ATTRIBUTE: 'unknown SCRAM attribute',
+  SCRAM_INVALID_NONCE: 'invalid nonce in SCRAM exchange',
+  SCRAM_ITERATION_COUNT_MISMATCH: 'iteration count mismatch in SCRAM',
+  SCRAM_MECHANISM_NOT_SUPPORTED: 'SCRAM mechanism not supported',
+
   // General errors
   INTERNAL_ERROR: 'internal error',
   UNEXPECTED_ERROR: 'unexpected error occurred',
@@ -610,6 +643,8 @@ module.exports = {
   CANCEL_REQUEST_CODE,
   MESSAGE_TYPES,
   AUTH_METHODS,
+  SASL_MECHANISMS,
+  SCRAM_STATES,
   TRANSACTION_STATUS,
   DATA_TYPES,
   FORMAT_CODES,

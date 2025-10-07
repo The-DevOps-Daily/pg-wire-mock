@@ -51,6 +51,12 @@ describe('Server Configuration', () => {
       sslMinVersion: 'TLSv1.2',
       sslMaxVersion: 'TLSv1.3',
       sslCipherSuites: null,
+      // SCRAM authentication properties
+      authMethod: 'trust',
+      requireAuthentication: true,
+      scramIterations: 4096,
+      username: 'postgres',
+      password: 'password',
     });
   });
 
@@ -80,6 +86,12 @@ describe('Server Configuration', () => {
       sslMinVersion: 'TLSv1.2',
       sslMaxVersion: 'TLSv1.3',
       sslCipherSuites: null,
+      // SCRAM authentication properties
+      authMethod: 'trust',
+      requireAuthentication: true,
+      scramIterations: 4096,
+      username: 'postgres',
+      password: 'password',
     });
   });
 
@@ -117,6 +129,12 @@ describe('Server Configuration', () => {
       sslMinVersion: 'TLSv1.2',
       sslMaxVersion: 'TLSv1.3',
       sslCipherSuites: null,
+      // SCRAM authentication properties
+      authMethod: 'trust',
+      requireAuthentication: true,
+      scramIterations: 4096,
+      username: 'postgres',
+      password: 'password',
     });
   });
 

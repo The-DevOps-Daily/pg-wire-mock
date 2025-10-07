@@ -13,6 +13,7 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
 
 - **Complete PostgreSQL Wire Protocol v3.0 Support**
   - Authentication flow with parameter negotiation
+  - **Modern authentication methods** (NEW!) - [See Authentication Documentation](docs/AUTHENTICATION.md)
   - Simple and extended query protocols
   - Transaction management (BEGIN/COMMIT/ROLLBACK)
   - Prepared statements and portals
@@ -103,6 +104,31 @@ npm run dev
 psql "sslmode=require host=localhost port=5433 dbname=postgres user=postgres"
 ```
 
+### Authentication (NEW!)
+
+pg-wire-mock supports secure authentication methods, with a focus on modern SCRAM-SHA-256 authentication preferred in PostgreSQL 10+:
+
+```bash
+# Trust authentication (default - no password required)
+export PG_MOCK_AUTH_METHOD=trust
+npm start
+
+# SCRAM-SHA-256 authentication (recommended for PostgreSQL 10+)
+export PG_MOCK_AUTH_METHOD=scram-sha-256
+export PG_MOCK_REQUIRE_AUTHENTICATION=true
+export PG_MOCK_SCRAM_ITERATIONS=4096  # Optional: iteration count (default: 4096)
+npm start
+
+# Connect with authentication
+psql -h localhost -p 5432 -U postgres -W
+# Enter password when prompted (default mock password: "password")
+```
+
+**Authentication Methods:**
+
+- `trust`: No authentication required (default)
+- `scram-sha-256`: SCRAM-SHA-256 authentication (RFC 7677) - Modern, secure authentication
+
 ### Try Some Queries
 
 ```sql
@@ -184,14 +210,17 @@ Options:
 
 ### Environment Variables
 
-F```bash
-
+```bash
 # Server settings
-
 export PG_MOCK_PORT=5432
 export PG_MOCK_HOST=localhost
 export PG_MOCK_MAX_CONNECTIONS=100
 export PG_MOCK_CONNECTION_TIMEOUT=300000
+
+# Authentication settings (NEW!)
+export PG_MOCK_AUTH_METHOD=trust              # trust, scram-sha-256
+export PG_MOCK_REQUIRE_AUTHENTICATION=false   # Enable authentication requirement
+export PG_MOCK_SCRAM_ITERATIONS=4096          # SCRAM-SHA-256 iteration count
 
 # Logging settings
 export PG_MOCK_ENABLE_LOGGING=true
@@ -206,24 +235,22 @@ export PG_MOCK_QUERY_ANALYTICS=true
 export PG_MOCK_QUERY_FILE_LOGGING=false
 
 # Shutdown settings
-
 export PG_MOCK_SHUTDOWN_TIMEOUT=30000
 export PG_MOCK_SHUTDOWN_DRAIN_TIMEOUT=10000
 
 # Database settings
-
 export PG_MOCK_SERVER_VERSION="13.0 (Mock)"
 export PG_MOCK_DEFAULT_DATABASE=postgres
 export PG_MOCK_DEFAULT_USER=postgres
 export PG_MOCK_DEFAULT_TIMEZONE=UTC
 
-````
+```
 
 View current configuration:
 
 ```bash
 npm run config
-````
+```
 
 ## 🔧 Development
 

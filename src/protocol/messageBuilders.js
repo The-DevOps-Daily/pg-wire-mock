@@ -475,29 +475,76 @@ function sendCopyData(socket, data) {
  */
 
 /**
- * Sends AuthenticationMD5Password request
- * @param {Socket} socket - Client socket
- * @param {Buffer} salt - 4-byte random salt
+ * SCRAM-SHA-256 Authentication Messages
  */
-function sendAuthenticationMD5Password(socket, salt) {
-  const payload = Buffer.alloc(8);
-  payload.writeInt32BE(5, 0); // MD5 authentication method
-  salt.copy(payload, 4); // 4-byte salt
+
+/**
+ * Sends AuthenticationSASL message with supported mechanisms
+ * @param {Socket} socket - Client socket
+ * @param {Array<string>} mechanisms - Array of supported SASL mechanisms
+ */
+function sendAuthenticationSASL(socket, mechanisms = ['SCRAM-SHA-256']) {
+  const { AUTH_METHODS } = require('./constants');
+
+  let payload = Buffer.alloc(4);
+  payload.writeInt32BE(AUTH_METHODS.SASL, 0);
+
+  // Add each mechanism as a null-terminated string
+  const mechanismBuffers = [];
+  for (const mechanism of mechanisms) {
+    mechanismBuffers.push(writeCString(mechanism));
+  }
+
+  // Add final null terminator to end the list
+  mechanismBuffers.push(Buffer.from([0]));
+
+  payload = Buffer.concat([payload, ...mechanismBuffers]);
 
   const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, payload);
   socket.write(message);
-  console.log('Sent AuthenticationMD5Password');
+  protocolLogger.sent('AuthenticationSASL', `mechanisms: ${mechanisms.join(', ')}`, {
+    mechanisms,
+  });
 }
 
 /**
- * Sends AuthenticationCleartextPassword request
+ * Sends AuthenticationSASLContinue message with server challenge
  * @param {Socket} socket - Client socket
+ * @param {string} serverData - Server challenge data
  */
-function sendAuthenticationCleartextPassword(socket) {
-  const payload = createPayload(3); // Cleartext password method
+function sendAuthenticationSASLContinue(socket, serverData) {
+  const { AUTH_METHODS } = require('./constants');
+
+  const serverDataBuffer = Buffer.from(serverData, 'utf8');
+  let payload = Buffer.alloc(4);
+  payload.writeInt32BE(AUTH_METHODS.SASL_CONTINUE, 0);
+  payload = Buffer.concat([payload, serverDataBuffer]);
+
   const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, payload);
   socket.write(message);
-  console.log('Sent AuthenticationCleartextPassword');
+  protocolLogger.sent('AuthenticationSASLContinue', `challenge length: ${serverData.length}`, {
+    challengeLength: serverData.length,
+  });
+}
+
+/**
+ * Sends AuthenticationSASLFinal message with server verification
+ * @param {Socket} socket - Client socket
+ * @param {string} serverData - Server final verification data
+ */
+function sendAuthenticationSASLFinal(socket, serverData) {
+  const { AUTH_METHODS } = require('./constants');
+
+  const serverDataBuffer = Buffer.from(serverData, 'utf8');
+  let payload = Buffer.alloc(4);
+  payload.writeInt32BE(AUTH_METHODS.SASL_FINAL, 0);
+  payload = Buffer.concat([payload, serverDataBuffer]);
+
+  const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, payload);
+  socket.write(message);
+  protocolLogger.sent('AuthenticationSASLFinal', `verification length: ${serverData.length}`, {
+    verificationLength: serverData.length,
+  });
 }
 
 /**
@@ -551,9 +598,10 @@ module.exports = {
   sendCopyOutResponse,
   sendCopyData,
 
-  // Authentication (Extended)
-  sendAuthenticationMD5Password,
-  sendAuthenticationCleartextPassword,
+  // SCRAM-SHA-256 Authentication
+  sendAuthenticationSASL,
+  sendAuthenticationSASLContinue,
+  sendAuthenticationSASLFinal,
 
   // Notifications
   sendNotificationResponse,
