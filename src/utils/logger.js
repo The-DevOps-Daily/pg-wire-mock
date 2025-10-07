@@ -267,10 +267,11 @@ function createQueryLogger(config = {}) {
      * @param {*} value - Parameter value to sanitize
      * @returns {*} Sanitized value
      */
-    const sanitize = (value) => {
+    const sanitize = value => {
       if (typeof value === 'string') {
         // Mask potential sensitive data patterns
-        return value.replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '****-****-****-****') // Credit cards
+        return value
+          .replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '****-****-****-****') // Credit cards
           .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '***@***.***') // Emails
           .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '***-**-****'); // SSNs
       }
@@ -297,11 +298,43 @@ function createQueryLogger(config = {}) {
   function extractQueryType(query) {
     const normalized = query.trim().toUpperCase();
     const queryTypes = [
-      'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE',
-      'BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE', 'ANALYZE', 'EXPLAIN',
-      'SHOW', 'SET', 'RESET', 'COPY', 'VACUUM', 'REINDEX', 'CLUSTER', 'LOCK',
-      'UNLOCK', 'GRANT', 'REVOKE', 'COMMENT', 'PREPARE', 'EXECUTE', 'DEALLOCATE',
-      'DECLARE', 'FETCH', 'MOVE', 'CLOSE', 'LISTEN', 'NOTIFY', 'LOAD'
+      'SELECT',
+      'INSERT',
+      'UPDATE',
+      'DELETE',
+      'CREATE',
+      'ALTER',
+      'DROP',
+      'TRUNCATE',
+      'BEGIN',
+      'COMMIT',
+      'ROLLBACK',
+      'SAVEPOINT',
+      'RELEASE',
+      'ANALYZE',
+      'EXPLAIN',
+      'SHOW',
+      'SET',
+      'RESET',
+      'COPY',
+      'VACUUM',
+      'REINDEX',
+      'CLUSTER',
+      'LOCK',
+      'UNLOCK',
+      'GRANT',
+      'REVOKE',
+      'COMMENT',
+      'PREPARE',
+      'EXECUTE',
+      'DEALLOCATE',
+      'DECLARE',
+      'FETCH',
+      'MOVE',
+      'CLOSE',
+      'LISTEN',
+      'NOTIFY',
+      'LOAD',
     ];
     const pattern = new RegExp(`^(${queryTypes.join('|')})`);
     const match = normalized.match(pattern);
@@ -357,10 +390,11 @@ function createQueryLogger(config = {}) {
       };
 
       if (queryConfig.enableDetailedLogging) {
-        const truncatedQuery = query.length > queryConfig.maxQueryLength
-          ? `${query.substring(0, queryConfig.maxQueryLength)}...`
-          : query;
-        
+        const truncatedQuery =
+          query.length > queryConfig.maxQueryLength
+            ? `${query.substring(0, queryConfig.maxQueryLength)}...`
+            : query;
+
         baseLogger.info(`Query Started [${sessionId}]`, {
           query: truncatedQuery,
           queryType,
@@ -409,9 +443,10 @@ function createQueryLogger(config = {}) {
       } else if (executionTimeMs >= queryConfig.slowQueryThreshold) {
         baseLogger.warn(`Slow Query [${querySession.sessionId}]`, {
           ...logData,
-          query: querySession.query.length > queryConfig.maxQueryLength
-            ? `${querySession.query.substring(0, queryConfig.maxQueryLength)}...`
-            : querySession.query,
+          query:
+            querySession.query.length > queryConfig.maxQueryLength
+              ? `${querySession.query.substring(0, queryConfig.maxQueryLength)}...`
+              : querySession.query,
         });
       } else if (queryConfig.enableDetailedLogging) {
         baseLogger.info(`Query Completed [${querySession.sessionId}]`, logData);
@@ -428,14 +463,17 @@ function createQueryLogger(config = {}) {
       if (!queryConfig.logParameters) return;
 
       const sanitizedParams = sanitizeParameters(parameters);
-      const truncatedQuery = query.length > queryConfig.maxQueryLength
-        ? `${query.substring(0, queryConfig.maxQueryLength)}...`
-        : query;
+      const truncatedQuery =
+        query.length > queryConfig.maxQueryLength
+          ? `${query.substring(0, queryConfig.maxQueryLength)}...`
+          : query;
 
       baseLogger.info('Query with Parameters', {
         query: truncatedQuery,
         parameters: sanitizedParams,
-        parameterCount: Array.isArray(parameters) ? parameters.length : Object.keys(parameters || {}).length,
+        parameterCount: Array.isArray(parameters)
+          ? parameters.length
+          : Object.keys(parameters || {}).length,
         connectionId: meta.connectionId,
         user: meta.user,
         database: meta.database,
@@ -553,7 +591,10 @@ function createFileLogger(config = {}) {
   function rotateFile(filePath) {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const rotatedPath = filePath.replace(fileConfig.extension, `-${timestamp}${fileConfig.extension}`);
+      const rotatedPath = filePath.replace(
+        fileConfig.extension,
+        `-${timestamp}${fileConfig.extension}`
+      );
       fs.renameSync(filePath, rotatedPath);
 
       // Clean up old files
@@ -570,7 +611,8 @@ function createFileLogger(config = {}) {
    */
   function cleanupOldFiles(dir, baseName) {
     try {
-      const files = fs.readdirSync(dir)
+      const files = fs
+        .readdirSync(dir)
         .filter(file => file.startsWith(baseName) && file.endsWith(fileConfig.extension))
         .map(file => ({
           name: file,
@@ -647,7 +689,7 @@ function createFileLogger(config = {}) {
        * Writes raw JSON entry to file
        * @param {Object} entry - Raw log entry object
        */
-      writeRaw: (entry) => {
+      writeRaw: entry => {
         const logEntry = JSON.stringify({
           timestamp: new Date().toISOString(),
           ...entry,
@@ -676,7 +718,7 @@ const QueryAnalyzer = {
    * @param {Array} queryLogs - Array of query log entries
    * @returns {Object} Analysis results
    */
-  analyzePatterns: (queryLogs) => {
+  analyzePatterns: queryLogs => {
     const analysis = {
       totalQueries: queryLogs.length,
       uniqueQueries: new Set(),
@@ -709,8 +751,14 @@ const QueryAnalyzer = {
 
       // Track execution time stats
       if (executionTimeMs !== undefined) {
-        analysis.executionTimeStats.min = Math.min(analysis.executionTimeStats.min, executionTimeMs);
-        analysis.executionTimeStats.max = Math.max(analysis.executionTimeStats.max, executionTimeMs);
+        analysis.executionTimeStats.min = Math.min(
+          analysis.executionTimeStats.min,
+          executionTimeMs
+        );
+        analysis.executionTimeStats.max = Math.max(
+          analysis.executionTimeStats.max,
+          executionTimeMs
+        );
         analysis.executionTimeStats.total += executionTimeMs;
 
         // Time distribution
@@ -766,32 +814,32 @@ const QueryAnalyzer = {
    * @param {Array} queryLogs - Array of query log entries
    * @returns {string} Formatted report
    */
-  generateReport: (queryLogs) => {
+  generateReport: queryLogs => {
     const analysis = QueryAnalyzer.analyzePatterns(queryLogs);
-    
+
     let report = '=== Query Performance Report ===\n\n';
     report += `Total Queries: ${analysis.totalQueries}\n`;
     report += `Unique Queries: ${analysis.uniqueQueryCount}\n`;
     report += `Error Rate: ${((analysis.errorQueries.length / analysis.totalQueries) * 100).toFixed(2)}%\n\n`;
-    
+
     report += 'Query Types:\n';
     for (const [type, count] of Object.entries(analysis.queryTypes)) {
       report += `  ${type}: ${count}\n`;
     }
-    
+
     report += '\nExecution Time Distribution:\n';
     report += `  Fast (< 100ms): ${analysis.timeDistribution.fast}\n`;
     report += `  Medium (100ms - 1s): ${analysis.timeDistribution.medium}\n`;
     report += `  Slow (1s - 5s): ${analysis.timeDistribution.slow}\n`;
     report += `  Very Slow (> 5s): ${analysis.timeDistribution.verySlow}\n\n`;
-    
+
     if (analysis.executionTimeStats.total > 0) {
       report += 'Execution Time Stats:\n';
       report += `  Min: ${analysis.executionTimeStats.min.toFixed(3)}ms\n`;
       report += `  Max: ${analysis.executionTimeStats.max.toFixed(3)}ms\n`;
       report += `  Average: ${analysis.executionTimeStats.average.toFixed(3)}ms\n\n`;
     }
-    
+
     if (analysis.slowQueries.length > 0) {
       report += `Top ${Math.min(5, analysis.slowQueries.length)} Slowest Queries:\n`;
       analysis.slowQueries
@@ -801,7 +849,7 @@ const QueryAnalyzer = {
           report += `  ${i + 1}. ${log.executionTimeMs}ms - ${log.query.substring(0, 80)}...\n`;
         });
     }
-    
+
     return report;
   },
 };

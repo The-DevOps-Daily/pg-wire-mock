@@ -17,7 +17,7 @@ describe('Query Logging', () => {
       { query: 'SELECT 1', queryType: 'SELECT', executionTimeMs: 10 },
       { query: 'INSERT INTO t VALUES (1)', queryType: 'INSERT', executionTimeMs: 20 },
     ];
-    
+
     const analysis = QueryAnalyzer.analyzePatterns(logs);
     expect(analysis.totalQueries).toBe(2);
     expect(analysis.queryTypes.SELECT).toBe(1);
