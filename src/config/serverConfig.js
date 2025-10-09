@@ -61,6 +61,9 @@ const DEFAULT_CONFIG = {
   enableFunctionCalls: false,
   enableNotifications: false,
 
+  // Custom data types
+  customTypes: {},
+
   // Security settings
   requireAuthentication: true, // Enable authentication by default when auth method is set
   authMethod: 'trust', // trust, scram-sha-256
@@ -416,6 +419,107 @@ function getValidationSummary() {
   };
 }
 
+/**
+ * Registers a custom data type
+ * @param {Object} typeConfig - Custom type configuration
+ * @param {string} typeConfig.name - Type name
+ * @param {number} typeConfig.oid - PostgreSQL type OID (must be unique and > 100000)
+ * @param {Function} typeConfig.encode - Function to encode values to text format
+ * @param {Function} typeConfig.decode - Function to decode values from text format
+ * @param {number} [typeConfig.typlen] - Type length (-1 for variable length, default: -1)
+ * @param {string} [typeConfig.typtype] - Type category ('b' for base type, default: 'b')
+ * @param {Object} config - Server configuration object to register type in
+ * @returns {void}
+ */
+function registerCustomType(typeConfig, config = DEFAULT_CONFIG) {
+  // Validate type configuration
+  if (!typeConfig || typeof typeConfig !== 'object') {
+    throw new Error('Custom type configuration must be an object');
+  }
+
+  if (!typeConfig.name || typeof typeConfig.name !== 'string') {
+    throw new Error('Custom type must have a name (string)');
+  }
+
+  if (!typeConfig.oid || typeof typeConfig.oid !== 'number' || typeConfig.oid < 100000) {
+    throw new Error('Custom type must have a unique OID >= 100000');
+  }
+
+  if (!typeConfig.encode || typeof typeConfig.encode !== 'function') {
+    throw new Error('Custom type must have an encode function');
+  }
+
+  if (!typeConfig.decode || typeof typeConfig.decode !== 'function') {
+    throw new Error('Custom type must have a decode function');
+  }
+
+  // Check for OID conflicts
+  if (config.customTypes[typeConfig.oid]) {
+    throw new Error(`Custom type OID ${typeConfig.oid} is already registered`);
+  }
+
+  // Check for name conflicts
+  const existingType = Object.values(config.customTypes).find(
+    type => type.name.toLowerCase() === typeConfig.name.toLowerCase()
+  );
+  if (existingType) {
+    throw new Error(`Custom type name '${typeConfig.name}' is already registered`);
+  }
+
+  // Register the type
+  config.customTypes[typeConfig.oid] = {
+    name: typeConfig.name.toLowerCase(),
+    oid: typeConfig.oid,
+    encode: typeConfig.encode,
+    decode: typeConfig.decode,
+    typlen: typeConfig.typlen || -1,
+    typtype: typeConfig.typtype || 'b',
+  };
+}
+
+/**
+ * Gets a custom type by OID
+ * @param {number} oid - Type OID
+ * @param {Object} config - Server configuration object
+ * @returns {Object|null} Custom type configuration or null if not found
+ */
+function getCustomType(oid, config = DEFAULT_CONFIG) {
+  if (!config || !config.customTypes) {
+    return null;
+  }
+  return config.customTypes[oid] || null;
+}
+
+/**
+ * Gets a custom type by name
+ * @param {string} name - Type name
+ * @param {Object} config - Server configuration object
+ * @returns {Object|null} Custom type configuration or null if not found
+ */
+function getCustomTypeByName(name, config = DEFAULT_CONFIG) {
+  if (!name || typeof name !== 'string' || !config || !config.customTypes) {
+    return null;
+  }
+
+  return (
+    Object.values(config.customTypes).find(
+      type => type.name.toLowerCase() === name.toLowerCase()
+    ) || null
+  );
+}
+
+/**
+ * Gets all registered custom types
+ * @param {Object} config - Server configuration object
+ * @returns {Array} Array of custom type configurations
+ */
+function getAllCustomTypes(config = DEFAULT_CONFIG) {
+  if (!config || !config.customTypes) {
+    return [];
+  }
+  return Object.values(config.customTypes);
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   ENV_MAPPING,
@@ -426,4 +530,8 @@ module.exports = {
   createServerParameters,
   getConfigDocumentation,
   getValidationSummary,
+  registerCustomType,
+  getCustomType,
+  getCustomTypeByName,
+  getAllCustomTypes,
 };
