@@ -1033,10 +1033,12 @@ function processSASLInitialResponse(buffer, socket, connState, config) {
 
     // For SCRAM, if username is empty or "*" in the SASL message, use the one from connection parameters
     // Some clients send "*" instead of the actual username for privacy
-    const username =
-      clientInitial.username && clientInitial.username !== '*'
-        ? clientInitial.username
-        : connState.getCurrentUser();
+    let username;
+    if (clientInitial.username && clientInitial.username !== '*') {
+      username = clientInitial.username;
+    } else {
+      username = connState.getCurrentUser();
+    }
     console.log('Using username:', username);
 
     if (!username || !clientInitial.nonce) {
