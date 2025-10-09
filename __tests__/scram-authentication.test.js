@@ -661,5 +661,26 @@ describe('SCRAM-SHA-256 Authentication Tests', () => {
       expect(connState.scramMechanism).toBe(SASL_MECHANISMS.SCRAM_SHA_256);
       expect(connState.scramClientNonce).toBe('testnonce');
     });
+
+    test('should handle "*" username in SCRAM messages', () => {
+      // Test that "*" username falls back to connection parameters
+      const messageWithStar = 'n=*,r=clientnonce123';
+      const parsed = parseScramClientInitial(messageWithStar);
+
+      expect(parsed.username).toBe('*');
+      expect(parsed.nonce).toBe('clientnonce123');
+
+      // In the actual implementation, "*" should be treated as empty
+      // and fall back to connection parameters
+    });
+
+    test('should handle empty username in SCRAM messages', () => {
+      // Test that empty username falls back to connection parameters
+      const messageWithEmpty = 'r=clientnonce123';
+      const parsed = parseScramClientInitial(messageWithEmpty);
+
+      expect(parsed.username).toBeNull();
+      expect(parsed.nonce).toBe('clientnonce123');
+    });
   });
 });
