@@ -1031,8 +1031,12 @@ function processSASLInitialResponse(buffer, socket, connState, config) {
     const clientInitial = parseScramClientInitial(initialResponse);
     console.log('Parsed client initial:', clientInitial);
 
-    // For SCRAM, if username is empty in the SASL message, use the one from connection parameters
-    const username = clientInitial.username || connState.getCurrentUser();
+    // For SCRAM, if username is empty or "*" in the SASL message, use the one from connection parameters
+    // Some clients send "*" instead of the actual username for privacy
+    const username =
+      clientInitial.username && clientInitial.username !== '*'
+        ? clientInitial.username
+        : connState.getCurrentUser();
     console.log('Using username:', username);
 
     if (!username || !clientInitial.nonce) {
