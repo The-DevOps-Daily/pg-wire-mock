@@ -434,9 +434,12 @@ function handleStartupPacket(buffer, socket, connState, length, config = {}) {
     connState.setParameter(key, value);
   }
 
+  // Ensure config is an object (handle null/undefined)
+  const serverConfig = config || {};
+
   // Determine authentication method from config
-  const authMethod = config.authMethod || 'trust';
-  const requireAuth = config.requireAuthentication !== false; // Default to true unless explicitly false
+  const authMethod = serverConfig.authMethod || 'trust';
+  const requireAuth = serverConfig.requireAuthentication !== false; // Default to true unless explicitly false
 
   // Only skip authentication if method is trust AND authentication is not required
   if (authMethod === 'trust' && !requireAuth) {
