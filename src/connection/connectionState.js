@@ -39,10 +39,16 @@ class ConnectionState {
     // Connection metadata
     this.connected = true;
     this.connectionTime = new Date();
+    this.connectionId = null; // Will be set by server
 
     // Extended query protocol state
     this.preparedStatements = new Map();
     this.portals = new Map();
+
+    // Notification state
+    this.listeningChannels = new Set(); // Channels this connection is listening to
+    this.notificationManager = null; // Reference to notification manager
+    this.socket = null; // Client socket for sending notifications
 
     // Connection statistics
     this.queriesExecuted = 0;
@@ -246,6 +252,92 @@ class ConnectionState {
   }
 
   /**
+   * Adds a notification channel to the listening set
+   * @param {string} channelName - Channel name to listen to
+   */
+  addListeningChannel(channelName) {
+    this.listeningChannels.add(channelName);
+    this.updateActivity();
+    console.log(`Started listening to channel: ${channelName}`);
+  }
+
+  /**
+   * Removes a notification channel from the listening set
+   * @param {string} channelName - Channel name to stop listening to
+   */
+  removeListeningChannel(channelName) {
+    const removed = this.listeningChannels.delete(channelName);
+    if (removed) {
+      this.updateActivity();
+      console.log(`Stopped listening to channel: ${channelName}`);
+    }
+    return removed;
+  }
+
+  /**
+   * Removes all listening channels
+   * @returns {number} Number of channels removed
+   */
+  clearAllListeningChannels() {
+    const count = this.listeningChannels.size;
+    this.listeningChannels.clear();
+    if (count > 0) {
+      this.updateActivity();
+      console.log(`Stopped listening to ${count} channels`);
+    }
+    return count;
+  }
+
+  /**
+   * Checks if connection is listening to a channel
+   * @param {string} channelName - Channel name to check
+   * @returns {boolean} True if listening to channel
+   */
+  isListeningToChannel(channelName) {
+    return this.listeningChannels.has(channelName);
+  }
+
+  /**
+   * Gets all channels this connection is listening to
+   * @returns {Array<string>} Array of channel names
+   */
+  getListeningChannels() {
+    return Array.from(this.listeningChannels);
+  }
+
+  /**
+   * Sets the notification manager reference
+   * @param {NotificationManager} notificationManager - Notification manager instance
+   */
+  setNotificationManager(notificationManager) {
+    this.notificationManager = notificationManager;
+  }
+
+  /**
+   * Gets the notification manager reference
+   * @returns {NotificationManager|null} Notification manager instance
+   */
+  getNotificationManager() {
+    return this.notificationManager;
+  }
+
+  /**
+   * Sets the client socket reference
+   * @param {Socket} socket - Client socket
+   */
+  setSocket(socket) {
+    this.socket = socket;
+  }
+
+  /**
+   * Gets the client socket reference
+   * @returns {Socket|null} Client socket
+   */
+  getSocket() {
+    return this.socket;
+  }
+
+  /**
    * Increments the query counter
    */
   incrementQueryCount() {
@@ -283,6 +375,7 @@ class ConnectionState {
     this.connected = false;
     this.preparedStatements.clear();
     this.portals.clear();
+    this.clearAllListeningChannels();
     console.log(
       `Connection closed after ${this.getConnectionDuration()}ms,
       ${this.queriesExecuted} queries executed`
@@ -309,6 +402,7 @@ class ConnectionState {
       queriesExecuted: this.queriesExecuted,
       preparedStatements: this.preparedStatements.size,
       portals: this.portals.size,
+      listeningChannels: this.listeningChannels.size,
       connected: this.connected,
     };
   }
@@ -411,9 +505,10 @@ class ConnectionState {
     if (this.isInTransaction()) return false;
     if (this.isInFailedTransaction()) return false;
 
-    // Don't reuse connections with active prepared statements or portals
+    // Don't reuse connections with active prepared statements, portals, or listeners
     if (this.preparedStatements.size > 0) return false;
     if (this.portals.size > 0) return false;
+    if (this.listeningChannels.size > 0) return false;
 
     // Validate overall state
     const validation = this.validateState();
@@ -429,6 +524,7 @@ class ConnectionState {
       // Clear extended query protocol state
       this.preparedStatements.clear();
       this.portals.clear();
+      this.clearAllListeningChannels();
 
       // Reset to idle transaction status
       this.transactionStatus = TRANSACTION_STATUS.IDLE;
