@@ -49,7 +49,7 @@ describe('Connection Pooling', () => {
 
     test('should not initialize pool when disabled', async () => {
       const serverWithoutPool = new ServerManager({
-        port: testPort + 1,
+        port: 5433, // Use different port to avoid conflicts
         enableConnectionPooling: false,
         enableLogging: false,
       });
@@ -62,6 +62,8 @@ describe('Connection Pooling', () => {
         expect(stats.config.enableConnectionPooling).toBe(false);
       } finally {
         await serverWithoutPool.stop();
+        // Wait a bit for port to be fully released
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     });
   });

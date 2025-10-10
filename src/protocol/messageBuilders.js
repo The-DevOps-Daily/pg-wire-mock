@@ -143,13 +143,14 @@ function sendRowDescription(socket, columns) {
  * @param {Socket} socket - Client socket
  * @param {Array} values - Array of field values
  * @param {Array} columnTypes - Array of column type information (optional)
+ * @param {Object} config - Server configuration for custom types (optional)
  */
-function sendDataRow(socket, values, columnTypes = []) {
+function sendDataRow(socket, values, columnTypes = [], config = null) {
   let payload = Buffer.alloc(2);
   payload.writeInt16BE(values.length, 0); // Number of fields
 
   const valueBuffers = [];
-  const { isArrayType, encodeArrayToText } = require('./utils');
+  const { isArrayType, encodeArrayToText, isCustomType, encodeCustomType } = require('./utils');
 
   for (let i = 0; i < values.length; i++) {
     const value = values[i];
@@ -161,15 +162,19 @@ function sendDataRow(socket, values, columnTypes = []) {
       nullBuffer.writeInt32BE(-1, 0);
       valueBuffers.push(nullBuffer);
     } else {
-      // Check if this is an array type
+      // Determine how to encode the value
       let valueStr;
+
       if (Array.isArray(value)) {
         // Handle JavaScript array - encode as PostgreSQL array
-        const elementType = getElementTypeFromColumn(columnType);
+        const elementType = getElementTypeFromColumn(columnType, config);
         valueStr = encodeArrayToText(value, elementType);
       } else if (columnType && isArrayType(columnType.dataTypeOID)) {
         // Handle string representation of array that needs to be validated
         valueStr = String(value);
+      } else if (columnType && config && isCustomType(columnType.dataTypeOID, config)) {
+        // Handle custom type encoding
+        valueStr = encodeCustomType(value, columnType.dataTypeOID, config);
       } else {
         // Regular value - convert to string
         valueStr = String(value);
@@ -194,42 +199,21 @@ function sendDataRow(socket, values, columnTypes = []) {
 /**
  * Helper function to get element type from column information
  * @param {Object} columnType - Column type information
+ * @param {Object} config - Server configuration
  * @returns {string} Element type name
  */
-function getElementTypeFromColumn(columnType) {
+function getElementTypeFromColumn(columnType, config = null) {
   if (!columnType || !columnType.dataTypeOID) {
     return 'text';
   }
 
-  const { getBaseTypeOID } = require('./utils');
-  const { DATA_TYPES: TYPES } = require('./constants');
+  const { getBaseTypeOID, getTypeName } = require('./utils');
 
   // Get base type OID if this is an array type
   const baseTypeOID = getBaseTypeOID(columnType.dataTypeOID) || columnType.dataTypeOID;
 
-  // Map base type OID to type name
-  const typeMapping = {
-    [TYPES.BOOL]: 'bool',
-    [TYPES.INT2]: 'int2',
-    [TYPES.INT4]: 'int4',
-    [TYPES.INT8]: 'int8',
-    [TYPES.FLOAT4]: 'float4',
-    [TYPES.FLOAT8]: 'float8',
-    [TYPES.NUMERIC]: 'numeric',
-    [TYPES.TEXT]: 'text',
-    [TYPES.VARCHAR]: 'varchar',
-    [TYPES.BPCHAR]: 'bpchar',
-    [TYPES.DATE]: 'date',
-    [TYPES.TIME]: 'time',
-    [TYPES.TIMESTAMP]: 'timestamp',
-    [TYPES.TIMESTAMPTZ]: 'timestamptz',
-    [TYPES.INTERVAL]: 'interval',
-    [TYPES.UUID]: 'uuid',
-    [TYPES.JSON]: 'json',
-    [TYPES.JSONB]: 'jsonb',
-  };
-
-  return typeMapping[baseTypeOID] || 'text';
+  // Use the getTypeName utility which handles both standard and custom types
+  return getTypeName(baseTypeOID, config);
 }
 
 /**

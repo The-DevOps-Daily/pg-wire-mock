@@ -1096,6 +1096,103 @@ function isArrayType(typeOID) {
   return getBaseTypeOID(typeOID) !== null;
 }
 
+/**
+ * Encodes a value using custom type encoder
+ * @param {any} value - Value to encode
+ * @param {number} typeOID - Custom type OID
+ * @param {Object} config - Server configuration
+ * @returns {string} Encoded value as text
+ */
+function encodeCustomType(value, typeOID, config) {
+  const { getCustomType } = require('../config/serverConfig');
+  const customType = getCustomType(typeOID, config);
+
+  if (!customType) {
+    throw new Error(`Unknown custom type OID: ${typeOID}`);
+  }
+
+  try {
+    return customType.encode(value);
+  } catch (error) {
+    throw new Error(`Failed to encode custom type '${customType.name}': ${error.message}`);
+  }
+}
+
+/**
+ * Decodes a value using custom type decoder
+ * @param {string} text - Text representation to decode
+ * @param {number} typeOID - Custom type OID
+ * @param {Object} config - Server configuration
+ * @returns {any} Decoded value
+ */
+function decodeCustomType(text, typeOID, config) {
+  const { getCustomType } = require('../config/serverConfig');
+  const customType = getCustomType(typeOID, config);
+
+  if (!customType) {
+    throw new Error(`Unknown custom type OID: ${typeOID}`);
+  }
+
+  try {
+    return customType.decode(text);
+  } catch (error) {
+    throw new Error(`Failed to decode custom type '${customType.name}': ${error.message}`);
+  }
+}
+
+/**
+ * Checks if a type OID is a custom type
+ * @param {number} typeOID - Type OID to check
+ * @param {Object} config - Server configuration
+ * @returns {boolean} True if it's a custom type
+ */
+function isCustomType(typeOID, config) {
+  const { getCustomType } = require('../config/serverConfig');
+  return getCustomType(typeOID, config) !== null;
+}
+
+/**
+ * Gets the type name for a given OID (including custom types)
+ * @param {number} typeOID - Type OID
+ * @param {Object} config - Server configuration
+ * @returns {string} Type name or 'unknown'
+ */
+function getTypeName(typeOID, config) {
+  const { DATA_TYPES } = require('./constants');
+  const { getCustomType } = require('../config/serverConfig');
+
+  // Check custom types first
+  const customType = getCustomType(typeOID, config);
+  if (customType) {
+    return customType.name;
+  }
+
+  // Standard PostgreSQL types
+  const typeMapping = {
+    [DATA_TYPES.BOOL]: 'bool',
+    [DATA_TYPES.INT2]: 'int2',
+    [DATA_TYPES.INT4]: 'int4',
+    [DATA_TYPES.INT8]: 'int8',
+    [DATA_TYPES.FLOAT4]: 'float4',
+    [DATA_TYPES.FLOAT8]: 'float8',
+    [DATA_TYPES.NUMERIC]: 'numeric',
+    [DATA_TYPES.TEXT]: 'text',
+    [DATA_TYPES.VARCHAR]: 'varchar',
+    [DATA_TYPES.CHAR]: 'char',
+    [DATA_TYPES.BPCHAR]: 'bpchar',
+    [DATA_TYPES.DATE]: 'date',
+    [DATA_TYPES.TIME]: 'time',
+    [DATA_TYPES.TIMESTAMP]: 'timestamp',
+    [DATA_TYPES.TIMESTAMPTZ]: 'timestamptz',
+    [DATA_TYPES.INTERVAL]: 'interval',
+    [DATA_TYPES.UUID]: 'uuid',
+    [DATA_TYPES.JSON]: 'json',
+    [DATA_TYPES.JSONB]: 'jsonb',
+  };
+
+  return typeMapping[typeOID] || 'unknown';
+}
+
 module.exports = {
   readCString,
   writeCString,
@@ -1119,6 +1216,11 @@ module.exports = {
   getArrayTypeOID,
   getBaseTypeOID,
   isArrayType,
+  // Custom type utilities
+  encodeCustomType,
+  decodeCustomType,
+  isCustomType,
+  getTypeName,
   // SCRAM-SHA-256 utilities
   generateScramNonce,
   pbkdf2ScramSha256,

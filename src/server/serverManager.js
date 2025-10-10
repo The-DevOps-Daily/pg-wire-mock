@@ -242,7 +242,7 @@ class ServerManager {
       }
 
       // Step 5: Clean up resources
-      this._cleanupResources();
+      await this._cleanupResources();
 
       const shutdownDuration = Date.now() - startTime;
       this.log('info', `Graceful shutdown completed in ${shutdownDuration}ms`);
@@ -251,7 +251,7 @@ class ServerManager {
       this.log('error', `Error during graceful shutdown: ${error.message}`);
       // Force cleanup on error
       this._forceCloseConnections();
-      this._cleanupResources();
+      await this._cleanupResources();
       throw error;
     } finally {
       this.isRunning = false;
@@ -408,7 +408,7 @@ class ServerManager {
    * Cleans up server resources
    * @private
    */
-  _cleanupResources() {
+  async _cleanupResources() {
     // Clear cleanup interval
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
@@ -418,7 +418,7 @@ class ServerManager {
     // Cleanup connection pool
     if (this.connectionPool) {
       try {
-        this.connectionPool.destroy();
+        await this.connectionPool.shutdown();
         this.log('info', 'Connection pool cleaned up');
       } catch (error) {
         this.log('error', `Error cleaning up connection pool: ${error.message}`);

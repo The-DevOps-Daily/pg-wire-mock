@@ -434,9 +434,12 @@ function handleStartupPacket(buffer, socket, connState, length, config = {}) {
     connState.setParameter(key, value);
   }
 
+  // Ensure config is an object (handle null/undefined)
+  const serverConfig = config || {};
+
   // Determine authentication method from config
-  const authMethod = config.authMethod || 'trust';
-  const requireAuth = config.requireAuthentication !== false; // Default to true unless explicitly false
+  const authMethod = serverConfig.authMethod || 'trust';
+  const requireAuth = serverConfig.requireAuthentication !== false; // Default to true unless explicitly false
 
   // Only skip authentication if method is trust AND authentication is not required
   if (authMethod === 'trust' && !requireAuth) {
@@ -1028,8 +1031,14 @@ function processSASLInitialResponse(buffer, socket, connState, config) {
     const clientInitial = parseScramClientInitial(initialResponse);
     console.log('Parsed client initial:', clientInitial);
 
-    // For SCRAM, if username is empty in the SASL message, use the one from connection parameters
-    const username = clientInitial.username || connState.getCurrentUser();
+    // For SCRAM, if username is empty or "*" in the SASL message, use the one from connection parameters
+    // Some clients send "*" instead of the actual username for privacy
+    let username;
+    if (clientInitial.username && clientInitial.username !== '*') {
+      username = clientInitial.username;
+    } else {
+      username = connState.getCurrentUser();
+    }
     console.log('Using username:', username);
 
     if (!username || !clientInitial.nonce) {

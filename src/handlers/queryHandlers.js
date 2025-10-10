@@ -605,9 +605,24 @@ function handleArrayQuery(query, _connState) {
 /**
  * Gets the type OID from a PostgreSQL type name
  * @param {string} typeName - PostgreSQL type name
+ * @param {Object} config - Server configuration for custom types (optional)
  * @returns {number} Type OID
  */
-function getTypeOIDFromName(typeName) {
+function getTypeOIDFromName(typeName, config = null) {
+  if (!typeName || typeof typeName !== 'string') {
+    return DATA_TYPES.TEXT;
+  }
+
+  // Check custom types first if config is provided
+  if (config) {
+    const { getCustomTypeByName } = require('../config/serverConfig');
+    const customType = getCustomTypeByName(typeName, config);
+    if (customType) {
+      return customType.oid;
+    }
+  }
+
+  // Standard PostgreSQL types
   const typeMapping = {
     bool: DATA_TYPES.BOOL,
     boolean: DATA_TYPES.BOOL,
@@ -816,12 +831,17 @@ function handleDeleteQuery(_query, _connState) {
  * Handles CREATE queries (mock implementation)
  * @param {string} query - The CREATE query
  * @param {ConnectionState} _connState - Connection state object
+ * @param {Object} config - Server configuration for custom types (optional)
  * @returns {QueryResult} Query result
  */
-function handleCreateQuery(query, _connState) {
-  if (query.includes('TABLE')) {
+function handleCreateQuery(query, _connState, config = null) {
+  const upperQuery = query.toUpperCase();
+
+  if (upperQuery.includes('CREATE TYPE')) {
+    return handleCreateTypeQuery(query, _connState, config);
+  } else if (upperQuery.includes('TABLE')) {
     return { command: 'CREATE TABLE', rowCount: 0 };
-  } else if (query.includes('INDEX')) {
+  } else if (upperQuery.includes('INDEX')) {
     return { command: 'CREATE INDEX', rowCount: 0 };
   } else {
     return { command: 'CREATE', rowCount: 0 };
@@ -1190,20 +1210,41 @@ function handleInformationSchemaSchemata(_query, _connState) {
 }
 
 /**
+ * Handles CREATE TYPE queries
+ * @param {string} _query - The CREATE TYPE query
+ * @param {ConnectionState} _connState - Connection state object
+ * @param {Object} _config - Server configuration for custom types
+ * @returns {QueryResult} Query result
+ */
+function handleCreateTypeQuery(_query, _connState, _config) {
+  // For now, return a success message for CREATE TYPE statements
+  // In a real implementation, you would parse the CREATE TYPE syntax
+  // and register the type using registerCustomType
+
+  return {
+    columns: [],
+    rows: [],
+    command: 'CREATE TYPE',
+    rowCount: 0,
+  };
+}
+
+/**
  * Handles pg_catalog queries (PostgreSQL system catalogs)
  * @param {string} query - The pg_catalog query
  * @param {ConnectionState} connState - Connection state object
+ * @param {Object} config - Server configuration for custom types (optional)
  * @returns {QueryResult} Query result
  */
-function handlePgCatalogQuery(query, connState) {
+function handlePgCatalogQuery(query, connState, config = null) {
   const upperQuery = query.toUpperCase();
 
   if (upperQuery.includes('PG_CATALOG.PG_TABLES')) {
-    return handlePgTables(query, connState);
+    return handlePgTables(query, connState, config);
   } else if (upperQuery.includes('PG_CATALOG.PG_TYPE')) {
-    return handlePgType(query, connState);
+    return handlePgType(query, connState, config);
   } else if (upperQuery.includes('PG_CATALOG.PG_CLASS')) {
-    return handlePgClass(query, connState);
+    return handlePgClass(query, connState, config);
   }
 
   // Fallback for unknown pg_catalog queries
@@ -1261,8 +1302,11 @@ function handlePgTables(_query, _connState) {
 /**
  * Handles pg_catalog.pg_type queries
  * PostgreSQL data type information
+ * @param {string} _query - The query (unused)
+ * @param {ConnectionState} _connState - Connection state (unused)
+ * @param {Object} config - Server configuration for custom types (optional)
  */
-function handlePgType(_query, _connState) {
+function handlePgType(_query, _connState, config = null) {
   const columns = [
     { name: 'oid', dataTypeOID: DATA_TYPES.OID, dataTypeSize: 4 },
     { name: 'typname', dataTypeOID: DATA_TYPES.NAME, dataTypeSize: 64 },
@@ -1282,6 +1326,22 @@ function handlePgType(_query, _connState) {
     [DATA_TYPES.TIMESTAMP.toString(), 'timestamp', '11', '8', 'b'],
     [DATA_TYPES.TIMESTAMPTZ.toString(), 'timestamptz', '11', '8', 'b'],
   ];
+
+  // Add custom types if config is provided
+  if (config) {
+    const { getAllCustomTypes } = require('../config/serverConfig');
+    const customTypes = getAllCustomTypes(config);
+
+    for (const customType of customTypes) {
+      rows.push([
+        customType.oid.toString(),
+        customType.name,
+        '2200', // pg_catalog namespace OID
+        customType.typlen.toString(),
+        customType.typtype,
+      ]);
+    }
+  }
 
   return {
     columns,
@@ -1340,6 +1400,7 @@ module.exports = {
   handleUpdateQuery,
   handleDeleteQuery,
   handleCreateQuery,
+  handleCreateTypeQuery,
   handleDropQuery,
   handleListenQuery,
   handleUnlistenQuery,
