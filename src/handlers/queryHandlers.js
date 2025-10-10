@@ -299,7 +299,8 @@ function processQuery(query, connState) {
     } else if (normalizedQuery.startsWith('UNLISTEN')) {
       return handleUnlistenQuery(normalizedQuery, connState);
     } else if (normalizedQuery.startsWith('NOTIFY')) {
-      return handleNotifyQuery(normalizedQuery, connState);
+      // Use original query to preserve payload casing
+      return handleNotifyQuery(query, connState);
     } else {
       return handleUnknownQuery(normalizedQuery, connState);
     }
@@ -892,15 +893,21 @@ function handleListenQuery(query, connState) {
     };
   }
 
-  const result = notificationManager.addListener(
-    connState.connectionId || 'unknown',
-    channel,
-    socket,
-    connState
-  );
-  if (!result.success) {
+  try {
+    const result = notificationManager.addListener(
+      connState.connectionId || 'unknown',
+      channel,
+      socket,
+      connState
+    );
+    if (!result.success) {
+      return {
+        error: ErrorFactory.invalidParameterValue('channel', result.error),
+      };
+    }
+  } catch (error) {
     return {
-      error: ErrorFactory.invalidParameterValue('channel', result.error),
+      error: ErrorFactory.internalError('Notification manager error: ' + error.message),
     };
   }
 
@@ -915,9 +922,10 @@ function handleListenQuery(query, connState) {
  * @returns {QueryResult} Query result
  */
 function handleUnlistenQuery(query, connState) {
-  // Syntax: UNLISTEN channel;  or UNLISTEN *;
+  // Syntax: UNLISTEN channel;  or UNLISTEN *;  or UNLISTEN;
   const star = /^UNLISTEN\s+\*\s*;?$/i.test(query);
   const specific = query.match(/^UNLISTEN\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?$/i);
+  const all = /^UNLISTEN\s*;?$/i.test(query);
 
   const notificationManager =
     connState.getNotificationManager && connState.getNotificationManager();
@@ -925,7 +933,7 @@ function handleUnlistenQuery(query, connState) {
     return { error: ErrorFactory.internalError('Notifications subsystem unavailable') };
   }
 
-  if (star) {
+  if (star || all) {
     // Remove all listeners for this connection
     const channels = connState.getListeningChannels();
     channels.forEach(ch =>
@@ -938,7 +946,7 @@ function handleUnlistenQuery(query, connState) {
   if (!specific) {
     return {
       error: ErrorFactory.syntaxError('invalid UNLISTEN syntax', {
-        hint: 'Use: UNLISTEN channel_name; or UNLISTEN *;',
+        hint: 'Use: UNLISTEN channel_name; or UNLISTEN *; or UNLISTEN;',
       }),
     };
   }
@@ -977,7 +985,13 @@ function handleNotifyQuery(query, connState) {
     return { error: ErrorFactory.internalError('Notifications subsystem unavailable') };
   }
 
-  notificationManager.sendNotification(channel, payload, connState.backendPid);
+  try {
+    notificationManager.sendNotification(channel, payload, connState.backendPid);
+  } catch (error) {
+    return {
+      error: ErrorFactory.internalError('Notification manager error: ' + error.message),
+    };
+  }
   return { command: 'NOTIFY', rowCount: 0 };
 }
 

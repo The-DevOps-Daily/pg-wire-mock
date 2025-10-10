@@ -4,6 +4,7 @@
  */
 
 const { TRANSACTION_STATUS, PROTOCOL_VERSION_3_0 } = require('../protocol/constants');
+const { createLogger } = require('../utils/logger');
 
 const { generateBackendSecret } = require('../protocol/utils');
 
@@ -12,6 +13,9 @@ const { generateBackendSecret } = require('../protocol/utils');
  */
 class ConnectionState {
   constructor() {
+    // Logger for connection state
+    this.logger = createLogger({ component: 'ConnectionState' });
+
     // Authentication state
     this.authenticated = false;
     this.protocolVersion = null;
@@ -63,7 +67,7 @@ class ConnectionState {
     this.authenticated = true;
     this.protocolVersion = protocolVersion;
     this.updateActivity();
-    console.log(`Connection authenticated with protocol version ${protocolVersion}`);
+    this.logger.info(`Connection authenticated with protocol version ${protocolVersion}`);
   }
 
   /**
@@ -74,7 +78,7 @@ class ConnectionState {
   setParameter(name, value) {
     this.parameters.set(name, value);
     this.updateActivity();
-    console.log(`Set connection parameter: ${name} = ${value}`);
+    this.logger.debug(`Set connection parameter: ${name} = ${value}`);
   }
 
   /**
@@ -119,9 +123,9 @@ class ConnectionState {
     if (Object.values(TRANSACTION_STATUS).includes(status)) {
       this.transactionStatus = status;
       this.updateActivity();
-      console.log(`Transaction status changed to: ${status}`);
+      this.logger.debug(`Transaction status changed to: ${status}`);
     } else {
-      console.warn(`Invalid transaction status: ${status}`);
+      this.logger.warn(`Invalid transaction status: ${status}`);
     }
   }
 
@@ -180,7 +184,7 @@ class ConnectionState {
       createdAt: new Date(),
     });
     this.updateActivity();
-    console.log(`Added prepared statement: ${name || '(unnamed)'}`);
+    this.logger.debug(`Added prepared statement: ${name || '(unnamed)'}`);
   }
 
   /**
@@ -201,7 +205,7 @@ class ConnectionState {
     const removed = this.preparedStatements.delete(name);
     if (removed) {
       this.updateActivity();
-      console.log(`Removed prepared statement: ${name || '(unnamed)'}`);
+      this.logger.debug(`Removed prepared statement: ${name || '(unnamed)'}`);
     }
     return removed;
   }
@@ -217,7 +221,7 @@ class ConnectionState {
       createdAt: new Date(),
     });
     this.updateActivity();
-    console.log(`Added portal: ${name || '(unnamed)'}`);
+    this.logger.debug(`Added portal: ${name || '(unnamed)'}`);
   }
 
   /**
@@ -238,7 +242,7 @@ class ConnectionState {
     const removed = this.portals.delete(name);
     if (removed) {
       this.updateActivity();
-      console.log(`Removed portal: ${name || '(unnamed)'}`);
+      this.logger.debug(`Removed portal: ${name || '(unnamed)'}`);
     }
     return removed;
   }
@@ -256,9 +260,8 @@ class ConnectionState {
    * @param {string} channelName - Channel name to listen to
    */
   addListeningChannel(channelName) {
-    this.listeningChannels.add(channelName);
+    this.listeningChannels.add(channelName.toLowerCase());
     this.updateActivity();
-    console.log(`Started listening to channel: ${channelName}`);
   }
 
   /**
@@ -266,10 +269,9 @@ class ConnectionState {
    * @param {string} channelName - Channel name to stop listening to
    */
   removeListeningChannel(channelName) {
-    const removed = this.listeningChannels.delete(channelName);
+    const removed = this.listeningChannels.delete(channelName.toLowerCase());
     if (removed) {
       this.updateActivity();
-      console.log(`Stopped listening to channel: ${channelName}`);
     }
     return removed;
   }
@@ -283,7 +285,6 @@ class ConnectionState {
     this.listeningChannels.clear();
     if (count > 0) {
       this.updateActivity();
-      console.log(`Stopped listening to ${count} channels`);
     }
     return count;
   }
@@ -294,7 +295,7 @@ class ConnectionState {
    * @returns {boolean} True if listening to channel
    */
   isListeningToChannel(channelName) {
-    return this.listeningChannels.has(channelName);
+    return this.listeningChannels.has(channelName.toLowerCase());
   }
 
   /**
@@ -376,9 +377,8 @@ class ConnectionState {
     this.preparedStatements.clear();
     this.portals.clear();
     this.clearAllListeningChannels();
-    console.log(
-      `Connection closed after ${this.getConnectionDuration()}ms,
-      ${this.queriesExecuted} queries executed`
+    this.logger.info(
+      `Connection closed after ${this.getConnectionDuration()}ms, ${this.queriesExecuted} queries executed`
     );
   }
 
@@ -535,14 +535,14 @@ class ConnectionState {
       // Validate state after reset
       const validation = this.validateState();
       if (!validation.isValid) {
-        console.warn('Connection reset failed validation:', validation.errors);
+        this.logger.warn('Connection reset failed validation:', validation.errors);
         return false;
       }
 
-      console.log(`Connection ${this.backendPid} reset for reuse`);
+      this.logger.debug(`Connection ${this.backendPid} reset for reuse`);
       return true;
     } catch (error) {
-      console.error('Error resetting connection for reuse:', error);
+      this.logger.error('Error resetting connection for reuse:', error);
       return false;
     }
   }
@@ -555,6 +555,7 @@ class ConnectionManager {
   constructor() {
     this.connections = new Map();
     this.connectionCount = 0;
+    this.logger = createLogger({ component: 'ConnectionManager' });
   }
 
   /**
@@ -566,7 +567,7 @@ class ConnectionManager {
     const id = connectionId || `conn_${++this.connectionCount}`;
     const connState = new ConnectionState();
     this.connections.set(id, connState);
-    console.log(`Created new connection: ${id}`);
+    this.logger.debug(`Created new connection: ${id}`);
     return connState;
   }
 
@@ -624,7 +625,7 @@ class ConnectionManager {
       }
     }
     if (closedCount > 0) {
-      console.log(`Cleaned up ${closedCount} idle connections`);
+      this.logger.info(`Cleaned up ${closedCount} idle connections`);
     }
     return closedCount;
   }

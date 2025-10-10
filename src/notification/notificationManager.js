@@ -146,6 +146,16 @@ class NotificationManager {
   }
 
   /**
+   * Normalizes a channel name to lowercase for case-insensitive handling
+   * @param {string} channelName - Channel name to normalize
+   * @returns {string} Normalized channel name
+   * @private
+   */
+  normalizeChannelName(channelName) {
+    return channelName ? channelName.toLowerCase() : channelName;
+  }
+
+  /**
    * Validates a channel name according to PostgreSQL rules
    * @param {string} channelName - Channel name to validate
    * @returns {Object} Validation result with isValid and error message
@@ -210,22 +220,28 @@ class NotificationManager {
    * @returns {Object} Result with success status and message
    */
   addListener(connectionId, channelName, socket, connState) {
+    // Normalize channel name to lowercase for case-insensitive handling
+    const normalizedChannelName = this.normalizeChannelName(channelName);
+
     // Validate channel name
-    const channelValidation = this.validateChannelName(channelName);
+    const channelValidation = this.validateChannelName(normalizedChannelName);
     if (!channelValidation.isValid) {
       this.log('warn', 'Invalid channel name', {
         connectionId,
-        channelName,
+        channelName: normalizedChannelName,
         error: channelValidation.error,
       });
       return { success: false, error: channelValidation.error };
     }
 
     // Check if we've hit the channel limit
-    if (this.channels.size >= this.config.maxChannels && !this.channels.has(channelName)) {
+    if (
+      this.channels.size >= this.config.maxChannels &&
+      !this.channels.has(normalizedChannelName)
+    ) {
       this.log('warn', 'Maximum channels limit reached', {
         connectionId,
-        channelName,
+        channelName: normalizedChannelName,
         maxChannels: this.config.maxChannels,
       });
       return {
@@ -235,24 +251,27 @@ class NotificationManager {
     }
 
     // Get or create channel
-    let channel = this.channels.get(channelName);
+    let channel = this.channels.get(normalizedChannelName);
     if (!channel) {
       channel = {
-        name: channelName,
+        name: normalizedChannelName,
         listeners: [],
         createdAt: new Date(),
         notificationCount: 0,
       };
-      this.channels.set(channelName, channel);
+      this.channels.set(normalizedChannelName, channel);
       this.stats.channelsCreated++;
       this.stats.totalChannels = this.channels.size;
-      this.log('info', 'Channel created', { channelName });
+      this.log('info', 'Channel created', { channelName: normalizedChannelName });
     }
 
     // Check if listener already exists
     const existingListener = channel.listeners.find(l => l.connectionId === connectionId);
     if (existingListener) {
-      this.log('debug', 'Listener already exists for connection', { connectionId, channelName });
+      this.log('debug', 'Listener already exists for connection', {
+        connectionId,
+        channelName: normalizedChannelName,
+      });
       return { success: true, message: 'Already listening to channel' };
     }
 
@@ -260,7 +279,7 @@ class NotificationManager {
     if (channel.listeners.length >= this.config.maxListenersPerChannel) {
       this.log('warn', 'Maximum listeners per channel reached', {
         connectionId,
-        channelName,
+        channelName: normalizedChannelName,
         maxListeners: this.config.maxListenersPerChannel,
       });
       return {
@@ -272,7 +291,7 @@ class NotificationManager {
     // Create new listener
     const listener = {
       connectionId,
-      channel: channelName,
+      channel: normalizedChannelName,
       socket,
       connState,
       startedAt: new Date(),
@@ -305,16 +324,23 @@ class NotificationManager {
    * @returns {Object} Result with success status and message
    */
   removeListener(connectionId, channelName) {
-    const channel = this.channels.get(channelName);
+    const normalizedChannelName = this.normalizeChannelName(channelName);
+    const channel = this.channels.get(normalizedChannelName);
     if (!channel) {
-      this.log('debug', 'Channel not found for removal', { connectionId, channelName });
+      this.log('debug', 'Channel not found for removal', {
+        connectionId,
+        channelName: normalizedChannelName,
+      });
       return { success: true, message: 'Not listening to channel' };
     }
 
     // Find and remove listener
     const listenerIndex = channel.listeners.findIndex(l => l.connectionId === connectionId);
     if (listenerIndex === -1) {
-      this.log('debug', 'Listener not found for removal', { connectionId, channelName });
+      this.log('debug', 'Listener not found for removal', {
+        connectionId,
+        channelName: normalizedChannelName,
+      });
       return { success: true, message: 'Not listening to channel' };
     }
 
@@ -326,7 +352,7 @@ class NotificationManager {
     // Remove from connection tracking
     const connectionListeners = this.listeners.get(connectionId);
     if (connectionListeners) {
-      connectionListeners.delete(channelName);
+      connectionListeners.delete(normalizedChannelName);
       if (connectionListeners.size === 0) {
         this.listeners.delete(connectionId);
       }
@@ -334,13 +360,13 @@ class NotificationManager {
 
     this.log('info', 'Listener removed', {
       connectionId,
-      channelName,
+      channelName: normalizedChannelName,
       remainingListeners: channel.listeners.length,
     });
 
     // Schedule channel for cleanup if no listeners remain
     if (channel.listeners.length === 0) {
-      this.channelsToCleanup.add(channelName);
+      this.channelsToCleanup.add(normalizedChannelName);
     }
 
     return { success: true, message: 'Stopped listening to channel' };
@@ -381,19 +407,23 @@ class NotificationManager {
    * @returns {Object} Result with success status and delivery stats
    */
   sendNotification(channelName, payload, senderPid) {
+    const normalizedChannelName = this.normalizeChannelName(channelName);
+
     // Validate payload
     const payloadValidation = this.validatePayload(payload);
     if (!payloadValidation.isValid) {
       this.log('warn', 'Invalid notification payload', {
-        channelName,
+        channelName: normalizedChannelName,
         error: payloadValidation.error,
       });
       return { success: false, error: payloadValidation.error };
     }
 
-    const channel = this.channels.get(channelName);
+    const channel = this.channels.get(normalizedChannelName);
     if (!channel) {
-      this.log('debug', 'Channel not found for notification', { channelName });
+      this.log('debug', 'Channel not found for notification', {
+        channelName: normalizedChannelName,
+      });
       return {
         success: true,
         message: 'No listeners on channel',
@@ -403,7 +433,7 @@ class NotificationManager {
     }
 
     if (channel.listeners.length === 0) {
-      this.log('debug', 'No listeners on channel', { channelName });
+      this.log('debug', 'No listeners on channel', { channelName: normalizedChannelName });
       return {
         success: true,
         message: 'No listeners on channel',
@@ -412,9 +442,7 @@ class NotificationManager {
       };
     }
 
-    // Create notification message (not persisted)
-
-    // Send to all active listeners
+    // Send notifications to all current active listeners
     let deliveredCount = 0;
     let failedCount = 0;
     const activeListeners = channel.listeners.filter(l => l.isActive);
@@ -433,19 +461,19 @@ class NotificationManager {
         sendNotificationResponse(
           listener.socket,
           senderPid,
-          channelName,
+          normalizedChannelName,
           payloadValidation.payload
         );
 
         deliveredCount++;
         this.log('debug', 'Notification delivered', {
-          channelName,
+          channelName: normalizedChannelName,
           connectionId: listener.connectionId,
           payloadLength: payloadValidation.payload.length,
         });
       } catch (error) {
         this.log('warn', 'Failed to deliver notification', {
-          channelName,
+          channelName: normalizedChannelName,
           connectionId: listener.connectionId,
           error: error.message,
         });
@@ -461,7 +489,7 @@ class NotificationManager {
     this.stats.notificationsFailed += failedCount;
 
     this.log('info', 'Notification sent', {
-      channelName,
+      channelName: normalizedChannelName,
       deliveredTo: deliveredCount,
       failedTo: failedCount,
       totalListeners: activeListeners.length,
@@ -498,7 +526,8 @@ class NotificationManager {
    * @returns {Array<NotificationListener>} Array of active listeners
    */
   getListenersForChannel(channelName) {
-    const channel = this.channels.get(channelName);
+    const normalizedChannelName = this.normalizeChannelName(channelName);
+    const channel = this.channels.get(normalizedChannelName);
     return channel ? channel.listeners.filter(l => l.isActive) : [];
   }
 
