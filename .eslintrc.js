@@ -23,7 +23,7 @@ module.exports = {
     'space-before-blocks': 'error',
     'keyword-spacing': 'error',
     'eol-last': ['error', 'always'],
-    'max-len': ['warn', { code: 110, ignoreComments: true }],
+    'max-len': ['warn', { code: 120, ignoreComments: true }],
   },
   ignorePatterns: ['node_modules', 'coverage'],
 };

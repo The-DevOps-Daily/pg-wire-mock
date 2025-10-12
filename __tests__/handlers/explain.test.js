@@ -2,10 +2,7 @@
  * Tests for EXPLAIN query functionality
  */
 
-const {
-  handleExplainQuery,
-  processQuery,
-} = require('../../src/handlers/queryHandlers');
+const { handleExplainQuery, processQuery } = require('../../src/handlers/queryHandlers');
 const { ConnectionState } = require('../../src/connection/connectionState');
 
 describe('EXPLAIN Query Handler', () => {
@@ -27,7 +24,7 @@ describe('EXPLAIN Query Handler', () => {
       expect(result.columns[0].name).toBe('QUERY PLAN');
       expect(result.rows).toBeDefined();
       expect(result.rows.length).toBeGreaterThan(0);
-      
+
       // Check that it contains plan text
       const planText = result.rows.map(row => row[0]).join('\n');
       expect(planText).toContain('Seq Scan');
@@ -41,7 +38,7 @@ describe('EXPLAIN Query Handler', () => {
 
       expect(result.command).toBe('EXPLAIN');
       expect(result.rows).toBeDefined();
-      
+
       const planText = result.rows.map(row => row[0]).join('\n');
       expect(planText).toContain('Result');
       expect(planText).not.toContain('actual time='); // ANALYZE is false
@@ -52,7 +49,7 @@ describe('EXPLAIN Query Handler', () => {
       const result = handleExplainQuery(query, connState);
 
       expect(result.command).toBe('EXPLAIN');
-      
+
       const planText = result.rows.map(row => row[0]).join('\n');
       expect(planText).toContain('actual time=');
       expect(planText).toContain('rows=');
@@ -63,9 +60,9 @@ describe('EXPLAIN Query Handler', () => {
 
     test('should handle different query types', () => {
       const queries = [
-        'EXPLAIN INSERT INTO users (name) VALUES (\'test\')',
-        'EXPLAIN UPDATE users SET name = \'updated\' WHERE id = 1',
-        'EXPLAIN DELETE FROM users WHERE id = 1'
+        "EXPLAIN INSERT INTO users (name) VALUES ('test')",
+        "EXPLAIN UPDATE users SET name = 'updated' WHERE id = 1",
+        'EXPLAIN DELETE FROM users WHERE id = 1',
       ];
 
       queries.forEach(query => {
@@ -83,10 +80,10 @@ describe('EXPLAIN Query Handler', () => {
       const result = handleExplainQuery(query, connState);
 
       expect(result.command).toBe('EXPLAIN');
-      
+
       const jsonText = result.rows.map(row => row[0]).join('\n');
       const parsed = JSON.parse(jsonText);
-      
+
       expect(Array.isArray(parsed)).toBe(true);
       expect(parsed[0]).toHaveProperty('Plan');
       expect(parsed[0].Plan).toHaveProperty('Node Type');
@@ -99,7 +96,7 @@ describe('EXPLAIN Query Handler', () => {
       const result = handleExplainQuery(query, connState);
 
       expect(result.command).toBe('EXPLAIN');
-      
+
       const xmlText = result.rows.map(row => row[0]).join('\n');
       expect(xmlText).toContain('<?xml version="1.0"');
       expect(xmlText).toContain('<explain xmlns=');
@@ -113,7 +110,7 @@ describe('EXPLAIN Query Handler', () => {
       const result = handleExplainQuery(query, connState);
 
       expect(result.command).toBe('EXPLAIN');
-      
+
       const yamlText = result.rows.map(row => row[0]).join('\n');
       expect(yamlText).toContain('- Plan:');
       expect(yamlText).toContain('Node Type:');
@@ -127,7 +124,7 @@ describe('EXPLAIN Query Handler', () => {
 
       const jsonText = result.rows.map(row => row[0]).join('\n');
       const parsed = JSON.parse(jsonText);
-      
+
       expect(parsed[0].Plan).toHaveProperty('Actual Startup Time');
       expect(parsed[0].Plan).toHaveProperty('Actual Total Time');
       expect(parsed[0].Plan).toHaveProperty('Actual Rows');
@@ -147,7 +144,7 @@ describe('EXPLAIN Query Handler', () => {
     });
 
     test('should handle queries with WHERE conditions', () => {
-      const query = 'EXPLAIN SELECT * FROM users WHERE name = \'test\' AND id > 10';
+      const query = "EXPLAIN SELECT * FROM users WHERE name = 'test' AND id > 10";
       const result = handleExplainQuery(query, connState);
 
       const planText = result.rows.map(row => row[0]).join('\n');
@@ -164,7 +161,7 @@ describe('EXPLAIN Query Handler', () => {
     });
 
     test('should handle complex UPDATE with WHERE', () => {
-      const query = 'EXPLAIN ANALYZE UPDATE users SET name = \'new\' WHERE id IN (1,2,3)';
+      const query = "EXPLAIN ANALYZE UPDATE users SET name = 'new' WHERE id IN (1,2,3)";
       const result = handleExplainQuery(query, connState);
 
       const planText = result.rows.map(row => row[0]).join('\n');
@@ -178,7 +175,7 @@ describe('EXPLAIN Query Handler', () => {
   describe('Error handling', () => {
     test('should handle invalid format', () => {
       const query = 'EXPLAIN (FORMAT INVALID) SELECT 1';
-      
+
       expect(() => {
         handleExplainQuery(query, connState);
       }).toThrow();
@@ -186,7 +183,7 @@ describe('EXPLAIN Query Handler', () => {
 
     test('should handle empty EXPLAIN', () => {
       const query = 'EXPLAIN';
-      
+
       expect(() => {
         handleExplainQuery(query, connState);
       }).toThrow();
@@ -194,7 +191,7 @@ describe('EXPLAIN Query Handler', () => {
 
     test('should handle EXPLAIN with only whitespace', () => {
       const query = 'EXPLAIN   ';
-      
+
       expect(() => {
         handleExplainQuery(query, connState);
       }).toThrow();
@@ -204,7 +201,7 @@ describe('EXPLAIN Query Handler', () => {
       // Test that EXPLAIN can handle unknown queries gracefully
       const query = 'EXPLAIN INVALID SYNTAX QUERY';
       const result = handleExplainQuery(query, connState);
-      
+
       // Should return a result (mock server handles unknown queries)
       expect(result.command).toBe('EXPLAIN');
       expect(result.rows).toBeDefined();
@@ -253,7 +250,7 @@ describe('EXPLAIN Query Handler', () => {
       const queries = [
         'EXPLAIN SELECT 1',
         'EXPLAIN (FORMAT JSON) SELECT 1',
-        'EXPLAIN ANALYZE SELECT 1'
+        'EXPLAIN ANALYZE SELECT 1',
       ];
 
       queries.forEach(query => {
@@ -272,11 +269,11 @@ describe('EXPLAIN Query Handler', () => {
 
       const planText = result.rows.map(row => row[0]).join('\n');
       const costMatch = planText.match(/cost=(\d+\.\d+)\.\.(\d+\.\d+)/);
-      
+
       expect(costMatch).toBeTruthy();
       const startupCost = parseFloat(costMatch[1]);
       const totalCost = parseFloat(costMatch[2]);
-      
+
       expect(startupCost).toBeGreaterThanOrEqual(0);
       expect(totalCost).toBeGreaterThanOrEqual(startupCost);
     });
@@ -287,7 +284,7 @@ describe('EXPLAIN Query Handler', () => {
 
       const planText = result.rows.map(row => row[0]).join('\n');
       const rowMatch = planText.match(/rows=(\d+)/);
-      
+
       expect(rowMatch).toBeTruthy();
       const rows = parseInt(rowMatch[1]);
       expect(rows).toBeGreaterThan(0);
