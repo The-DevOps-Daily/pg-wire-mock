@@ -1278,7 +1278,7 @@ function handlePgClass(_query, _connState) {
 function handleExplainQuery(query, connState) {
   // Parse EXPLAIN options and inner query
   const explainInfo = parseExplainQuery(query);
-  
+
   if (explainInfo.error) {
     throw ErrorFactory.createSyntaxError(explainInfo.error);
   }
@@ -1287,7 +1287,7 @@ function handleExplainQuery(query, connState) {
   try {
     // Get the inner query result to understand structure
     innerResult = processQuery(explainInfo.innerQuery, connState);
-    
+
     // If inner query has error, propagate it
     if (innerResult.error) {
       return innerResult;
@@ -1299,7 +1299,7 @@ function handleExplainQuery(query, connState) {
 
   // Generate mock execution plan
   const plan = generateMockExecutionPlan(explainInfo, innerResult);
-  
+
   // Format the plan according to specified format
   const formattedPlan = formatExplainOutput(plan, explainInfo.format, explainInfo.analyze);
 
@@ -1324,22 +1324,22 @@ function handleExplainQuery(query, connState) {
  */
 function parseExplainQuery(query) {
   const normalizedQuery = query.trim();
-  
+
   // Enhanced EXPLAIN parsing regex to handle ANALYZE keyword
   let explainMatch = normalizedQuery.match(/^EXPLAIN\s+ANALYZE\s+(.*)/i);
   let isAnalyze = false;
-  
+
   if (explainMatch) {
     isAnalyze = true;
   } else {
     explainMatch = normalizedQuery.match(/^EXPLAIN\s*(?:\((.*?)\))?\s*(.*)/i);
   }
-  
+
   if (!explainMatch) {
     return { error: 'Invalid EXPLAIN syntax' };
   }
 
-  const optionsStr = isAnalyze ? '' : (explainMatch[1] || '');
+  const optionsStr = isAnalyze ? '' : explainMatch[1] || '';
   const innerQuery = explainMatch[isAnalyze ? 1 : 2];
 
   if (!innerQuery.trim()) {
@@ -1353,15 +1353,15 @@ function parseExplainQuery(query) {
     costs: true,
     buffers: false,
     timing: true,
-    format: 'TEXT'
+    format: 'TEXT',
   };
 
   if (optionsStr) {
     const optionPairs = optionsStr.split(',').map(opt => opt.trim());
-    
+
     for (const optionPair of optionPairs) {
       const [key, value] = optionPair.split(/\s+/).map(s => s.trim().toUpperCase());
-      
+
       switch (key) {
         case 'ANALYZE':
           options.analyze = value !== 'FALSE';
@@ -1395,7 +1395,7 @@ function parseExplainQuery(query) {
     costs: options.costs,
     buffers: options.buffers,
     timing: options.timing,
-    format: options.format
+    format: options.format,
   };
 }
 
@@ -1407,10 +1407,10 @@ function parseExplainQuery(query) {
  */
 function generateMockExecutionPlan(explainInfo, innerResult) {
   const innerQuery = explainInfo.innerQuery.toUpperCase();
-  
+
   // Generate plan nodes based on query type
   let planNodes = [];
-  
+
   if (innerQuery.startsWith('SELECT')) {
     planNodes = generateSelectPlan(innerQuery, innerResult, explainInfo);
   } else if (innerQuery.startsWith('INSERT')) {
@@ -1421,23 +1421,25 @@ function generateMockExecutionPlan(explainInfo, innerResult) {
     planNodes = generateDeletePlan(innerQuery, innerResult, explainInfo);
   } else {
     // Generic plan for other queries
-    planNodes = [{
-      nodeType: 'Result',
-      startupCost: 0.00,
-      totalCost: 0.01,
-      planRows: 1,
-      planWidth: 0,
-      actualStartupTime: explainInfo.analyze ? 0.001 : null,
-      actualTotalTime: explainInfo.analyze ? 0.002 : null,
-      actualRows: explainInfo.analyze ? 1 : null,
-      actualLoops: explainInfo.analyze ? 1 : null
-    }];
+    planNodes = [
+      {
+        nodeType: 'Result',
+        startupCost: 0.0,
+        totalCost: 0.01,
+        planRows: 1,
+        planWidth: 0,
+        actualStartupTime: explainInfo.analyze ? 0.001 : null,
+        actualTotalTime: explainInfo.analyze ? 0.002 : null,
+        actualRows: explainInfo.analyze ? 1 : null,
+        actualLoops: explainInfo.analyze ? 1 : null,
+      },
+    ];
   }
 
   return {
     nodes: planNodes,
     planningTime: explainInfo.analyze ? (Math.random() * 0.5 + 0.1).toFixed(3) : null,
-    executionTime: explainInfo.analyze ? (Math.random() * 5 + 1).toFixed(3) : null
+    executionTime: explainInfo.analyze ? (Math.random() * 5 + 1).toFixed(3) : null,
   };
 }
 
@@ -1448,34 +1450,36 @@ function generateSelectPlan(query, result, explainInfo) {
   const hasWhere = query.includes('WHERE');
   const hasJoin = query.includes('JOIN');
   const hasOrderBy = query.includes('ORDER BY');
-  
+
   // Handle simple queries like SELECT 1
   if (query.match(/SELECT\s+\d+/i) || query.match(/SELECT\s+\d+\s*;?\s*$/i)) {
-    return [{
-      nodeType: 'Result',
-      startupCost: 0.00,
-      totalCost: 0.01,
-      planRows: 1,
-      planWidth: 4,
-      actualStartupTime: explainInfo.analyze ? 0.001 : null,
-      actualTotalTime: explainInfo.analyze ? 0.002 : null,
-      actualRows: explainInfo.analyze ? 1 : null,
-      actualLoops: explainInfo.analyze ? 1 : null
-    }];
+    return [
+      {
+        nodeType: 'Result',
+        startupCost: 0.0,
+        totalCost: 0.01,
+        planRows: 1,
+        planWidth: 4,
+        actualStartupTime: explainInfo.analyze ? 0.001 : null,
+        actualTotalTime: explainInfo.analyze ? 0.002 : null,
+        actualRows: explainInfo.analyze ? 1 : null,
+        actualLoops: explainInfo.analyze ? 1 : null,
+      },
+    ];
   }
-  
+
   const estimatedRows = result.rowCount || 1000;
   const estimatedWidth = 100; // Average row width estimate
-  
+
   let nodes = [];
-  
+
   if (hasJoin) {
     // Hash Join example
     nodes.push({
       nodeType: 'Hash Join',
       joinType: 'Inner',
-      startupCost: 15.00,
-      totalCost: 45.50,
+      startupCost: 15.0,
+      totalCost: 45.5,
       planRows: estimatedRows,
       planWidth: estimatedWidth,
       actualStartupTime: explainInfo.analyze ? 0.123 : null,
@@ -1487,69 +1491,71 @@ function generateSelectPlan(query, result, explainInfo) {
         {
           nodeType: 'Seq Scan',
           relationName: 'users',
-          startupCost: 0.00,
-          totalCost: 15.00,
+          startupCost: 0.0,
+          totalCost: 15.0,
           planRows: 100,
           planWidth: 50,
           actualStartupTime: explainInfo.analyze ? 0.012 : null,
           actualTotalTime: explainInfo.analyze ? 0.891 : null,
           actualRows: explainInfo.analyze ? 100 : null,
-          actualLoops: explainInfo.analyze ? 1 : null
+          actualLoops: explainInfo.analyze ? 1 : null,
         },
         {
           nodeType: 'Hash',
-          startupCost: 12.50,
-          totalCost: 12.50,
+          startupCost: 12.5,
+          totalCost: 12.5,
           planRows: 500,
           planWidth: 50,
           actualStartupTime: explainInfo.analyze ? 0.045 : null,
           actualTotalTime: explainInfo.analyze ? 0.045 : null,
           actualRows: explainInfo.analyze ? 500 : null,
           actualLoops: explainInfo.analyze ? 1 : null,
-          children: [{
-            nodeType: 'Seq Scan',
-            relationName: 'posts',
-            startupCost: 0.00,
-            totalCost: 12.50,
-            planRows: 500,
-            planWidth: 50,
-            actualStartupTime: explainInfo.analyze ? 0.001 : null,
-            actualTotalTime: explainInfo.analyze ? 0.234 : null,
-            actualRows: explainInfo.analyze ? 500 : null,
-            actualLoops: explainInfo.analyze ? 1 : null
-          }]
-        }
-      ]
+          children: [
+            {
+              nodeType: 'Seq Scan',
+              relationName: 'posts',
+              startupCost: 0.0,
+              totalCost: 12.5,
+              planRows: 500,
+              planWidth: 50,
+              actualStartupTime: explainInfo.analyze ? 0.001 : null,
+              actualTotalTime: explainInfo.analyze ? 0.234 : null,
+              actualRows: explainInfo.analyze ? 500 : null,
+              actualLoops: explainInfo.analyze ? 1 : null,
+            },
+          ],
+        },
+      ],
     });
   } else {
     // Simple sequential scan
     const node = {
       nodeType: 'Seq Scan',
       relationName: extractTableName(query) || 'table',
-      startupCost: 0.00,
+      startupCost: 0.0,
       totalCost: (estimatedRows * 0.01 + 5).toFixed(2),
       planRows: estimatedRows,
       planWidth: estimatedWidth,
       actualStartupTime: explainInfo.analyze ? 0.012 : null,
       actualTotalTime: explainInfo.analyze ? (estimatedRows * 0.001 + 0.5).toFixed(3) : null,
       actualRows: explainInfo.analyze ? estimatedRows : null,
-      actualLoops: explainInfo.analyze ? 1 : null
+      actualLoops: explainInfo.analyze ? 1 : null,
     };
-    
+
     if (hasWhere) {
       node.filter = extractWhereCondition(query) || '(condition)';
       node.rowsRemovedByFilter = explainInfo.analyze ? Math.floor(estimatedRows * 0.1) : null;
     }
-    
+
     nodes.push(node);
   }
-  
+
   // Add sort node if ORDER BY
   if (hasOrderBy) {
     const sortNode = {
       nodeType: 'Sort',
-      startupCost: nodes[0].totalCost + 5.00,
-      totalCost: nodes[0].totalCost + 10.00,
+      startupCost: nodes[0].totalCost + 5.0,
+      totalCost: nodes[0].totalCost + 10.0,
       planRows: estimatedRows,
       planWidth: estimatedWidth,
       actualStartupTime: explainInfo.analyze ? 1.234 : null,
@@ -1559,11 +1565,11 @@ function generateSelectPlan(query, result, explainInfo) {
       sortKey: extractOrderByColumns(query) || 'column',
       sortMethod: 'quicksort',
       sortSpaceUsed: explainInfo.analyze ? Math.floor(estimatedRows / 10) : null,
-      children: nodes
+      children: nodes,
     };
     nodes = [sortNode];
   }
-  
+
   return nodes;
 }
 
@@ -1571,29 +1577,33 @@ function generateSelectPlan(query, result, explainInfo) {
  * Generates execution plan for INSERT queries
  */
 function generateInsertPlan(query, result, explainInfo) {
-  return [{
-    nodeType: 'Insert',
-    relationName: extractTableName(query) || 'table',
-    startupCost: 0.00,
-    totalCost: 0.01,
-    planRows: 0,
-    planWidth: 0,
-    actualStartupTime: explainInfo.analyze ? 0.001 : null,
-    actualTotalTime: explainInfo.analyze ? 0.234 : null,
-    actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
-    actualLoops: explainInfo.analyze ? 1 : null,
-    children: [{
-      nodeType: 'Result',
-      startupCost: 0.00,
+  return [
+    {
+      nodeType: 'Insert',
+      relationName: extractTableName(query) || 'table',
+      startupCost: 0.0,
       totalCost: 0.01,
-      planRows: 1,
-      planWidth: 32,
+      planRows: 0,
+      planWidth: 0,
       actualStartupTime: explainInfo.analyze ? 0.001 : null,
-      actualTotalTime: explainInfo.analyze ? 0.001 : null,
-      actualRows: explainInfo.analyze ? 1 : null,
-      actualLoops: explainInfo.analyze ? 1 : null
-    }]
-  }];
+      actualTotalTime: explainInfo.analyze ? 0.234 : null,
+      actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
+      actualLoops: explainInfo.analyze ? 1 : null,
+      children: [
+        {
+          nodeType: 'Result',
+          startupCost: 0.0,
+          totalCost: 0.01,
+          planRows: 1,
+          planWidth: 32,
+          actualStartupTime: explainInfo.analyze ? 0.001 : null,
+          actualTotalTime: explainInfo.analyze ? 0.001 : null,
+          actualRows: explainInfo.analyze ? 1 : null,
+          actualLoops: explainInfo.analyze ? 1 : null,
+        },
+      ],
+    },
+  ];
 }
 
 /**
@@ -1602,42 +1612,50 @@ function generateInsertPlan(query, result, explainInfo) {
 function generateUpdatePlan(query, result, explainInfo) {
   const hasWhere = query.includes('WHERE');
   const estimatedRows = result.rowCount || 100;
-  
-  return [{
-    nodeType: 'Update',
-    relationName: extractTableName(query) || 'table',
-    startupCost: hasWhere ? 15.00 : 0.00,
-    totalCost: hasWhere ? 25.50 : 0.01,
-    planRows: 0,
-    planWidth: 0,
-    actualStartupTime: explainInfo.analyze ? 0.123 : null,
-    actualTotalTime: explainInfo.analyze ? 1.234 : null,
-    actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
-    actualLoops: explainInfo.analyze ? 1 : null,
-    children: hasWhere ? [{
-      nodeType: 'Seq Scan',
+
+  return [
+    {
+      nodeType: 'Update',
       relationName: extractTableName(query) || 'table',
-      startupCost: 0.00,
-      totalCost: 15.00,
-      planRows: estimatedRows,
-      planWidth: 100,
-      filter: extractWhereCondition(query) || '(condition)',
-      actualStartupTime: explainInfo.analyze ? 0.012 : null,
-      actualTotalTime: explainInfo.analyze ? 0.891 : null,
+      startupCost: hasWhere ? 15.0 : 0.0,
+      totalCost: hasWhere ? 25.5 : 0.01,
+      planRows: 0,
+      planWidth: 0,
+      actualStartupTime: explainInfo.analyze ? 0.123 : null,
+      actualTotalTime: explainInfo.analyze ? 1.234 : null,
       actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
-      actualLoops: explainInfo.analyze ? 1 : null
-    }] : [{
-      nodeType: 'Result',
-      startupCost: 0.00,
-      totalCost: 0.01,
-      planRows: 1,
-      planWidth: 32,
-      actualStartupTime: explainInfo.analyze ? 0.001 : null,
-      actualTotalTime: explainInfo.analyze ? 0.001 : null,
-      actualRows: explainInfo.analyze ? 1 : null,
-      actualLoops: explainInfo.analyze ? 1 : null
-    }]
-  }];
+      actualLoops: explainInfo.analyze ? 1 : null,
+      children: hasWhere
+        ? [
+          {
+            nodeType: 'Seq Scan',
+            relationName: extractTableName(query) || 'table',
+            startupCost: 0.0,
+            totalCost: 15.0,
+            planRows: estimatedRows,
+            planWidth: 100,
+            filter: extractWhereCondition(query) || '(condition)',
+            actualStartupTime: explainInfo.analyze ? 0.012 : null,
+            actualTotalTime: explainInfo.analyze ? 0.891 : null,
+            actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
+            actualLoops: explainInfo.analyze ? 1 : null,
+          },
+        ]
+        : [
+          {
+            nodeType: 'Result',
+            startupCost: 0.0,
+            totalCost: 0.01,
+            planRows: 1,
+            planWidth: 32,
+            actualStartupTime: explainInfo.analyze ? 0.001 : null,
+            actualTotalTime: explainInfo.analyze ? 0.001 : null,
+            actualRows: explainInfo.analyze ? 1 : null,
+            actualLoops: explainInfo.analyze ? 1 : null,
+          },
+        ],
+    },
+  ];
 }
 
 /**
@@ -1646,32 +1664,38 @@ function generateUpdatePlan(query, result, explainInfo) {
 function generateDeletePlan(query, result, explainInfo) {
   const hasWhere = query.includes('WHERE');
   const estimatedRows = result.rowCount || 100;
-  
-  return [{
-    nodeType: 'Delete',
-    relationName: extractTableName(query) || 'table',
-    startupCost: hasWhere ? 15.00 : 0.00,
-    totalCost: hasWhere ? 25.50 : 0.01,
-    planRows: 0,
-    planWidth: 0,
-    actualStartupTime: explainInfo.analyze ? 0.123 : null,
-    actualTotalTime: explainInfo.analyze ? 1.234 : null,
-    actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
-    actualLoops: explainInfo.analyze ? 1 : null,
-    children: hasWhere ? [{
-      nodeType: 'Seq Scan',
+
+  return [
+    {
+      nodeType: 'Delete',
       relationName: extractTableName(query) || 'table',
-      startupCost: 0.00,
-      totalCost: 15.00,
-      planRows: estimatedRows,
-      planWidth: 6,
-      filter: extractWhereCondition(query) || '(condition)',
-      actualStartupTime: explainInfo.analyze ? 0.012 : null,
-      actualTotalTime: explainInfo.analyze ? 0.891 : null,
+      startupCost: hasWhere ? 15.0 : 0.0,
+      totalCost: hasWhere ? 25.5 : 0.01,
+      planRows: 0,
+      planWidth: 0,
+      actualStartupTime: explainInfo.analyze ? 0.123 : null,
+      actualTotalTime: explainInfo.analyze ? 1.234 : null,
       actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
-      actualLoops: explainInfo.analyze ? 1 : null
-    }] : null
-  }];
+      actualLoops: explainInfo.analyze ? 1 : null,
+      children: hasWhere
+        ? [
+          {
+            nodeType: 'Seq Scan',
+            relationName: extractTableName(query) || 'table',
+            startupCost: 0.0,
+            totalCost: 15.0,
+            planRows: estimatedRows,
+            planWidth: 6,
+            filter: extractWhereCondition(query) || '(condition)',
+            actualStartupTime: explainInfo.analyze ? 0.012 : null,
+            actualTotalTime: explainInfo.analyze ? 0.891 : null,
+            actualRows: explainInfo.analyze ? result.rowCount || 1 : null,
+            actualLoops: explainInfo.analyze ? 1 : null,
+          },
+        ]
+        : null,
+    },
+  ];
 }
 
 /**
@@ -1699,40 +1723,47 @@ function formatExplainOutput(plan, format, analyze) {
  */
 function formatPlanAsText(plan, analyze) {
   let output = [];
-  
+
   function formatNode(node, level = 0) {
     const indent = '  '.repeat(level);
     let line = indent;
-    
+
     if (level > 0) {
       line += '->  ';
     }
-    
+
     line += node.nodeType;
-    
+
     if (node.relationName) {
       line += ` on ${node.relationName}`;
     }
-    
+
     if (node.joinType) {
       line += ` (${node.joinType})`;
     }
-    
-    const startupCost = typeof node.startupCost === 'number' ? node.startupCost.toFixed(2) : node.startupCost;
-    const totalCost = typeof node.totalCost === 'number' ? node.totalCost.toFixed(2) : node.totalCost;
+
+    const startupCost =
+      typeof node.startupCost === 'number' ? node.startupCost.toFixed(2) : node.startupCost;
+    const totalCost =
+      typeof node.totalCost === 'number' ? node.totalCost.toFixed(2) : node.totalCost;
     line += `  (cost=${startupCost}..${totalCost} rows=${node.planRows} width=${node.planWidth})`;
-    
+
     if (analyze && node.actualStartupTime !== null) {
-      const actualStartup = typeof node.actualStartupTime === 'number' ?
-        node.actualStartupTime.toFixed(3) : node.actualStartupTime;
-      const actualTotal = typeof node.actualTotalTime === 'number' ?
-        node.actualTotalTime.toFixed(3) : node.actualTotalTime;
-      line += ` (actual time=${actualStartup}..${actualTotal}` +
-              ` rows=${node.actualRows} loops=${node.actualLoops})`;
+      const actualStartup =
+        typeof node.actualStartupTime === 'number'
+          ? node.actualStartupTime.toFixed(3)
+          : node.actualStartupTime;
+      const actualTotal =
+        typeof node.actualTotalTime === 'number'
+          ? node.actualTotalTime.toFixed(3)
+          : node.actualTotalTime;
+      line +=
+        ` (actual time=${actualStartup}..${actualTotal}` +
+        ` rows=${node.actualRows} loops=${node.actualLoops})`;
     }
-    
+
     output.push(line);
-    
+
     if (node.filter) {
       output.push(indent + (level > 0 ? '    ' : '') + `Filter: ${node.filter}`);
       if (analyze && node.rowsRemovedByFilter) {
@@ -1740,11 +1771,11 @@ function formatPlanAsText(plan, analyze) {
         output.push(indent + (level > 0 ? '    ' : '') + filterMsg);
       }
     }
-    
+
     if (node.hashCondition) {
       output.push(indent + (level > 0 ? '    ' : '') + `Hash Cond: ${node.hashCondition}`);
     }
-    
+
     if (node.sortKey) {
       output.push(indent + (level > 0 ? '    ' : '') + `Sort Key: ${node.sortKey}`);
       if (analyze && node.sortMethod) {
@@ -1752,18 +1783,18 @@ function formatPlanAsText(plan, analyze) {
         output.push(indent + (level > 0 ? '    ' : '') + sortMsg);
       }
     }
-    
+
     if (node.children) {
       for (const child of node.children) {
         formatNode(child, level + 1);
       }
     }
   }
-  
+
   for (const node of plan.nodes) {
     formatNode(node);
   }
-  
+
   if (analyze) {
     if (plan.planningTime) {
       output.push(`Planning Time: ${plan.planningTime} ms`);
@@ -1772,7 +1803,7 @@ function formatPlanAsText(plan, analyze) {
       output.push(`Execution Time: ${plan.executionTime} ms`);
     }
   }
-  
+
   return output.join('\n');
 }
 
@@ -1786,35 +1817,35 @@ function formatPlanAsJSON(plan, analyze) {
       'Startup Cost': parseFloat(node.startupCost),
       'Total Cost': parseFloat(node.totalCost),
       'Plan Rows': node.planRows,
-      'Plan Width': node.planWidth
+      'Plan Width': node.planWidth,
     };
-    
+
     if (node.relationName) {
       result['Relation Name'] = node.relationName;
     }
-    
+
     if (node.joinType) {
       result['Join Type'] = node.joinType;
     }
-    
+
     if (analyze && node.actualStartupTime !== null) {
       result['Actual Startup Time'] = parseFloat(node.actualStartupTime);
       result['Actual Total Time'] = parseFloat(node.actualTotalTime);
       result['Actual Rows'] = node.actualRows;
       result['Actual Loops'] = node.actualLoops;
     }
-    
+
     if (node.filter) {
       result['Filter'] = node.filter;
       if (analyze && node.rowsRemovedByFilter) {
         result['Rows Removed by Filter'] = node.rowsRemovedByFilter;
       }
     }
-    
+
     if (node.hashCondition) {
       result['Hash Cond'] = node.hashCondition;
     }
-    
+
     if (node.sortKey) {
       result['Sort Key'] = [node.sortKey];
       if (analyze && node.sortMethod) {
@@ -1823,18 +1854,18 @@ function formatPlanAsJSON(plan, analyze) {
         result['Sort Space Type'] = 'Memory';
       }
     }
-    
+
     if (node.children && node.children.length > 0) {
       result['Plans'] = node.children.map(convertNode);
     }
-    
+
     return result;
   }
-  
+
   const jsonPlan = {
-    'Plan': convertNode(plan.nodes[0])
+    Plan: convertNode(plan.nodes[0]),
   };
-  
+
   if (analyze) {
     if (plan.planningTime) {
       jsonPlan['Planning Time'] = parseFloat(plan.planningTime);
@@ -1843,7 +1874,7 @@ function formatPlanAsJSON(plan, analyze) {
       jsonPlan['Execution Time'] = parseFloat(plan.executionTime);
     }
   }
-  
+
   return JSON.stringify([jsonPlan], null, 2);
 }
 
@@ -1854,39 +1885,39 @@ function formatPlanAsXML(plan, analyze) {
   function convertNode(node, level = 1) {
     const indent = '  '.repeat(level);
     let xml = `${indent}<Plan>\n`;
-    
+
     xml += `${indent}  <Node-Type>${node.nodeType}</Node-Type>\n`;
     xml += `${indent}  <Startup-Cost>${node.startupCost}</Startup-Cost>\n`;
     xml += `${indent}  <Total-Cost>${node.totalCost}</Total-Cost>\n`;
     xml += `${indent}  <Plan-Rows>${node.planRows}</Plan-Rows>\n`;
     xml += `${indent}  <Plan-Width>${node.planWidth}</Plan-Width>\n`;
-    
+
     if (node.relationName) {
       xml += `${indent}  <Relation-Name>${node.relationName}</Relation-Name>\n`;
     }
-    
+
     if (node.joinType) {
       xml += `${indent}  <Join-Type>${node.joinType}</Join-Type>\n`;
     }
-    
+
     if (analyze && node.actualStartupTime !== null) {
       xml += `${indent}  <Actual-Startup-Time>${node.actualStartupTime}</Actual-Startup-Time>\n`;
       xml += `${indent}  <Actual-Total-Time>${node.actualTotalTime}</Actual-Total-Time>\n`;
       xml += `${indent}  <Actual-Rows>${node.actualRows}</Actual-Rows>\n`;
       xml += `${indent}  <Actual-Loops>${node.actualLoops}</Actual-Loops>\n`;
     }
-    
+
     if (node.filter) {
       xml += `${indent}  <Filter>${node.filter}</Filter>\n`;
       if (analyze && node.rowsRemovedByFilter) {
         xml += `${indent}  <Rows-Removed-by-Filter>${node.rowsRemovedByFilter}</Rows-Removed-by-Filter>\n`;
       }
     }
-    
+
     if (node.hashCondition) {
       xml += `${indent}  <Hash-Cond>${node.hashCondition}</Hash-Cond>\n`;
     }
-    
+
     if (node.sortKey) {
       xml += `${indent}  <Sort-Key>\n${indent}    <Item>${node.sortKey}</Item>\n${indent}  </Sort-Key>\n`;
       if (analyze && node.sortMethod) {
@@ -1895,7 +1926,7 @@ function formatPlanAsXML(plan, analyze) {
         xml += `${indent}  <Sort-Space-Type>Memory</Sort-Space-Type>\n`;
       }
     }
-    
+
     if (node.children && node.children.length > 0) {
       xml += `${indent}  <Plans>\n`;
       for (const child of node.children) {
@@ -1903,16 +1934,17 @@ function formatPlanAsXML(plan, analyze) {
       }
       xml += `${indent}  </Plans>\n`;
     }
-    
+
     xml += `${indent}</Plan>\n`;
     return xml;
   }
-  
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<explain xmlns="http://www.postgresql.org/2009/explain">\n';
+
+  let xml =
+    '<?xml version="1.0" encoding="UTF-8"?>\n<explain xmlns="http://www.postgresql.org/2009/explain">\n';
   xml += '  <Query>\n';
   xml += convertNode(plan.nodes[0], 2);
   xml += '  </Query>\n';
-  
+
   if (analyze) {
     if (plan.planningTime) {
       xml += `  <Planning-Time>${plan.planningTime}</Planning-Time>\n`;
@@ -1921,7 +1953,7 @@ function formatPlanAsXML(plan, analyze) {
       xml += `  <Execution-Time>${plan.executionTime}</Execution-Time>\n`;
     }
   }
-  
+
   xml += '</explain>';
   return xml;
 }
@@ -1937,33 +1969,33 @@ function formatPlanAsYAML(plan, analyze) {
     yaml += `${indent}  Total Cost: ${node.totalCost}\n`;
     yaml += `${indent}  Plan Rows: ${node.planRows}\n`;
     yaml += `${indent}  Plan Width: ${node.planWidth}\n`;
-    
+
     if (node.relationName) {
       yaml += `${indent}  Relation Name: "${node.relationName}"\n`;
     }
-    
+
     if (node.joinType) {
       yaml += `${indent}  Join Type: "${node.joinType}"\n`;
     }
-    
+
     if (analyze && node.actualStartupTime !== null) {
       yaml += `${indent}  Actual Startup Time: ${node.actualStartupTime}\n`;
       yaml += `${indent}  Actual Total Time: ${node.actualTotalTime}\n`;
       yaml += `${indent}  Actual Rows: ${node.actualRows}\n`;
       yaml += `${indent}  Actual Loops: ${node.actualLoops}\n`;
     }
-    
+
     if (node.filter) {
       yaml += `${indent}  Filter: "${node.filter}"\n`;
       if (analyze && node.rowsRemovedByFilter) {
         yaml += `${indent}  Rows Removed by Filter: ${node.rowsRemovedByFilter}\n`;
       }
     }
-    
+
     if (node.hashCondition) {
       yaml += `${indent}  Hash Cond: "${node.hashCondition}"\n`;
     }
-    
+
     if (node.sortKey) {
       yaml += `${indent}  Sort Key:\n${indent}    - "${node.sortKey}"\n`;
       if (analyze && node.sortMethod) {
@@ -1972,20 +2004,20 @@ function formatPlanAsYAML(plan, analyze) {
         yaml += `${indent}  Sort Space Type: "Memory"\n`;
       }
     }
-    
+
     if (node.children && node.children.length > 0) {
       yaml += `${indent}  Plans:\n`;
       for (const child of node.children) {
         yaml += convertNode(child, level + 2);
       }
     }
-    
+
     return yaml;
   }
-  
+
   let yaml = '- Plan:\n';
   yaml += convertNode(plan.nodes[0], 1);
-  
+
   if (analyze) {
     if (plan.planningTime) {
       yaml += `  Planning Time: ${plan.planningTime}\n`;
@@ -1994,7 +2026,7 @@ function formatPlanAsYAML(plan, analyze) {
       yaml += `  Execution Time: ${plan.executionTime}\n`;
     }
   }
-  
+
   return yaml;
 }
 
@@ -2007,16 +2039,16 @@ function extractTableName(query) {
     /FROM\s+([^\s,;]+)/i,
     /UPDATE\s+([^\s,;]+)/i,
     /INSERT\s+INTO\s+([^\s,;(]+)/i,
-    /DELETE\s+FROM\s+([^\s,;]+)/i
+    /DELETE\s+FROM\s+([^\s,;]+)/i,
   ];
-  
+
   for (const pattern of patterns) {
     const match = query.match(pattern);
     if (match) {
       return match[1].replace(/["`]/g, ''); // Remove quotes
     }
   }
-  
+
   return null;
 }
 
