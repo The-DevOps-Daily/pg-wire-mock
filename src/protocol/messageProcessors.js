@@ -891,7 +891,7 @@ function processPasswordMessage(buffer, socket, connState, config = {}) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed
  */
-function processCopyData(buffer, _socket, _connState) {
+function processCopyData(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
 
   // Extract copy data
@@ -899,10 +899,184 @@ function processCopyData(buffer, _socket, _connState) {
 
   console.log(`Copy data received: ${data.length} bytes`);
 
-  // In a real implementation, we'd process the copy data
-  // For now, just acknowledge receipt
+  // Get copy state
+  const copyState = connState.getCopyState();
+  if (!copyState) {
+    console.error('Received COPY data but no COPY operation in progress');
+    return length + 1;
+  }
+
+  try {
+    // Process the copy data based on format
+    if (copyState.binary) {
+      processCopyDataBinary(data, copyState, connState);
+    } else {
+      processCopyDataText(data, copyState, connState);
+    }
+
+    // Update statistics
+    connState.updateCopyStats(data.length, 0); // Rows will be counted during parsing
+
+  } catch (error) {
+    console.error('Error processing COPY data:', error.message);
+    
+    const { sendErrorResponse } = require('./messageBuilders');
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.DATA_EXCEPTION,
+      `COPY data processing failed: ${error.message}`
+    );
+  }
 
   return length + 1;
+}
+
+/**
+ * Processes binary COPY data
+ * @param {Buffer} data - Binary data buffer
+ * @param {Object} copyState - COPY operation state
+ * @param {ConnectionState} connState - Connection state
+ */
+function processCopyDataBinary(data, copyState, connState) {
+  // Binary format processing
+  let offset = 0;
+  let rowCount = 0;
+
+  // Skip binary header if this is the first chunk
+  if (!copyState.headerProcessed) {
+    // Check for PGCOPY signature
+    const signature = data.slice(0, 11).toString('binary');
+    if (signature === 'PGCOPY\n\xff\r\n\0') {
+      offset = 15; // Skip signature + flags + extension length
+      copyState.headerProcessed = true;
+    }
+  }
+
+  // Process data rows
+  while (offset < data.length - 2) { // -2 for potential end marker
+    // Check for end marker
+    const fieldCount = data.readInt16BE(offset);
+    if (fieldCount === -1) {
+      // End of data marker
+      break;
+    }
+
+    offset += 2;
+    const row = {};
+    
+    // Read field data
+    for (let i = 0; i < fieldCount; i++) {
+      const fieldLength = data.readInt32BE(offset);
+      offset += 4;
+      
+      if (fieldLength === -1) {
+        // NULL value
+        row[`col_${i}`] = null;
+      } else {
+        const fieldData = data.slice(offset, offset + fieldLength);
+        row[`col_${i}`] = fieldData.toString('utf8');
+        offset += fieldLength;
+      }
+    }
+    
+    rowCount++;
+    
+    // Store row data (in a real implementation, this would go to a database)
+    if (!copyState.receivedRows) {
+      copyState.receivedRows = [];
+    }
+    copyState.receivedRows.push(row);
+  }
+
+  connState.updateCopyStats(0, rowCount);
+  console.log(`Processed ${rowCount} rows from binary COPY data`);
+}
+
+/**
+ * Processes text COPY data
+ * @param {Buffer} data - Text data buffer
+ * @param {Object} copyState - COPY operation state
+ * @param {ConnectionState} connState - Connection state
+ */
+function processCopyDataText(data, copyState, connState) {
+  // Convert buffer to string
+  const text = data.toString('utf8');
+  const delimiter = copyState.delimiter || '\t';
+  const nullString = copyState.nullString || '\\N';
+  
+  // Split into lines
+  const lines = text.split('\n').filter(line => line.length > 0);
+  let rowCount = 0;
+
+  for (const line of lines) {
+    if (line.trim() === '') continue;
+    
+    // Parse line into fields
+    const fields = parseCopyTextLine(line, delimiter, copyState.quote);
+    const row = {};
+    
+    fields.forEach((field, index) => {
+      // Handle NULL values
+      if (field === nullString) {
+        row[`col_${index}`] = null;
+      } else {
+        row[`col_${index}`] = field;
+      }
+    });
+    
+    rowCount++;
+    
+    // Store row data (in a real implementation, this would go to a database)
+    if (!copyState.receivedRows) {
+      copyState.receivedRows = [];
+    }
+    copyState.receivedRows.push(row);
+  }
+
+  connState.updateCopyStats(0, rowCount);
+  console.log(`Processed ${rowCount} rows from text COPY data`);
+}
+
+/**
+ * Parses a COPY text line with proper field separation
+ * @param {string} line - Text line to parse
+ * @param {string} delimiter - Field delimiter
+ * @param {string} quote - Quote character
+ * @returns {Array} Array of field values
+ */
+function parseCopyTextLine(line, delimiter, quote = '"') {
+  const fields = [];
+  let current = '';
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const char = line[i];
+
+    if (char === quote && !inQuotes) {
+      inQuotes = true;
+    } else if (char === quote && inQuotes) {
+      // Check for escaped quote
+      if (i + 1 < line.length && line[i + 1] === quote) {
+        current += quote;
+        i++; // Skip next quote
+      } else {
+        inQuotes = false;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      fields.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+
+    i++;
+  }
+
+  // Add the last field
+  fields.push(current);
+
+  return fields;
 }
 
 /**
@@ -912,15 +1086,42 @@ function processCopyData(buffer, _socket, _connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed
  */
-function processCopyDone(buffer, socket, _connState) {
+function processCopyDone(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
 
   console.log('Copy done received');
 
-  // In a real implementation, we'd finalize the copy operation
-  // For now, just send command complete
-  const { sendCommandComplete } = require('./messageBuilders');
-  sendCommandComplete(socket, 'COPY 0');
+  // Get copy state
+  const copyState = connState.getCopyState();
+  if (!copyState) {
+    console.error('Received COPY done but no COPY operation in progress');
+    return length + 1;
+  }
+
+  try {
+    // Finalize the copy operation
+    const rowCount = copyState.rowsTransferred || 0;
+    const bytesCount = copyState.bytesTransferred || 0;
+    
+    console.log(`COPY operation completed: ${rowCount} rows, ${bytesCount} bytes transferred`);
+
+    // Clear copy state
+    connState.clearCopyState();
+
+    // Send command complete
+    const { sendCommandComplete } = require('./messageBuilders');
+    sendCommandComplete(socket, `COPY ${rowCount}`);
+
+  } catch (error) {
+    console.error('Error finalizing COPY operation:', error.message);
+    
+    const { sendErrorResponse } = require('./messageBuilders');
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.DATA_EXCEPTION,
+      `COPY finalization failed: ${error.message}`
+    );
+  }
 
   return length + 1;
 }
@@ -932,13 +1133,23 @@ function processCopyDone(buffer, socket, _connState) {
  * @param {ConnectionState} connState - Connection state
  * @returns {number} Bytes processed
  */
-function processCopyFail(buffer, socket, _connState) {
+function processCopyFail(buffer, socket, connState) {
   const length = buffer.readInt32BE(1);
 
   // Extract error message
   const errorMessage = buffer.slice(5, length).toString('utf8').replace(/\0$/, '');
 
   console.log(`Copy failed: ${errorMessage}`);
+
+  // Get copy state
+  const copyState = connState.getCopyState();
+  if (copyState) {
+    console.log(`COPY operation failed after ${copyState.rowsTransferred} rows, ` +
+      `${copyState.bytesTransferred} bytes transferred`);
+    
+    // Clear copy state
+    connState.clearCopyState();
+  }
 
   // Send error response
   sendErrorResponse(

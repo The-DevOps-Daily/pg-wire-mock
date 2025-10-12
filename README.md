@@ -20,10 +20,13 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Error handling with proper SQLSTATE codes
   - **SSL/TLS encryption support** (NEW!) - [See SSL Documentation](docs/SSL_SUPPORT.md)
   - **PostgreSQL array type support** (NEW!) - [See Array Documentation](docs/ARRAY_SUPPORT.md)
+  - **COPY protocol for bulk data transfer** (NEW!) - [See COPY Documentation](docs/COPY_PROTOCOL.md)
 
 - **Comprehensive Query Support**
   - SELECT queries with various functions
   - Array queries and operations (NEW!)
+  - **COPY protocol operations** (NEW!) - Bulk data transfer with STDIN/STDOUT support
+  - **EXPLAIN query plans** (NEW!) - Mock query execution plans and analysis
   - SHOW commands for server information
   - DDL commands (CREATE/DROP - mock responses)
   - DML commands (INSERT/UPDATE/DELETE - mock responses)

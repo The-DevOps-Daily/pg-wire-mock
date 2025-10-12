@@ -44,6 +44,9 @@ class ConnectionState {
     this.preparedStatements = new Map();
     this.portals = new Map();
 
+    // COPY protocol state
+    this.copyState = null;
+
     // Connection statistics
     this.queriesExecuted = 0;
     this.lastActivityTime = new Date();
@@ -161,6 +164,63 @@ class ConnectionState {
    */
   failTransaction() {
     this.setTransactionStatus(TRANSACTION_STATUS.IN_FAILED_TRANSACTION);
+  }
+
+  /**
+   * Sets the connection copy state
+   * @param {Object} copyInfo - COPY operation information
+   */
+  setCopyState(copyInfo) {
+    this.copyState = {
+      ...copyInfo,
+      startedAt: new Date(),
+      bytesTransferred: 0,
+      rowsTransferred: 0,
+    };
+    this.updateActivity();
+    console.log(`Started COPY operation: ${copyInfo.direction} ${copyInfo.tableName || copyInfo.query}`);
+  }
+
+  /**
+   * Gets the current copy state
+   * @returns {Object|null} Copy state or null
+   */
+  getCopyState() {
+    return this.copyState || null;
+  }
+
+  /**
+   * Updates copy transfer statistics
+   * @param {number} bytes - Bytes transferred
+   * @param {number} rows - Rows transferred
+   */
+  updateCopyStats(bytes = 0, rows = 0) {
+    if (this.copyState) {
+      this.copyState.bytesTransferred += bytes;
+      this.copyState.rowsTransferred += rows;
+      this.updateActivity();
+    }
+  }
+
+  /**
+   * Clears the copy state when operation completes
+   */
+  clearCopyState() {
+    if (this.copyState) {
+      const duration = new Date() - this.copyState.startedAt;
+      console.log(`COPY operation completed: ${this.copyState.rowsTransferred} rows, ` +
+        `${this.copyState.bytesTransferred} bytes in ${duration}ms`);
+    }
+    this.copyState = null;
+    this.updateActivity();
+  }
+
+  /**
+   * Checks if connection is in COPY mode
+   * @returns {boolean} True if in COPY mode
+   */
+  isInCopyMode() {
+    return this.copyState !== null;
   }
 
   /**

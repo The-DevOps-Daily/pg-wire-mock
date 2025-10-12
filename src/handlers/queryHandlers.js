@@ -202,6 +202,26 @@ function executeQuery(query, socket, connState) {
     return;
   }
 
+  // Handle COPY operations
+  if (results.needsCopyInResponse) {
+    const { sendCopyInResponse } = require('../protocol/messageBuilders');
+    const format = results.copyInfo.binary ? 1 : 0;
+    const columnFormats = []; // Default to text format for all columns
+    sendCopyInResponse(socket, format, columnFormats);
+    return; // Don't send command complete yet - wait for COPY data
+  }
+
+  if (results.needsCopyOutResponse) {
+    const { sendCopyOutResponse } = require('../protocol/messageBuilders');
+    const format = results.copyInfo.binary ? 1 : 0;
+    const columnFormats = []; // Default to text format for all columns
+    sendCopyOutResponse(socket, format, columnFormats);
+    
+    // Generate and send mock data
+    handleCopyOut(socket, results.copyInfo, connState);
+    return; // Command complete will be sent after all data
+  }
+
   // Send result data if query returns rows
   if (results.columns && results.columns.length > 0) {
     sendRowDescription(socket, results.columns);
@@ -294,6 +314,8 @@ function processQuery(query, connState) {
       return handleCreateQuery(normalizedQuery, connState);
     } else if (normalizedQuery.startsWith('DROP')) {
       return handleDropQuery(normalizedQuery, connState);
+    } else if (normalizedQuery.startsWith('COPY')) {
+      return handleCopyQuery(normalizedQuery, connState);
     } else {
       return handleUnknownQuery(normalizedQuery, connState);
     }
@@ -1264,6 +1286,461 @@ function handlePgClass(_query, _connState) {
   };
 }
 
+/**
+ * Handles COPY queries for bulk data transfer
+ * @param {string} query - The COPY query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result with COPY setup
+ */
+function handleCopyQuery(query, connState) {
+  const copyInfo = parseCopyQuery(query);
+  
+  if (copyInfo.error) {
+    return {
+      error: {
+        code: '42601', // Syntax error
+        message: copyInfo.error,
+        severity: 'ERROR'
+      }
+    };
+  }
+
+  // Set copy state in connection
+  const copyStateInfo = {
+    ...copyInfo,
+    active: true,
+    direction: copyInfo.direction === 'FROM' ? 'in' : 'out',
+    format: copyInfo.format || 'text',
+    table: copyInfo.tableName,
+    columns: copyInfo.columns || null,
+    binary: copyInfo.binary || false,
+    rowsProcessed: 0
+  };
+  connState.setCopyState(copyStateInfo);
+
+  // Return appropriate response based on COPY direction
+  if (copyInfo.direction === 'FROM') {
+    return {
+      command: 'COPY_FROM',
+      copyInfo: copyInfo,
+      needsCopyInResponse: true,
+      rowCount: 0,
+    };
+  } else if (copyInfo.direction === 'TO') {
+    return {
+      command: 'COPY_TO',
+      copyInfo: copyInfo,
+      needsCopyOutResponse: true,
+      rowCount: 0,
+    };
+  }
+
+  throw ErrorFactory.createSyntaxError('Invalid COPY command');
+}
+
+/**
+ * Parses COPY query to extract parameters
+ * @param {string} query - The COPY query
+ * @returns {Object} Parsed COPY information
+ */
+function parseCopyQuery(query) {
+  // Remove extra whitespace and normalize
+  const normalizedQuery = query.trim().replace(/\s+/g, ' ');
+  
+  // Match COPY FROM STDIN
+  let match = normalizedQuery.match(/^COPY\s+([^\s]+)\s+FROM\s+STDIN(?:\s+WITH\s+(.*))?$/i);
+  if (match) {
+    const tableName = match[1];
+    const options = parseCopyOptions(match[2] || '');
+    
+    return {
+      direction: 'FROM',
+      tableName: tableName,
+      source: 'STDIN',
+      format: options.format || 'text',
+      delimiter: options.delimiter || '\t',
+      nullString: options.null || '\\N',
+      header: options.header || false,
+      quote: options.quote || '"',
+      escape: options.escape || '"',
+      binary: options.format === 'binary',
+      columns: options.columns || null,
+    };
+  }
+  
+  // Match COPY TO STDOUT
+  const copyToPattern = /^COPY\s+(?:\(([^)]+)\)\s+FROM\s+)?([^\s]+)\s+TO\s+STDOUT(?:\s+WITH\s+(.*))?$/i;
+  match = normalizedQuery.match(copyToPattern);
+  if (match) {
+    const selectClause = match[1];
+    const tableOrQuery = match[2];
+    const options = parseCopyOptions(match[3] || '');
+    
+    return {
+      direction: 'TO',
+      tableName: tableOrQuery,
+      destination: 'STDOUT',
+      format: options.format || 'text',
+      delimiter: options.delimiter || '\t',
+      nullString: options.null || '\\N',
+      header: options.header || false,
+      quote: options.quote || '"',
+      escape: options.escape || '"',
+      binary: options.format === 'binary',
+      selectClause: selectClause,
+    };
+  }
+  
+  // Match COPY (SELECT ...) TO STDOUT
+  match = normalizedQuery.match(/^COPY\s+\(([^)]+)\)\s+TO\s+STDOUT(?:\s+WITH\s+(.*))?$/i);
+  if (match) {
+    const selectQuery = match[1];
+    const options = parseCopyOptions(match[2] || '');
+    
+    return {
+      direction: 'TO',
+      query: selectQuery,
+      destination: 'STDOUT',
+      format: options.format || 'text',
+      delimiter: options.delimiter || '\t',
+      nullString: options.null || '\\N',
+      header: options.header || false,
+      quote: options.quote || '"',
+      escape: options.escape || '"',
+      binary: options.format === 'binary',
+    };
+  }
+
+  return { error: 'Invalid COPY syntax' };
+}
+
+/**
+ * Parses COPY WITH options
+ * @param {string} optionsStr - The options string
+ * @returns {Object} Parsed options
+ */
+function parseCopyOptions(optionsStr) {
+  const options = {};
+  
+  if (!optionsStr) {
+    return options;
+  }
+  
+  // Remove parentheses if present
+  let cleanOptionsStr = optionsStr.trim();
+  if (cleanOptionsStr.startsWith('(') && cleanOptionsStr.endsWith(')')) {
+    cleanOptionsStr = cleanOptionsStr.slice(1, -1).trim();
+  }
+  
+  // Split by comma, but handle quoted values
+  const parts = [];
+  let current = '';
+  let inQuotes = false;
+  let quoteChar = null;
+  
+  for (let i = 0; i < cleanOptionsStr.length; i++) {
+    const char = cleanOptionsStr[i];
+    
+    if (!inQuotes && (char === '"' || char === "'")) {
+      inQuotes = true;
+      quoteChar = char;
+      current += char;
+    } else if (inQuotes && char === quoteChar) {
+      inQuotes = false;
+      quoteChar = null;
+      current += char;
+    } else if (!inQuotes && char === ',') {
+      parts.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  if (current.trim()) {
+    parts.push(current.trim());
+  }
+  
+  // Parse each option
+  for (const part of parts) {
+    const optionMatch = part.match(/^\s*([A-Z_]+)(?:\s+(.+))?\s*$/i);
+    if (optionMatch) {
+      const key = optionMatch[1].toLowerCase();
+      let value = optionMatch[2];
+      
+      if (value) {
+        // Remove quotes if present
+        value = value.replace(/^['"]|['"]$/g, '');
+        
+        // Handle specific option types
+        switch (key) {
+          case 'format':
+            options.format = value.toLowerCase();
+            break;
+          case 'delimiter':
+            options.delimiter = value;
+            break;
+          case 'null':
+            options.null = value;
+            break;
+          case 'header':
+            options.header = value.toLowerCase() === 'true' || value === '1';
+            break;
+          case 'quote':
+            options.quote = value;
+            break;
+          case 'escape':
+            options.escape = value;
+            break;
+          default:
+            options[key] = value;
+        }
+      } else {
+        // Boolean options without values
+        switch (key) {
+          case 'header':
+            options.header = true;
+            break;
+          case 'binary':
+            options.format = 'binary';
+            break;
+          default:
+            options[key] = true;
+        }
+      }
+    }
+  }
+  
+  return options;
+}
+
+/**
+ * Generates mock data for COPY TO operations
+ * @param {Object} copyInfo - COPY operation info
+ * @param {number} rowCount - Number of rows to generate
+ * @returns {Array} Array of data rows
+ */
+function generateMockCopyData(copyInfo, rowCount = 100) {
+  const rows = [];
+  
+  // Define mock data based on table name
+  const mockData = {
+    users: [
+      { id: 1, name: 'John Doe', email: 'john@example.com', created_at: '2023-01-01 10:00:00' },
+      { id: 2, name: 'Jane Smith', email: 'jane@example.com', created_at: '2023-01-02 11:00:00' },
+      { id: 3, name: 'Bob Johnson', email: 'bob@example.com', created_at: '2023-01-03 12:00:00' },
+    ],
+    posts: [
+      { id: 1, title: 'First Post', content: 'Hello World', user_id: 1, created_at: '2023-01-01 15:00:00' },
+      { id: 2, title: 'Second Post', content: 'More content', user_id: 2, created_at: '2023-01-02 16:00:00' },
+    ],
+    products: [
+      { id: 1, name: 'Widget A', price: 19.99, category: 'widgets' },
+      { id: 2, name: 'Gadget B', price: 29.99, category: 'gadgets' },
+    ]
+  };
+  
+  const tableName = copyInfo.tableName || 'users';
+  const baseData = mockData[tableName.toLowerCase()] || mockData.users;
+  
+  // Generate requested number of rows
+  for (let i = 0; i < rowCount; i++) {
+    const baseRow = baseData[i % baseData.length];
+    const row = { ...baseRow };
+    
+    // Modify some fields to create variety
+    if (row.id) {
+      row.id = i + 1;
+    }
+    if (row.name) {
+      row.name = `${baseRow.name} ${Math.floor(i / baseData.length) + 1}`;
+    }
+    if (row.email) {
+      row.email = `user${i + 1}@example.com`;
+    }
+    if (row.title) {
+      row.title = `${baseRow.title} ${Math.floor(i / baseData.length) + 1}`;
+    }
+    
+    rows.push(row);
+  }
+  
+  return rows;
+}
+
+/**
+ * Formats data for COPY output
+ * @param {Array} rows - Data rows
+ * @param {Object} copyInfo - COPY format info
+ * @returns {string} Formatted data string
+ */
+function formatCopyData(rows, copyInfo) {
+  if (copyInfo.binary) {
+    return formatCopyDataBinary(rows, copyInfo);
+  } else {
+    return formatCopyDataText(rows, copyInfo);
+  }
+}
+
+/**
+ * Formats data for text COPY output
+ * @param {Array} rows - Data rows
+ * @param {Object} copyInfo - COPY format info
+ * @returns {string} Formatted text data
+ */
+function formatCopyDataText(rows, copyInfo) {
+  const lines = [];
+  const delimiter = copyInfo.delimiter;
+  const nullString = copyInfo.nullString;
+  
+  for (const row of rows) {
+    const values = Object.values(row).map(value => {
+      if (value === null || value === undefined) {
+        return nullString;
+      }
+      
+      // Convert to string and escape if needed
+      let strValue = String(value);
+      
+      // Escape special characters
+      if (strValue.includes(delimiter) || strValue.includes('\n') || strValue.includes('\r')) {
+        strValue = `"${strValue.replace(/"/g, '""')}"`;
+      }
+      
+      return strValue;
+    });
+    
+    lines.push(values.join(delimiter));
+  }
+  
+  return lines.join('\n');
+}
+
+/**
+ * Formats data for binary COPY output
+ * @param {Array} rows - Data rows
+ * @param {Object} copyInfo - COPY format info
+ * @returns {Buffer} Binary data buffer
+ */
+function formatCopyDataBinary(rows, copyInfo) {
+  // Simplified binary format - in real implementation this would be more complex
+  const buffers = [];
+  
+  // Binary header
+  const header = Buffer.alloc(15);
+  header.write('PGCOPY\n\xff\r\n\0', 0, 11, 'binary');
+  header.writeInt32BE(0, 11); // Flags field
+  buffers.push(header);
+  
+  // Extension area length (0)
+  const extensionLength = Buffer.alloc(4);
+  extensionLength.writeInt32BE(0, 0);
+  buffers.push(extensionLength);
+  
+  for (const row of rows) {
+    const values = Object.values(row);
+    
+    // Field count
+    const fieldCount = Buffer.alloc(2);
+    fieldCount.writeInt16BE(values.length, 0);
+    buffers.push(fieldCount);
+    
+    for (const value of values) {
+      if (value === null || value === undefined) {
+        // NULL value
+        const nullLength = Buffer.alloc(4);
+        nullLength.writeInt32BE(-1, 0);
+        buffers.push(nullLength);
+      } else {
+        // Convert value to buffer
+        const valueStr = String(value);
+        const valueBuffer = Buffer.from(valueStr, 'utf8');
+        
+        const length = Buffer.alloc(4);
+        length.writeInt32BE(valueBuffer.length, 0);
+        buffers.push(length);
+        buffers.push(valueBuffer);
+      }
+    }
+  }
+  
+  // End marker
+  const endMarker = Buffer.alloc(2);
+  endMarker.writeInt16BE(-1, 0);
+  buffers.push(endMarker);
+  
+  return Buffer.concat(buffers);
+}
+
+/**
+ * Handle COPY OUT operations - send mock data to client
+ * @param {net.Socket} socket - Client socket
+ * @param {Object} copyInfo - COPY operation info
+ * @param {ConnectionState} connState - Connection state
+ */
+function handleCopyOut(socket, copyInfo, connState) {
+  try {
+    const { sendCopyData, sendCopyDone } = require('../protocol/messageBuilders');
+    const { sendCommandComplete } = require('../protocol/messageBuilders');
+    
+    // Generate mock data based on COPY type
+    let mockData = [];
+    const rowCount = copyInfo.options.rowCount || 100; // Default 100 rows
+    
+    if (copyInfo.from === 'table') {
+      // Generate mock table data
+      mockData = generateMockCopyData(copyInfo.source, rowCount);
+    } else if (copyInfo.from === 'query') {
+      // Generate mock query result data
+      mockData = generateMockQueryCopyData(copyInfo.query, rowCount);
+    }
+    
+    // Format and send data
+    for (const row of mockData) {
+      const formattedData = formatCopyData(row, copyInfo);
+      sendCopyData(socket, formattedData);
+    }
+    
+    // Send COPY completion
+    sendCopyDone(socket);
+    
+    // Send command completion
+    const commandTag = formatCommandTag('COPY', rowCount);
+    sendCommandComplete(socket, commandTag);
+    
+    // Update connection state
+    connState.clearCopyState();
+    
+    console.log(`COPY OUT completed: ${rowCount} rows sent`);
+  } catch (error) {
+    console.error('Error in handleCopyOut:', error);
+    const { sendErrorResponse } = require('../protocol/messageBuilders');
+    sendErrorResponse(socket, 'ERROR', '08P01', 'COPY OUT failed', error.message);
+  }
+}
+
+/**
+ * Generate mock data for COPY queries (SELECT ... INTO OUTFILE equivalent)
+ * @param {string} query - The query to generate data for
+ * @param {number} rowCount - Number of rows to generate
+ * @returns {Array} Array of row data
+ */
+function generateMockQueryCopyData(query, rowCount) {
+  // Simple mock data generator for COPY queries
+  const mockData = [];
+  
+  for (let i = 1; i <= rowCount; i++) {
+    mockData.push([
+      i, // id
+      `user_${i}`, // name
+      `user${i}@example.com`, // email
+      new Date().toISOString(), // created_at
+    ]);
+  }
+  
+  return mockData;
+}
+
 module.exports = {
   executeQuery,
   executeQueryString,
@@ -1279,7 +1756,14 @@ module.exports = {
   handleCreateQuery,
   handleCreateTypeQuery,
   handleDropQuery,
+  handleCopyQuery,
+  parseCopyQuery,
+  parseCopyOptions,
   handleUnknownQuery,
+  generateMockCopyData,
+  formatCopyData,
+  handleCopyOut,
+  generateMockQueryCopyData,
   handleIntrospectionQuery,
   handleInformationSchemaTables,
   handleInformationSchemaColumns,
