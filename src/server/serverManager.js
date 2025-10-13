@@ -8,6 +8,7 @@ const tls = require('tls');
 const fs = require('fs');
 const { ConnectionState } = require('../connection/connectionState');
 const { ConnectionPool } = require('../connection/connectionPool');
+const { NotificationManager } = require('../notification/notificationManager');
 const {
   processMessage,
   configureMessageProcessorLogger,
@@ -85,6 +86,12 @@ class ServerManager {
         logLevel: this.config.logLevel,
       });
     }
+
+    // Initialize notification manager
+    this.notificationManager = new NotificationManager({
+      enableLogging: this.config.enableLogging,
+      logLevel: this.config.logLevel,
+    });
 
     // Statistics
     this.stats = {
@@ -379,6 +386,9 @@ class ServerManager {
         connState.rollbackTransaction();
       }
 
+      // Clean up notification listeners
+      this.notificationManager.removeAllListenersForConnection(connectionId);
+
       // Close connection state
       connState.close();
 
@@ -412,6 +422,16 @@ class ServerManager {
         this.log('info', 'Connection pool cleaned up');
       } catch (error) {
         this.log('error', `Error cleaning up connection pool: ${error.message}`);
+      }
+    }
+
+    // Cleanup notification manager
+    if (this.notificationManager) {
+      try {
+        this.notificationManager.shutdown();
+        this.log('info', 'Notification manager cleaned up');
+      } catch (error) {
+        this.log('error', `Error cleaning up notification manager: ${error.message}`);
       }
     }
 
@@ -483,6 +503,11 @@ class ServerManager {
 
     // Create connection state (pool integration can be enhanced later)
     connState = new ConnectionState();
+
+    // Set connection ID and references
+    connState.connectionId = connectionId;
+    connState.setNotificationManager(this.notificationManager);
+    connState.setSocket(socket);
 
     // Log that pooling is enabled for future enhancement
     if (this.connectionPool && this.connectionPool.isInitialized) {
@@ -821,6 +846,9 @@ class ServerManager {
         this.connectionPool.releaseConnection(connState);
         this.log('debug', `Returned connection ${connectionId} to pool`);
       } else {
+        // Clean up notification listeners
+        this.notificationManager.removeAllListenersForConnection(connectionId);
+
         // Close connection state
         connState.close();
       }

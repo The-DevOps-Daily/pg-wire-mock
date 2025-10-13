@@ -20,11 +20,13 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Error handling with proper SQLSTATE codes
   - **SSL/TLS encryption support** (NEW!) - [See SSL Documentation](docs/SSL_SUPPORT.md)
   - **PostgreSQL array type support** (NEW!) - [See Array Documentation](docs/ARRAY_SUPPORT.md)
+  - **LISTEN/NOTIFY asynchronous notifications** (NEW!) - [See LISTEN/NOTIFY Documentation](docs/NOTIFICATIONS.md)
   - **COPY protocol for bulk data transfer** (NEW!) - [See COPY Documentation](docs/COPY_PROTOCOL.md)
 
 - **Comprehensive Query Support**
   - SELECT queries with various functions
   - Array queries and operations (NEW!)
+  - LISTEN/NOTIFY/UNLISTEN commands for pub-sub messaging (NEW!)
   - **COPY protocol operations** (NEW!) - Bulk data transfer with STDIN/STDOUT support
   - **EXPLAIN query plans** (NEW!) - Mock query execution plans and analysis
   - SHOW commands for server information
@@ -146,6 +148,11 @@ SELECT ARRAY[1, 2, 3, 4, 5];
 SELECT '{apple,banana,cherry}';
 SELECT '{1,2,3,4,5}'::int4[];
 SELECT '{{a,b},{c,d}}'::text[][];
+
+-- LISTEN/NOTIFY notifications (NEW!)
+LISTEN my_channel;
+NOTIFY my_channel, 'Hello world!';
+UNLISTEN my_channel;
 
 -- Server information
 SHOW DOCS;

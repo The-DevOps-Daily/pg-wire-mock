@@ -4,6 +4,7 @@
  */
 
 const { TRANSACTION_STATUS, PROTOCOL_VERSION_3_0 } = require('../protocol/constants');
+const { createLogger } = require('../utils/logger');
 
 const { generateBackendSecret } = require('../protocol/utils');
 
@@ -12,6 +13,9 @@ const { generateBackendSecret } = require('../protocol/utils');
  */
 class ConnectionState {
   constructor() {
+    // Logger for connection state
+    this.logger = createLogger({ component: 'ConnectionState' });
+
     // Authentication state
     this.authenticated = false;
     this.protocolVersion = null;
@@ -39,11 +43,16 @@ class ConnectionState {
     // Connection metadata
     this.connected = true;
     this.connectionTime = new Date();
+    this.connectionId = null; // Will be set by server
 
     // Extended query protocol state
     this.preparedStatements = new Map();
     this.portals = new Map();
 
+    // Notification state
+    this.listeningChannels = new Set(); // Channels this connection is listening to
+    this.notificationManager = null; // Reference to notification manager
+    this.socket = null; // Client socket for sending notifications
     // COPY protocol state
     this.copyState = null;
 
@@ -60,7 +69,7 @@ class ConnectionState {
     this.authenticated = true;
     this.protocolVersion = protocolVersion;
     this.updateActivity();
-    console.log(`Connection authenticated with protocol version ${protocolVersion}`);
+    this.logger.info(`Connection authenticated with protocol version ${protocolVersion}`);
   }
 
   /**
@@ -71,7 +80,7 @@ class ConnectionState {
   setParameter(name, value) {
     this.parameters.set(name, value);
     this.updateActivity();
-    console.log(`Set connection parameter: ${name} = ${value}`);
+    this.logger.debug(`Set connection parameter: ${name} = ${value}`);
   }
 
   /**
@@ -116,9 +125,9 @@ class ConnectionState {
     if (Object.values(TRANSACTION_STATUS).includes(status)) {
       this.transactionStatus = status;
       this.updateActivity();
-      console.log(`Transaction status changed to: ${status}`);
+      this.logger.debug(`Transaction status changed to: ${status}`);
     } else {
-      console.warn(`Invalid transaction status: ${status}`);
+      this.logger.warn(`Invalid transaction status: ${status}`);
     }
   }
 
@@ -234,7 +243,7 @@ class ConnectionState {
       createdAt: new Date(),
     });
     this.updateActivity();
-    console.log(`Added prepared statement: ${name || '(unnamed)'}`);
+    this.logger.debug(`Added prepared statement: ${name || '(unnamed)'}`);
   }
 
   /**
@@ -255,7 +264,7 @@ class ConnectionState {
     const removed = this.preparedStatements.delete(name);
     if (removed) {
       this.updateActivity();
-      console.log(`Removed prepared statement: ${name || '(unnamed)'}`);
+      this.logger.debug(`Removed prepared statement: ${name || '(unnamed)'}`);
     }
     return removed;
   }
@@ -271,7 +280,7 @@ class ConnectionState {
       createdAt: new Date(),
     });
     this.updateActivity();
-    console.log(`Added portal: ${name || '(unnamed)'}`);
+    this.logger.debug(`Added portal: ${name || '(unnamed)'}`);
   }
 
   /**
@@ -292,7 +301,7 @@ class ConnectionState {
     const removed = this.portals.delete(name);
     if (removed) {
       this.updateActivity();
-      console.log(`Removed portal: ${name || '(unnamed)'}`);
+      this.logger.debug(`Removed portal: ${name || '(unnamed)'}`);
     }
     return removed;
   }
@@ -303,6 +312,89 @@ class ConnectionState {
   clearUnnamed() {
     this.removePreparedStatement('');
     this.removePortal('');
+  }
+
+  /**
+   * Adds a notification channel to the listening set
+   * @param {string} channelName - Channel name to listen to
+   */
+  addListeningChannel(channelName) {
+    this.listeningChannels.add(channelName.toLowerCase());
+    this.updateActivity();
+  }
+
+  /**
+   * Removes a notification channel from the listening set
+   * @param {string} channelName - Channel name to stop listening to
+   */
+  removeListeningChannel(channelName) {
+    const removed = this.listeningChannels.delete(channelName.toLowerCase());
+    if (removed) {
+      this.updateActivity();
+    }
+    return removed;
+  }
+
+  /**
+   * Removes all listening channels
+   * @returns {number} Number of channels removed
+   */
+  clearAllListeningChannels() {
+    const count = this.listeningChannels.size;
+    this.listeningChannels.clear();
+    if (count > 0) {
+      this.updateActivity();
+    }
+    return count;
+  }
+
+  /**
+   * Checks if connection is listening to a channel
+   * @param {string} channelName - Channel name to check
+   * @returns {boolean} True if listening to channel
+   */
+  isListeningToChannel(channelName) {
+    return this.listeningChannels.has(channelName.toLowerCase());
+  }
+
+  /**
+   * Gets all channels this connection is listening to
+   * @returns {Array<string>} Array of channel names
+   */
+  getListeningChannels() {
+    return Array.from(this.listeningChannels);
+  }
+
+  /**
+   * Sets the notification manager reference
+   * @param {NotificationManager} notificationManager - Notification manager instance
+   */
+  setNotificationManager(notificationManager) {
+    this.notificationManager = notificationManager;
+  }
+
+  /**
+   * Gets the notification manager reference
+   * @returns {NotificationManager|null} Notification manager instance
+   */
+  getNotificationManager() {
+    return this.notificationManager;
+  }
+
+  /**
+   * Sets the client socket reference
+   * @param {Socket} socket - Client socket
+   */
+  setSocket(socket) {
+    this.socket = socket;
+  }
+
+  /**
+   * Gets the client socket reference
+   * @returns {Socket|null} Client socket
+   */
+  getSocket() {
+    return this.socket;
   }
 
   /**
@@ -343,9 +435,9 @@ class ConnectionState {
     this.connected = false;
     this.preparedStatements.clear();
     this.portals.clear();
-    console.log(
-      `Connection closed after ${this.getConnectionDuration()}ms,
-      ${this.queriesExecuted} queries executed`
+    this.clearAllListeningChannels();
+    this.logger.info(
+      `Connection closed after ${this.getConnectionDuration()}ms, ${this.queriesExecuted} queries executed`
     );
   }
 
@@ -369,6 +461,7 @@ class ConnectionState {
       queriesExecuted: this.queriesExecuted,
       preparedStatements: this.preparedStatements.size,
       portals: this.portals.size,
+      listeningChannels: this.listeningChannels.size,
       connected: this.connected,
     };
   }
@@ -471,9 +564,10 @@ class ConnectionState {
     if (this.isInTransaction()) return false;
     if (this.isInFailedTransaction()) return false;
 
-    // Don't reuse connections with active prepared statements or portals
+    // Don't reuse connections with active prepared statements, portals, or listeners
     if (this.preparedStatements.size > 0) return false;
     if (this.portals.size > 0) return false;
+    if (this.listeningChannels.size > 0) return false;
 
     // Validate overall state
     const validation = this.validateState();
@@ -489,6 +583,7 @@ class ConnectionState {
       // Clear extended query protocol state
       this.preparedStatements.clear();
       this.portals.clear();
+      this.clearAllListeningChannels();
 
       // Reset to idle transaction status
       this.transactionStatus = TRANSACTION_STATUS.IDLE;
@@ -499,14 +594,14 @@ class ConnectionState {
       // Validate state after reset
       const validation = this.validateState();
       if (!validation.isValid) {
-        console.warn('Connection reset failed validation:', validation.errors);
+        this.logger.warn('Connection reset failed validation:', validation.errors);
         return false;
       }
 
-      console.log(`Connection ${this.backendPid} reset for reuse`);
+      this.logger.debug(`Connection ${this.backendPid} reset for reuse`);
       return true;
     } catch (error) {
-      console.error('Error resetting connection for reuse:', error);
+      this.logger.error('Error resetting connection for reuse:', error);
       return false;
     }
   }
@@ -519,6 +614,7 @@ class ConnectionManager {
   constructor() {
     this.connections = new Map();
     this.connectionCount = 0;
+    this.logger = createLogger({ component: 'ConnectionManager' });
   }
 
   /**
@@ -530,7 +626,7 @@ class ConnectionManager {
     const id = connectionId || `conn_${++this.connectionCount}`;
     const connState = new ConnectionState();
     this.connections.set(id, connState);
-    console.log(`Created new connection: ${id}`);
+    this.logger.debug(`Created new connection: ${id}`);
     return connState;
   }
 
@@ -588,7 +684,7 @@ class ConnectionManager {
       }
     }
     if (closedCount > 0) {
-      console.log(`Cleaned up ${closedCount} idle connections`);
+      this.logger.info(`Cleaned up ${closedCount} idle connections`);
     }
     return closedCount;
   }

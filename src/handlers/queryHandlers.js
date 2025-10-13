@@ -319,6 +319,13 @@ function processQuery(query, connState) {
       return handleCreateQuery(normalizedQuery, connState);
     } else if (normalizedQuery.startsWith('DROP')) {
       return handleDropQuery(normalizedQuery, connState);
+    } else if (normalizedQuery.startsWith('LISTEN')) {
+      return handleListenQuery(normalizedQuery, connState);
+    } else if (normalizedQuery.startsWith('UNLISTEN')) {
+      return handleUnlistenQuery(normalizedQuery, connState);
+    } else if (normalizedQuery.startsWith('NOTIFY')) {
+      // Use original query to preserve payload casing
+      return handleNotifyQuery(query, connState);
     } else if (normalizedQuery.startsWith('COPY')) {
       return handleCopyQuery(normalizedQuery, connState);
     } else {
@@ -883,6 +890,136 @@ function handleDropQuery(query, _connState) {
   } else {
     return { command: 'DROP', rowCount: 0 };
   }
+}
+
+/**
+ * Handles LISTEN command
+ * @param {string} query - The LISTEN command
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleListenQuery(query, connState) {
+  // Syntax: LISTEN channel;  (channel is an identifier)
+  const match = query.match(/^LISTEN\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?$/i);
+  if (!match) {
+    return {
+      error: ErrorFactory.syntaxError('invalid LISTEN syntax', {
+        hint: 'Use: LISTEN channel_name;',
+      }),
+    };
+  }
+
+  const channel = match[1];
+  const notificationManager =
+    connState.getNotificationManager && connState.getNotificationManager();
+  const socket = connState.getSocket && connState.getSocket();
+
+  if (!notificationManager || !socket) {
+    return {
+      error: ErrorFactory.internalError('Notifications subsystem unavailable'),
+    };
+  }
+
+  try {
+    const result = notificationManager.addListener(
+      connState.connectionId || 'unknown',
+      channel,
+      socket,
+      connState
+    );
+    if (!result.success) {
+      return {
+        error: ErrorFactory.invalidParameterValue('channel', result.error),
+      };
+    }
+  } catch (error) {
+    return {
+      error: ErrorFactory.internalError('Notification manager error: ' + error.message),
+    };
+  }
+
+  connState.addListeningChannel(channel);
+  return { command: 'LISTEN', rowCount: 0 };
+}
+
+/**
+ * Handles UNLISTEN command
+ * @param {string} query - The UNLISTEN command
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleUnlistenQuery(query, connState) {
+  // Syntax: UNLISTEN channel;  or UNLISTEN *;  or UNLISTEN;
+  const star = /^UNLISTEN\s+\*\s*;?$/i.test(query);
+  const specific = query.match(/^UNLISTEN\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?$/i);
+  const all = /^UNLISTEN\s*;?$/i.test(query);
+
+  const notificationManager =
+    connState.getNotificationManager && connState.getNotificationManager();
+  if (!notificationManager) {
+    return { error: ErrorFactory.internalError('Notifications subsystem unavailable') };
+  }
+
+  if (star || all) {
+    // Remove all listeners for this connection
+    const channels = connState.getListeningChannels();
+    channels.forEach(ch =>
+      notificationManager.removeListener(connState.connectionId || 'unknown', ch)
+    );
+    connState.clearAllListeningChannels();
+    return { command: 'UNLISTEN', rowCount: 0 };
+  }
+
+  if (!specific) {
+    return {
+      error: ErrorFactory.syntaxError('invalid UNLISTEN syntax', {
+        hint: 'Use: UNLISTEN channel_name; or UNLISTEN *; or UNLISTEN;',
+      }),
+    };
+  }
+
+  const channel = specific[1];
+  notificationManager.removeListener(connState.connectionId || 'unknown', channel);
+  connState.removeListeningChannel(channel);
+  return { command: 'UNLISTEN', rowCount: 0 };
+}
+
+/**
+ * Handles NOTIFY command
+ * @param {string} query - The NOTIFY command
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleNotifyQuery(query, connState) {
+  // Syntax: NOTIFY channel [, 'payload'];  payload optional and must be a single-quoted string
+  const matchWithPayload = query.match(/^NOTIFY\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*,\s*'(.*)'\s*;?$/i);
+  const matchSimple = query.match(/^NOTIFY\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?$/i);
+
+  if (!matchWithPayload && !matchSimple) {
+    return {
+      error: ErrorFactory.syntaxError('invalid NOTIFY syntax', {
+        hint: "Use: NOTIFY channel; or NOTIFY channel, 'payload';",
+      }),
+    };
+  }
+
+  const channel = (matchWithPayload || matchSimple)[1];
+  const payload = matchWithPayload ? matchWithPayload[2].replace(/''/g, "'") : '';
+
+  const notificationManager =
+    connState.getNotificationManager && connState.getNotificationManager();
+  if (!notificationManager) {
+    return { error: ErrorFactory.internalError('Notifications subsystem unavailable') };
+  }
+
+  try {
+    notificationManager.sendNotification(channel, payload, connState.backendPid);
+  } catch (error) {
+    return {
+      error: ErrorFactory.internalError('Notification manager error: ' + error.message),
+    };
+  }
+  return { command: 'NOTIFY', rowCount: 0 };
 }
 
 /**
@@ -2567,6 +2704,9 @@ module.exports = {
   handleCreateQuery,
   handleCreateTypeQuery,
   handleDropQuery,
+  handleListenQuery,
+  handleUnlistenQuery,
+  handleNotifyQuery,
   handleCopyQuery,
   parseCopyQuery,
   parseCopyOptions,
