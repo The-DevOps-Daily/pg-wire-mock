@@ -916,10 +916,9 @@ function processCopyData(buffer, socket, connState) {
 
     // Update statistics
     connState.updateCopyStats(data.length, 0); // Rows will be counted during parsing
-
   } catch (error) {
     console.error('Error processing COPY data:', error.message);
-    
+
     const { sendErrorResponse } = require('./messageBuilders');
     sendErrorResponse(
       socket,
@@ -953,7 +952,8 @@ function processCopyDataBinary(data, copyState, connState) {
   }
 
   // Process data rows
-  while (offset < data.length - 2) { // -2 for potential end marker
+  while (offset < data.length - 2) {
+    // -2 for potential end marker
     // Check for end marker
     const fieldCount = data.readInt16BE(offset);
     if (fieldCount === -1) {
@@ -963,12 +963,12 @@ function processCopyDataBinary(data, copyState, connState) {
 
     offset += 2;
     const row = {};
-    
+
     // Read field data
     for (let i = 0; i < fieldCount; i++) {
       const fieldLength = data.readInt32BE(offset);
       offset += 4;
-      
+
       if (fieldLength === -1) {
         // NULL value
         row[`col_${i}`] = null;
@@ -978,9 +978,9 @@ function processCopyDataBinary(data, copyState, connState) {
         offset += fieldLength;
       }
     }
-    
+
     rowCount++;
-    
+
     // Store row data (in a real implementation, this would go to a database)
     if (!copyState.receivedRows) {
       copyState.receivedRows = [];
@@ -1003,18 +1003,18 @@ function processCopyDataText(data, copyState, connState) {
   const text = data.toString('utf8');
   const delimiter = copyState.delimiter || '\t';
   const nullString = copyState.nullString || '\\N';
-  
+
   // Split into lines
   const lines = text.split('\n').filter(line => line.length > 0);
   let rowCount = 0;
 
   for (const line of lines) {
     if (line.trim() === '') continue;
-    
+
     // Parse line into fields
     const fields = parseCopyTextLine(line, delimiter, copyState.quote);
     const row = {};
-    
+
     fields.forEach((field, index) => {
       // Handle NULL values
       if (field === nullString) {
@@ -1023,9 +1023,9 @@ function processCopyDataText(data, copyState, connState) {
         row[`col_${index}`] = field;
       }
     });
-    
+
     rowCount++;
-    
+
     // Store row data (in a real implementation, this would go to a database)
     if (!copyState.receivedRows) {
       copyState.receivedRows = [];
@@ -1102,7 +1102,7 @@ function processCopyDone(buffer, socket, connState) {
     // Finalize the copy operation
     const rowCount = copyState.rowsTransferred || 0;
     const bytesCount = copyState.bytesTransferred || 0;
-    
+
     console.log(`COPY operation completed: ${rowCount} rows, ${bytesCount} bytes transferred`);
 
     // Clear copy state
@@ -1111,10 +1111,9 @@ function processCopyDone(buffer, socket, connState) {
     // Send command complete
     const { sendCommandComplete } = require('./messageBuilders');
     sendCommandComplete(socket, `COPY ${rowCount}`);
-
   } catch (error) {
     console.error('Error finalizing COPY operation:', error.message);
-    
+
     const { sendErrorResponse } = require('./messageBuilders');
     sendErrorResponse(
       socket,
@@ -1144,9 +1143,11 @@ function processCopyFail(buffer, socket, connState) {
   // Get copy state
   const copyState = connState.getCopyState();
   if (copyState) {
-    console.log(`COPY operation failed after ${copyState.rowsTransferred} rows, ` +
-      `${copyState.bytesTransferred} bytes transferred`);
-    
+    console.log(
+      `COPY operation failed after ${copyState.rowsTransferred} rows, ` +
+        `${copyState.bytesTransferred} bytes transferred`
+    );
+
     // Clear copy state
     connState.clearCopyState();
   }
