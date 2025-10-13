@@ -29,10 +29,91 @@ class PostgresError extends Error {
     this.line = options.line;
     this.routine = options.routine;
 
-    // Capture stack trace in development mode
+    // Enhanced development mode debugging information
     if (isDevelopmentMode()) {
       Error.captureStackTrace(this, this.constructor);
+      this.debugInfo = this.generateDebugInfo(options);
+      this.enhancedStack = this.generateEnhancedStackTrace();
     }
+  }
+
+  /**
+   * Generates comprehensive debugging information for development mode
+   * @param {Object} options - Original options passed to constructor
+   * @returns {Object} Debug information object
+   */
+  generateDebugInfo(options) {
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      memoryUsage: process.memoryUsage(),
+      processId: process.pid,
+      uptime: process.uptime()
+    };
+
+    // Add query context if available
+    if (options.queryContext) {
+      debugInfo.queryContext = {
+        originalQuery: options.queryContext.originalQuery,
+        normalizedQuery: options.queryContext.normalizedQuery,
+        queryType: options.queryContext.queryType,
+        executionTime: options.queryContext.executionTime,
+        connectionId: options.queryContext.connectionId
+      };
+    }
+
+    // Add connection context if available
+    if (options.connectionContext) {
+      debugInfo.connectionContext = {
+        clientAddress: options.connectionContext.clientAddress,
+        connected: options.connectionContext.connected,
+        transactionStatus: options.connectionContext.transactionStatus,
+        processId: options.connectionContext.processId
+      };
+    }
+
+    return debugInfo;
+  }
+
+  /**
+   * Generates enhanced stack trace with source context
+   * @returns {Object} Enhanced stack trace information
+   */
+  generateEnhancedStackTrace() {
+    const stack = this.stack ? this.stack.split('\n') : [];
+    const enhancedStack = {
+      frames: [],
+      summary: stack[0] || 'Unknown error location'
+    };
+
+    // Process each stack frame to add context
+    for (let i = 1; i < Math.min(stack.length, 10); i++) {
+      const frame = this.parseStackFrame(stack[i]);
+      if (frame) {
+        enhancedStack.frames.push(frame);
+      }
+    }
+
+    return enhancedStack;
+  }
+
+  /**
+   * Parses a single stack frame to extract useful information
+   * @param {string} frameString - Stack frame string
+   * @returns {Object|null} Parsed frame information
+   */
+  parseStackFrame(frameString) {
+    const frameMatch = frameString.match(/\s*at\s+(.+?)\s+\((.+):(\d+):(\d+)\)/);
+    if (frameMatch) {
+      return {
+        function: frameMatch[1],
+        file: frameMatch[2],
+        line: parseInt(frameMatch[3]),
+        column: parseInt(frameMatch[4]),
+        isInternal: frameMatch[2].includes('node_modules') || frameMatch[2].includes('internal')
+      };
+    }
+    return null;
   }
 
   /**
@@ -93,6 +174,219 @@ class PostgresError extends Error {
       return `${existingContext}\n\nStack trace (development mode):\n  ${formattedStack}`;
     }
     return `Stack trace (development mode):\n  ${formattedStack}`;
+  }
+}
+
+/**
+ * Error context generators for different error scenarios
+ */
+class ErrorContext {
+  /**
+   * Generates context for SQL parsing errors
+   * @param {string} query - The SQL query being parsed
+   * @param {number} position - Character position where error occurred
+   * @param {string} expectedTokens - Expected tokens at this position
+   * @returns {Object} Error context object
+   */
+  static generateParsingContext(query, position, expectedTokens) {
+    const lines = query.split('\n');
+    let currentPos = 0;
+    let lineNumber = 1;
+    let columnNumber = 1;
+
+    // Find line and column number for the error position
+    for (const line of lines) {
+      if (currentPos + line.length >= position) {
+        columnNumber = position - currentPos + 1;
+        break;
+      }
+      currentPos += line.length + 1; // +1 for newline
+      lineNumber++;
+    }
+
+    const errorLine = lines[lineNumber - 1] || '';
+    const beforeError = errorLine.substring(0, columnNumber - 1);
+    const afterError = errorLine.substring(columnNumber - 1);
+
+    return {
+      detail: `Syntax error at line ${lineNumber}, column ${columnNumber}`,
+      hint: expectedTokens ? `Expected: ${expectedTokens}` : 'Check SQL syntax near the highlighted area',
+      position: position.toString(),
+      internalQuery: query,
+      context: `SQL parsing at line ${lineNumber}`,
+      file: 'query',
+      line: lineNumber.toString(),
+      routine: 'SQL_parser',
+      queryContext: {
+        errorLine: errorLine,
+        beforeError: beforeError,
+        afterError: afterError,
+        lineNumber: lineNumber,
+        columnNumber: columnNumber
+      }
+    };
+  }
+
+  /**
+   * Generates context for function/operator not found errors
+   * @param {string} functionName - Name of the function that wasn't found
+   * @param {Array} argTypes - Argument types provided
+   * @param {Array} availableFunctions - List of similar available functions
+   * @returns {Object} Error context object
+   */
+  static generateFunctionContext(functionName, argTypes = [], availableFunctions = []) {
+    const argTypeStr = argTypes.length > 0 ? `(${argTypes.join(', ')})` : '()';
+    const suggestions = this.findSimilarFunctions(functionName, availableFunctions);
+
+    return {
+      detail: `Function "${functionName}${argTypeStr}" does not exist`,
+      hint: suggestions.length > 0
+        ? `Did you mean: ${suggestions.slice(0, 3).join(', ')}?`
+        : 'Check the function name and argument types. Use \\df to list available functions.',
+      routine: functionName,
+      context: 'Function resolution',
+      dataType: argTypes.join(', ') || 'void'
+    };
+  }
+
+  /**
+   * Generates context for schema/table/column not found errors
+   * @param {string} objectType - Type of object (schema, table, column)
+   * @param {string} objectName - Name of the object that wasn't found
+   * @param {Object} schemaInfo - Available schema information
+   * @returns {Object} Error context object
+   */
+  static generateSchemaContext(objectType, objectName, schemaInfo = {}) {
+    const suggestions = this.findSimilarObjects(objectName, schemaInfo.availableObjects || []);
+    
+    return {
+      detail: `${objectType.charAt(0).toUpperCase() + objectType.slice(1)} "${objectName}" does not exist`,
+      hint: suggestions.length > 0
+        ? `Did you mean: ${suggestions.slice(0, 3).join(', ')}?`
+        : `Check the ${objectType} name and your search path`,
+      schema: schemaInfo.schema || 'unknown',
+      table: schemaInfo.table,
+      column: schemaInfo.column,
+      context: `${objectType} resolution`,
+      routine: `resolve_${objectType}`
+    };
+  }
+
+  /**
+   * Generates context for constraint violation errors
+   * @param {string} constraintType - Type of constraint (not_null, unique, foreign_key, etc.)
+   * @param {Object} constraintInfo - Information about the constraint
+   * @returns {Object} Error context object
+   */
+  static generateConstraintContext(constraintType, constraintInfo) {
+    const contextMap = {
+      not_null: {
+        detail: `Null value violates not-null constraint on column "${constraintInfo.column}"`,
+        hint: 'Provide a value for this required column or modify the constraint'
+      },
+      unique: {
+        detail: `Duplicate value violates unique constraint "${constraintInfo.constraint}"`,
+        hint: 'The value you are trying to insert already exists'
+      },
+      foreign_key: {
+        detail: `Foreign key constraint "${constraintInfo.constraint}" violated`,
+        hint: 'The referenced record does not exist in the parent table'
+      },
+      check: {
+        detail: `Check constraint "${constraintInfo.constraint}" violated`,
+        hint: 'The value does not satisfy the constraint condition'
+      }
+    };
+
+    const context = contextMap[constraintType] || {
+      detail: `Constraint "${constraintInfo.constraint}" violated`,
+      hint: 'Check the constraint definition and your data'
+    };
+
+    return {
+      ...context,
+      schema: constraintInfo.schema,
+      table: constraintInfo.table,
+      column: constraintInfo.column,
+      constraint: constraintInfo.constraint,
+      context: `Constraint validation: ${constraintType}`,
+      routine: 'constraint_check'
+    };
+  }
+
+  /**
+   * Finds similar function names using fuzzy matching
+   * @param {string} searchName - Function name to search for
+   * @param {Array} availableFunctions - List of available functions
+   * @returns {Array} Array of similar function names
+   */
+  static findSimilarFunctions(searchName, availableFunctions) {
+    return availableFunctions
+      .filter(func => this.calculateSimilarity(searchName, func) > 0.6)
+      .sort((a, b) => this.calculateSimilarity(searchName, b) - this.calculateSimilarity(searchName, a))
+      .slice(0, 5);
+  }
+
+  /**
+   * Finds similar object names using fuzzy matching
+   * @param {string} searchName - Object name to search for
+   * @param {Array} availableObjects - List of available objects
+   * @returns {Array} Array of similar object names
+   */
+  static findSimilarObjects(searchName, availableObjects) {
+    return availableObjects
+      .filter(obj => this.calculateSimilarity(searchName, obj) > 0.5)
+      .sort((a, b) => this.calculateSimilarity(searchName, b) - this.calculateSimilarity(searchName, a))
+      .slice(0, 5);
+  }
+
+  /**
+   * Calculates similarity between two strings using simple algorithm
+   * @param {string} str1 - First string
+   * @param {string} str2 - Second string
+   * @returns {number} Similarity score between 0 and 1
+   */
+  static calculateSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    
+    str1 = str1.toLowerCase();
+    str2 = str2.toLowerCase();
+    
+    if (str1 === str2) return 1;
+    if (str1.includes(str2) || str2.includes(str1)) return 0.8;
+    
+    // Simple character-based similarity
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    const editDistance = this.getEditDistance(longer, shorter);
+    
+    return (longer.length - editDistance) / longer.length;
+  }
+
+  /**
+   * Calculates edit distance between two strings
+   * @param {string} str1 - First string
+   * @param {string} str2 - Second string
+   * @returns {number} Edit distance
+   */
+  static getEditDistance(str1, str2) {
+    const matrix = Array(str2.length + 1).fill().map(() => Array(str1.length + 1).fill(0));
+    
+    for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
+    
+    for (let j = 1; j <= str2.length; j++) {
+      for (let i = 1; i <= str1.length; i++) {
+        const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,
+          matrix[j - 1][i] + 1,
+          matrix[j - 1][i - 1] + cost
+        );
+      }
+    }
+    
+    return matrix[str2.length][str1.length];
   }
 }
 
@@ -364,6 +658,7 @@ function isValidErrorStructure(error) {
 
 module.exports = {
   PostgresError,
+  ErrorContext,
   ErrorFactory,
   createError,
   wrapError,
