@@ -216,7 +216,7 @@ function executeQuery(query, socket, connState) {
     const format = results.copyInfo.binary ? 1 : 0;
     const columnFormats = []; // Default to text format for all columns
     sendCopyOutResponse(socket, format, columnFormats);
-    
+
     // Generate and send mock data
     handleCopyOut(socket, results.copyInfo, connState);
     return; // Command complete will be sent after all data
@@ -1748,14 +1748,14 @@ function formatExplainOutput(plan, format, analyze) {
  */
 function handleCopyQuery(query, connState) {
   const copyInfo = parseCopyQuery(query);
-  
+
   if (copyInfo.error) {
     return {
       error: {
         code: '42601', // Syntax error
         message: copyInfo.error,
-        severity: 'ERROR'
-      }
+        severity: 'ERROR',
+      },
     };
   }
 
@@ -1768,7 +1768,7 @@ function handleCopyQuery(query, connState) {
     table: copyInfo.tableName,
     columns: copyInfo.columns || null,
     binary: copyInfo.binary || false,
-    rowsProcessed: 0
+    rowsProcessed: 0,
   };
   connState.setCopyState(copyStateInfo);
 
@@ -1800,13 +1800,13 @@ function handleCopyQuery(query, connState) {
 function parseCopyQuery(query) {
   // Remove extra whitespace and normalize
   const normalizedQuery = query.trim().replace(/\s+/g, ' ');
-  
+
   // Match COPY FROM STDIN
   let match = normalizedQuery.match(/^COPY\s+([^\s]+)\s+FROM\s+STDIN(?:\s+WITH\s+(.*))?$/i);
   if (match) {
     const tableName = match[1];
     const options = parseCopyOptions(match[2] || '');
-    
+
     return {
       direction: 'FROM',
       tableName: tableName,
@@ -1821,15 +1821,16 @@ function parseCopyQuery(query) {
       columns: options.columns || null,
     };
   }
-  
+
   // Match COPY TO STDOUT
-  const copyToPattern = /^COPY\s+(?:\(([^)]+)\)\s+FROM\s+)?([^\s]+)\s+TO\s+STDOUT(?:\s+WITH\s+(.*))?$/i;
+  const copyToPattern =
+    /^COPY\s+(?:\(([^)]+)\)\s+FROM\s+)?([^\s]+)\s+TO\s+STDOUT(?:\s+WITH\s+(.*))?$/i;
   match = normalizedQuery.match(copyToPattern);
   if (match) {
     const selectClause = match[1];
     const tableOrQuery = match[2];
     const options = parseCopyOptions(match[3] || '');
-    
+
     return {
       direction: 'TO',
       tableName: tableOrQuery,
@@ -1844,13 +1845,13 @@ function parseCopyQuery(query) {
       selectClause: selectClause,
     };
   }
-  
+
   // Match COPY (SELECT ...) TO STDOUT
   match = normalizedQuery.match(/^COPY\s+\(([^)]+)\)\s+TO\s+STDOUT(?:\s+WITH\s+(.*))?$/i);
   if (match) {
     const selectQuery = match[1];
     const options = parseCopyOptions(match[2] || '');
-    
+
     return {
       direction: 'TO',
       query: selectQuery,
@@ -1875,26 +1876,26 @@ function parseCopyQuery(query) {
  */
 function parseCopyOptions(optionsStr) {
   const options = {};
-  
+
   if (!optionsStr) {
     return options;
   }
-  
+
   // Remove parentheses if present
   let cleanOptionsStr = optionsStr.trim();
   if (cleanOptionsStr.startsWith('(') && cleanOptionsStr.endsWith(')')) {
     cleanOptionsStr = cleanOptionsStr.slice(1, -1).trim();
   }
-  
+
   // Split by comma, but handle quoted values
   const parts = [];
   let current = '';
   let inQuotes = false;
   let quoteChar = null;
-  
+
   for (let i = 0; i < cleanOptionsStr.length; i++) {
     const char = cleanOptionsStr[i];
-    
+
     if (!inQuotes && (char === '"' || char === "'")) {
       inQuotes = true;
       quoteChar = char;
@@ -1910,22 +1911,22 @@ function parseCopyOptions(optionsStr) {
       current += char;
     }
   }
-  
+
   if (current.trim()) {
     parts.push(current.trim());
   }
-  
+
   // Parse each option
   for (const part of parts) {
     const optionMatch = part.match(/^\s*([A-Z_]+)(?:\s+(.+))?\s*$/i);
     if (optionMatch) {
       const key = optionMatch[1].toLowerCase();
       let value = optionMatch[2];
-      
+
       if (value) {
         // Remove quotes if present
         value = value.replace(/^['"]|['"]$/g, '');
-        
+
         // Handle specific option types
         switch (key) {
           case 'format':
@@ -1964,7 +1965,7 @@ function parseCopyOptions(optionsStr) {
       }
     }
   }
-  
+
   return options;
 }
 
@@ -1976,7 +1977,7 @@ function parseCopyOptions(optionsStr) {
  */
 function generateMockCopyData(copyInfo, rowCount = 100) {
   const rows = [];
-  
+
   // Define mock data based on table name
   const mockData = {
     users: [
@@ -1985,23 +1986,35 @@ function generateMockCopyData(copyInfo, rowCount = 100) {
       { id: 3, name: 'Bob Johnson', email: 'bob@example.com', created_at: '2023-01-03 12:00:00' },
     ],
     posts: [
-      { id: 1, title: 'First Post', content: 'Hello World', user_id: 1, created_at: '2023-01-01 15:00:00' },
-      { id: 2, title: 'Second Post', content: 'More content', user_id: 2, created_at: '2023-01-02 16:00:00' },
+      {
+        id: 1,
+        title: 'First Post',
+        content: 'Hello World',
+        user_id: 1,
+        created_at: '2023-01-01 15:00:00',
+      },
+      {
+        id: 2,
+        title: 'Second Post',
+        content: 'More content',
+        user_id: 2,
+        created_at: '2023-01-02 16:00:00',
+      },
     ],
     products: [
       { id: 1, name: 'Widget A', price: 19.99, category: 'widgets' },
       { id: 2, name: 'Gadget B', price: 29.99, category: 'gadgets' },
-    ]
+    ],
   };
-  
+
   const tableName = copyInfo.tableName || 'users';
   const baseData = mockData[tableName.toLowerCase()] || mockData.users;
-  
+
   // Generate requested number of rows
   for (let i = 0; i < rowCount; i++) {
     const baseRow = baseData[i % baseData.length];
     const row = { ...baseRow };
-    
+
     // Modify some fields to create variety
     if (row.id) {
       row.id = i + 1;
@@ -2015,10 +2028,10 @@ function generateMockCopyData(copyInfo, rowCount = 100) {
     if (row.title) {
       row.title = `${baseRow.title} ${Math.floor(i / baseData.length) + 1}`;
     }
-    
+
     rows.push(row);
   }
-  
+
   return rows;
 }
 
@@ -2046,27 +2059,27 @@ function formatCopyDataText(rows, copyInfo) {
   const lines = [];
   const delimiter = copyInfo.delimiter;
   const nullString = copyInfo.nullString;
-  
+
   for (const row of rows) {
     const values = Object.values(row).map(value => {
       if (value === null || value === undefined) {
         return nullString;
       }
-      
+
       // Convert to string and escape if needed
       let strValue = String(value);
-      
+
       // Escape special characters
       if (strValue.includes(delimiter) || strValue.includes('\n') || strValue.includes('\r')) {
         strValue = `"${strValue.replace(/"/g, '""')}"`;
       }
-      
+
       return strValue;
     });
-    
+
     lines.push(values.join(delimiter));
   }
-  
+
   return lines.join('\n');
 }
 
@@ -2079,26 +2092,26 @@ function formatCopyDataText(rows, copyInfo) {
 function formatCopyDataBinary(rows, _copyInfo) {
   // Simplified binary format - in real implementation this would be more complex
   const buffers = [];
-  
+
   // Binary header
   const header = Buffer.alloc(15);
   header.write('PGCOPY\n\xff\r\n\0', 0, 11, 'binary');
   header.writeInt32BE(0, 11); // Flags field
   buffers.push(header);
-  
+
   // Extension area length (0)
   const extensionLength = Buffer.alloc(4);
   extensionLength.writeInt32BE(0, 0);
   buffers.push(extensionLength);
-  
+
   for (const row of rows) {
     const values = Object.values(row);
-    
+
     // Field count
     const fieldCount = Buffer.alloc(2);
     fieldCount.writeInt16BE(values.length, 0);
     buffers.push(fieldCount);
-    
+
     for (const value of values) {
       if (value === null || value === undefined) {
         // NULL value
@@ -2109,7 +2122,7 @@ function formatCopyDataBinary(rows, _copyInfo) {
         // Convert value to buffer
         const valueStr = String(value);
         const valueBuffer = Buffer.from(valueStr, 'utf8');
-        
+
         const length = Buffer.alloc(4);
         length.writeInt32BE(valueBuffer.length, 0);
         buffers.push(length);
@@ -2117,12 +2130,12 @@ function formatCopyDataBinary(rows, _copyInfo) {
       }
     }
   }
-  
+
   // End marker
   const endMarker = Buffer.alloc(2);
   endMarker.writeInt16BE(-1, 0);
   buffers.push(endMarker);
-  
+
   return Buffer.concat(buffers);
 }
 
@@ -2136,11 +2149,11 @@ function handleCopyOut(socket, copyInfo, connState) {
   try {
     const { sendCopyData, sendCopyDone } = require('../protocol/messageBuilders');
     const { sendCommandComplete } = require('../protocol/messageBuilders');
-    
+
     // Generate mock data based on COPY type
     let mockData = [];
     const rowCount = copyInfo.options.rowCount || 100; // Default 100 rows
-    
+
     if (copyInfo.from === 'table') {
       // Generate mock table data
       mockData = generateMockCopyData(copyInfo.source, rowCount);
@@ -2148,23 +2161,23 @@ function handleCopyOut(socket, copyInfo, connState) {
       // Generate mock query result data
       mockData = generateMockQueryCopyData(copyInfo.query, rowCount);
     }
-    
+
     // Format and send data
     for (const row of mockData) {
       const formattedData = formatCopyData(row, copyInfo);
       sendCopyData(socket, formattedData);
     }
-    
+
     // Send COPY completion
     sendCopyDone(socket);
-    
+
     // Send command completion
     const commandTag = formatCommandTag('COPY', rowCount);
     sendCommandComplete(socket, commandTag);
-    
+
     // Update connection state
     connState.clearCopyState();
-    
+
     console.log(`COPY OUT completed: ${rowCount} rows sent`);
   } catch (error) {
     console.error('Error in handleCopyOut:', error);
@@ -2526,7 +2539,7 @@ function extractOrderByColumns(query) {
 function generateMockQueryCopyData(query, rowCount) {
   // Simple mock data generator for COPY queries
   const mockData = [];
-  
+
   for (let i = 1; i <= rowCount; i++) {
     mockData.push([
       i, // id
@@ -2535,7 +2548,7 @@ function generateMockQueryCopyData(query, rowCount) {
       new Date().toISOString(), // created_at
     ]);
   }
-  
+
   return mockData;
 }
 
