@@ -20,15 +20,13 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Error handling with proper SQLSTATE codes
   - **SSL/TLS encryption support** (NEW!) - [See SSL Documentation](docs/SSL_SUPPORT.md)
   - **PostgreSQL array type support** (NEW!) - [See Array Documentation](docs/ARRAY_SUPPORT.md)
+  - **COPY protocol for bulk data transfer** (NEW!) - [See COPY Documentation](docs/COPY_PROTOCOL.md)
 
 - **Comprehensive Query Support**
   - SELECT queries with various functions
   - Array queries and operations (NEW!)
-  - **EXPLAIN query support** (NEW!) - [See EXPLAIN Documentation](docs/EXPLAIN_SUPPORT.md)
-    - Mock query execution plans with realistic structure
-    - Support for EXPLAIN ANALYZE with timing simulation
-    - Multiple output formats: TEXT, JSON, XML, YAML
-    - Integration with query optimization tools
+  - **COPY protocol operations** (NEW!) - Bulk data transfer with STDIN/STDOUT support
+  - **EXPLAIN query plans** (NEW!) - Mock query execution plans and analysis
   - SHOW commands for server information
   - DDL commands (CREATE/DROP - mock responses)
   - DML commands (INSERT/UPDATE/DELETE - mock responses)
@@ -148,12 +146,6 @@ SELECT ARRAY[1, 2, 3, 4, 5];
 SELECT '{apple,banana,cherry}';
 SELECT '{1,2,3,4,5}'::int4[];
 SELECT '{{a,b},{c,d}}'::text[][];
-
--- EXPLAIN queries (NEW!)
-EXPLAIN SELECT * FROM users;
-EXPLAIN ANALYZE SELECT * FROM users WHERE id = 1;
-EXPLAIN (FORMAT JSON) SELECT * FROM users ORDER BY name;
-EXPLAIN (FORMAT JSON, ANALYZE) SELECT u.*, p.title FROM users u JOIN posts p ON u.id = p.user_id;
 
 -- Server information
 SHOW DOCS;
