@@ -5,7 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v1.2.0] - 2025-10-11
+
+### Added
+
+- **COPY Protocol Support** - Full implementation of PostgreSQL COPY command protocol (#108)
+  - Support for COPY FROM and COPY TO operations
+  - Binary and text format support
+  - Streaming data transfer capabilities
+  - Comprehensive protocol message handling
+
+- **EXPLAIN Query Support** - Complete EXPLAIN functionality for query analysis (#105)
+  - Support for all EXPLAIN formats (TEXT, JSON, XML, YAML)
+  - EXPLAIN ANALYZE with simulated timing information
+  - Mock execution plans for testing query optimization tools
+  - Integration with PostgreSQL client libraries
+  - Comprehensive documentation and examples
+
+- **Custom Data Types Support** - Framework for defining custom PostgreSQL data types (#104)
+  - Extensible type system architecture
+  - Custom type registration and validation
+  - Wire protocol integration for custom types
+
+- **SCRAM-SHA-256 Authentication** - Enhanced security with modern authentication (#99, #100)
+  - Full SCRAM-SHA-256 implementation
+  - Secure password hashing and verification
+  - Nonce generation and challenge-response protocol
+  - Backwards compatibility with existing auth methods
+
+- **Enhanced Query Logging** - Comprehensive query monitoring and debugging (#96)
+  - Timestamped query logs with execution details
+  - Parameter binding information
+  - Configurable log levels and formats
+  - Performance metrics and timing data
+
+- **SSL/TLS Support** - Secure connections for production-like testing (#89)
+  - Full SSL/TLS handshake implementation
+  - Certificate-based authentication
+  - Configurable cipher suites and protocols
+  - Self-signed certificate generation scripts
+
+- **Comprehensive Error Handling** - PostgreSQL-compliant error responses (#91)
+  - Standard PostgreSQL error codes and messages
+  - Detailed error context and suggestions
+  - Proper error propagation through the protocol stack
+  - Enhanced debugging capabilities
+
+- **Protocol Test Suite** - Extensive testing framework for protocol compliance (#103)
+  - Message flow validation tests
+  - Authentication mechanism tests
+  - Error condition testing
+  - Performance and stress testing
+
+- **Environment Variable Validation** - Robust configuration management (#86)
+  - Startup validation of all configuration parameters
+  - Clear error messages for invalid settings
+  - Default value documentation and validation
+
+### Improved
+
+- **Connection State Management** - Enhanced connection lifecycle handling (#83)
+  - Improved state validation methods
+  - Better connection tracking and cleanup
+  - Enhanced error recovery mechanisms
+
+- **Message Type Validation** - Strengthened protocol message handling (#84)
+  - Comprehensive protocol state validation
+  - Enhanced message type checking
+  - Better error reporting for invalid messages
+
+- **Logging System** - Standardized log formatting across components (#85)
+  - Consistent log message structure
+  - Improved readability and parsing
+  - Better integration with log aggregation tools
+
+- **Test Infrastructure** - Reduced test noise and improved reliability (#92, #93)
+  - Cleaner test output and reporting
+  - Fixed flaky tests and race conditions
+  - Better test isolation and cleanup
+
+### Fixed
+
+- **Linting Issues** - Code quality and consistency improvements (#107, #98)
+  - Fixed ESLint violations across codebase
+  - Improved CI/CD pipeline reliability
+  - Enhanced code formatting and style consistency
+
+### Internal
+
+- **Error Message Consolidation** - Centralized error constant management (#82)
+  - Unified error message definitions
+  - Improved maintainability and consistency
+  - Better internationalization support preparation
 
 ## [1.1.0] - 2024-10-04
 
