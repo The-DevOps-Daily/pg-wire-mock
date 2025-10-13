@@ -1,12 +1,36 @@
-# Error handling and enhanced error responses
+# Enhanced Error Handling and Responses
 
-This document describes pg-wire-mock's enhanced PostgreSQL-compliant error handling. It explains the runtime behavior, public API, examples, testing, configuration, and troubleshooting guidance.
+This document describes pg-wire-mock's comprehensive PostgreSQL-compliant error handling system with advanced debugging capabilities. It explains the runtime behavior, public API, examples, testing, configuration, and troubleshooting guidance.
 
 ## Overview
 
-pg-wire-mock now produces structured, PostgreSQL-wire-protocol-compliant error responses. The implementation adds a small, easy-to-use API for building rich Postgres-style errors (including severity, SQLSTATE, message, detail, hint, position, context, and optional debug fields). The goal is to make errors useful for client debugging while remaining backward-compatible for clients that only read the message and code.
+pg-wire-mock provides enhanced structured, PostgreSQL-wire-protocol-compliant error responses with detailed debugging information. The implementation adds comprehensive error context generation, development mode debugging features, and intelligent error suggestions to significantly improve the client development experience.
 
-Key features:
+## Enhanced Features (New)
+
+### 🔍 **Detailed Error Context Generation**
+- **Parsing Errors**: Line and column information with syntax suggestions
+- **Function Errors**: Similar function suggestions using fuzzy matching algorithm
+- **Schema Errors**: Object name suggestions for tables, columns, and schemas
+- **Constraint Violations**: Detailed constraint information with resolution hints
+
+### 🐛 **Advanced Development Mode Debugging**
+- **Enhanced Stack Traces**: Source file context and non-internal frame filtering
+- **Memory Usage Tracking**: Process memory information at error time
+- **Query Context**: Original query, execution time, and connection details
+- **Debug Information**: Node.js version, process ID, uptime, and performance metrics
+
+### 🛡️ **Production Safety & Security**
+- **Information Filtering**: Sensitive details automatically excluded in production mode
+- **Stack Trace Control**: Debug information only available in development environments
+- **Performance Optimization**: Minimal overhead in production deployments
+
+### 📋 **Full PostgreSQL Protocol Compliance**
+- **All Standard Fields**: Severity, code, message, detail, hint, position, context, etc.
+- **Extended Fields**: Schema, table, column, constraint, file, line, routine
+- **Wire Protocol**: Proper ErrorResponse message formatting with all field types
+
+## Core Features (Existing)
 
 - Full support for PostgreSQL wire `ErrorResponse` fields (S, C, M, D, H, P, p, q, W, s, t, c, d, n, F, L, R)
 - Centralized `ERROR_CODES` and `ERROR_MESSAGES` in `src/protocol/constants.js`
