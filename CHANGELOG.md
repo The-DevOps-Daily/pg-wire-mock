@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **LISTEN/NOTIFY Asynchronous Notification System** - Complete implementation of PostgreSQL async notifications (#101)
+  - LISTEN, UNLISTEN (including UNLISTEN \*) and NOTIFY command handling
+  - Channel management and broadcasting system
+  - Connection-level listener tracking and cleanup
+  - Protocol notifications delivered via proper PostgreSQL messages
+  - Channel name validation following PostgreSQL identifier rules
+  - Payload size and channel/listener limits enforcement
+  - Good test suite for broadcasting and cleanup behavior
+  - Full documentation in [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)
+
 ## [v1.2.0] - 2025-10-11
 
 ### Added
@@ -13,14 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Support for COPY FROM and COPY TO operations
   - Binary and text format support
   - Streaming data transfer capabilities
-  - Comprehensive protocol message handling
+  - Good protocol message handling
 
 - **EXPLAIN Query Support** - Complete EXPLAIN functionality for query analysis (#105)
   - Support for all EXPLAIN formats (TEXT, JSON, XML, YAML)
   - EXPLAIN ANALYZE with simulated timing information
   - Mock execution plans for testing query optimization tools
   - Integration with PostgreSQL client libraries
-  - Comprehensive documentation and examples
+  - Good documentation and examples
 
 - **Custom Data Types Support** - Framework for defining custom PostgreSQL data types (#104)
   - Extensible type system architecture
@@ -33,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Nonce generation and challenge-response protocol
   - Backwards compatibility with existing auth methods
 
-- **Enhanced Query Logging** - Comprehensive query monitoring and debugging (#96)
+- **Enhanced Query Logging** - Good query monitoring and debugging (#96)
   - Timestamped query logs with execution details
   - Parameter binding information
   - Configurable log levels and formats
@@ -45,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configurable cipher suites and protocols
   - Self-signed certificate generation scripts
 
-- **Comprehensive Error Handling** - PostgreSQL-compliant error responses (#91)
+- **Good Error Handling** - PostgreSQL-compliant error responses (#91)
   - Standard PostgreSQL error codes and messages
   - Detailed error context and suggestions
   - Proper error propagation through the protocol stack
@@ -70,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enhanced error recovery mechanisms
 
 - **Message Type Validation** - Strengthened protocol message handling (#84)
-  - Comprehensive protocol state validation
+  - Good protocol state validation
   - Enhanced message type checking
   - Better error reporting for invalid messages
 
@@ -108,7 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Array literal syntax: `'{1,2,3,4,5}'::int4[]`
   - Array constructor syntax: `ARRAY[1, 2, 3, 4, 5]`
   - Automatic array encoding/decoding in wire protocol messages
-  - Comprehensive test suite with 54 test cases
+  - Good test suite with 54 test cases
   - Full documentation in [docs/ARRAY_SUPPORT.md](docs/ARRAY_SUPPORT.md)
 - **Graceful Shutdown System**
   - Multi-phase shutdown process with connection draining
@@ -116,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic transaction rollback during shutdown
   - Configurable shutdown and drain timeouts
   - Force closure of lingering connections after timeout
-  - Comprehensive shutdown status monitoring
+  - Good shutdown status monitoring
   - Signal handling for SIGTERM, SIGINT, and SIGUSR1
   - Resource cleanup and state management
   - Error handling during shutdown process
@@ -130,11 +144,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `getActiveConnectionCount()` method for connection monitoring
   - Enhanced `closeConnection()` method with graceful closure support
 - **Documentation**
-  - Comprehensive [Graceful Shutdown Documentation](SHUTDOWN.md)
+  - Good [Graceful Shutdown Documentation](SHUTDOWN.md)
   - Updated README with shutdown configuration and best practices
   - API reference for shutdown methods and monitoring
 - **Testing**
-  - Comprehensive test suite for shutdown behavior
+  - Good test suite for shutdown behavior
   - Tests for connection draining and force closure
   - Error handling tests during shutdown
   - Configuration and status monitoring tests
