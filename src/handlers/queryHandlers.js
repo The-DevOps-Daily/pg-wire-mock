@@ -168,7 +168,15 @@ function executeQuery(query, socket, connState) {
   // Handle query errors
   if (results.error) {
     // Log the error with full details
-    queryLogger.error('Query execution failed', formatErrorForLogging(results.error));
+    queryLogger.error('Query execution failed', {
+      ...formatErrorForLogging(results.error),
+      queryContext: {
+        connectionId: connState.connectionId,
+        user: connState.getCurrentUser(),
+        database: connState.getCurrentDatabase(),
+        transactionStatus: connState.transactionStatus,
+      },
+    });
 
     // Convert error to protocol format
     const errorDetails = results.error.toProtocolFormat
@@ -337,7 +345,10 @@ function processQuery(query, connState) {
     // Wrap the error with enhanced details
     const wrappedError = wrapError(
       error,
-      'An unexpected error occurred while processing the query'
+      'An unexpected error occurred while processing the query',
+      {
+        internalQuery: query,
+      }
     );
 
     return {

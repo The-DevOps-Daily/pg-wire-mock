@@ -28,6 +28,8 @@ class PostgresError extends Error {
     this.file = options.file;
     this.line = options.line;
     this.routine = options.routine;
+    this.documentationLink = options.documentationLink;
+    this.suggestion = options.suggestion;
 
     // Capture stack trace in development mode
     if (isDevelopmentMode()) {
@@ -127,6 +129,8 @@ const ErrorFactory = {
   syntaxError(message, options = {}) {
     return createError(ERROR_CODES.SYNTAX_ERROR, message, {
       hint: 'Check your SQL syntax and try again.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.SYNTAX_ERROR),
+      suggestion: getSuggestedFix(ERROR_CODES.SYNTAX_ERROR),
       ...options,
     });
   },
@@ -141,6 +145,8 @@ const ErrorFactory = {
         : 'Check the column name and table reference.',
       column: columnName,
       table: tableName,
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.UNDEFINED_COLUMN),
+      suggestion: getSuggestedFix(ERROR_CODES.UNDEFINED_COLUMN),
       ...options,
     });
   },
@@ -152,6 +158,8 @@ const ErrorFactory = {
     return createError(ERROR_CODES.UNDEFINED_TABLE, `relation "${tableName}" does not exist`, {
       hint: 'Check that the table name is spelled correctly and exists in the schema.',
       table: tableName,
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.UNDEFINED_TABLE),
+      suggestion: getSuggestedFix(ERROR_CODES.UNDEFINED_TABLE),
       ...options,
     });
   },
@@ -167,6 +175,8 @@ const ErrorFactory = {
       {
         hint: 'Check the function name and that you are passing the correct argument types.',
         routine: functionName,
+        documentationLink: getErrorDocumentationLink(ERROR_CODES.UNDEFINED_FUNCTION),
+        suggestion: getSuggestedFix(ERROR_CODES.UNDEFINED_FUNCTION),
         ...options,
       }
     );
@@ -181,6 +191,8 @@ const ErrorFactory = {
     return createError(ERROR_CODES.INTERNAL_ERROR, message, {
       detail: 'An unexpected error occurred while processing the query.',
       hint: 'This may be a bug in the server. Please report it if the issue persists.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.INTERNAL_ERROR),
+      suggestion: getSuggestedFix(ERROR_CODES.INTERNAL_ERROR),
       context,
       file: error?.fileName,
       line: error?.lineNumber?.toString(),
@@ -195,6 +207,8 @@ const ErrorFactory = {
     return createError(ERROR_CODES.PROTOCOL_VIOLATION, message, {
       detail: 'The client sent a message that violates the PostgreSQL protocol.',
       hint: 'This is usually a client library issue. Check that you are using a compatible client.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.PROTOCOL_VIOLATION),
+      suggestion: getSuggestedFix(ERROR_CODES.PROTOCOL_VIOLATION),
       ...options,
     });
   },
@@ -205,6 +219,8 @@ const ErrorFactory = {
   featureNotSupported(feature, options = {}) {
     return createError(ERROR_CODES.FEATURE_NOT_SUPPORTED, `${feature} is not supported`, {
       hint: 'This mock server implements a subset of PostgreSQL features.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.FEATURE_NOT_SUPPORTED),
+      suggestion: getSuggestedFix(ERROR_CODES.FEATURE_NOT_SUPPORTED),
       ...options,
     });
   },
@@ -218,6 +234,8 @@ const ErrorFactory = {
       `invalid value for parameter "${parameter}": "${value}"`,
       {
         hint: 'Check that the parameter value is in the correct format.',
+        documentationLink: getErrorDocumentationLink(ERROR_CODES.INVALID_PARAMETER_VALUE),
+        suggestion: getSuggestedFix(ERROR_CODES.INVALID_PARAMETER_VALUE),
         ...options,
       }
     );
@@ -229,6 +247,8 @@ const ErrorFactory = {
   dataException(message, options = {}) {
     return createError(ERROR_CODES.DATA_EXCEPTION, message, {
       hint: 'Check that the data is in the correct format and type.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.DATA_EXCEPTION),
+      suggestion: getSuggestedFix(ERROR_CODES.DATA_EXCEPTION),
       ...options,
     });
   },
@@ -243,6 +263,8 @@ const ErrorFactory = {
       {
         column: columnName,
         hint: 'The column does not allow null values.',
+        documentationLink: getErrorDocumentationLink(ERROR_CODES.NULL_VALUE_NOT_ALLOWED),
+        suggestion: getSuggestedFix(ERROR_CODES.NULL_VALUE_NOT_ALLOWED),
         ...options,
       }
     );
@@ -254,6 +276,8 @@ const ErrorFactory = {
   emptyQuery(options = {}) {
     return createError(ERROR_CODES.SYNTAX_ERROR, ERROR_MESSAGES.EMPTY_QUERY, {
       hint: 'Ensure that you are sending a non-empty SQL query.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.SYNTAX_ERROR),
+      suggestion: getSuggestedFix(ERROR_CODES.SYNTAX_ERROR),
       ...options,
     });
   },
@@ -265,6 +289,8 @@ const ErrorFactory = {
     return createError(ERROR_CODES.SYNTAX_ERROR, ERROR_MESSAGES.UNTERMINATED_STRING, {
       position: position?.toString(),
       hint: 'Make sure all string literals are properly closed with matching quotes.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.SYNTAX_ERROR),
+      suggestion: getSuggestedFix(ERROR_CODES.SYNTAX_ERROR),
       ...options,
     });
   },
@@ -276,6 +302,8 @@ const ErrorFactory = {
     return createError(ERROR_CODES.SYNTAX_ERROR, ERROR_MESSAGES.UNTERMINATED_IDENTIFIER, {
       position: position?.toString(),
       hint: 'Make sure all quoted identifiers are properly closed with matching quotes.',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.SYNTAX_ERROR),
+      suggestion: getSuggestedFix(ERROR_CODES.SYNTAX_ERROR),
       ...options,
     });
   },
@@ -286,6 +314,8 @@ const ErrorFactory = {
   invalidArrayFormat(message, options = {}) {
     return createError(ERROR_CODES.INVALID_PARAMETER_VALUE, message, {
       hint: 'Arrays must be in PostgreSQL format like {val1,val2} or ARRAY[val1,val2].',
+      documentationLink: getErrorDocumentationLink(ERROR_CODES.INVALID_PARAMETER_VALUE),
+      suggestion: getSuggestedFix(ERROR_CODES.INVALID_PARAMETER_VALUE),
       ...options,
     });
   },
@@ -297,16 +327,22 @@ const ErrorFactory = {
  * @param {string} context - Additional context
  * @returns {PostgresError} Wrapped error
  */
-function wrapError(error, context) {
+function wrapError(error, context, options = {}) {
   if (error instanceof PostgresError) {
     // Add context to existing PostgresError
     const wrappedError = new PostgresError(error.code, error.message, error);
     wrappedError.context = error.context ? `${context}\n${error.context}` : context;
+    if (options.internalQuery && !wrappedError.internalQuery) {
+      wrappedError.internalQuery = options.internalQuery;
+    }
     return wrappedError;
   }
 
   // Wrap generic error
-  return ErrorFactory.internalError(error.message || 'Unknown error occurred', error, { context });
+  return ErrorFactory.internalError(error.message || 'Unknown error occurred', error, {
+    context,
+    ...(options.internalQuery ? { internalQuery: options.internalQuery } : {}),
+  });
 }
 
 /**
@@ -336,6 +372,9 @@ function formatErrorForLogging(error) {
       formatted.stack = error.stack;
     }
 
+    if (error.documentationLink) formatted.documentation = error.documentationLink;
+    if (error.suggestion) formatted.suggestion = error.suggestion;
+
     return formatted;
   }
 
@@ -345,7 +384,75 @@ function formatErrorForLogging(error) {
     severity: ERROR_SEVERITY.ERROR,
     message: error.message || 'Unknown error',
     ...(isDevelopmentMode() && error.stack && { stack: error.stack }),
+    documentation: getErrorDocumentationLink('XX000'),
+    suggestion: getSuggestedFix('XX000'),
   };
+}
+
+/**
+ * Returns a documentation URL for a given SQLSTATE code
+ * @param {string} code - SQLSTATE error code
+ * @returns {string} URL string
+ */
+function getErrorDocumentationLink(_code) {
+  // Link to PostgreSQL SQLSTATE appendix
+  return 'https://www.postgresql.org/docs/current/errcodes-appendix.html#ERRCODES-TABLE';
+}
+
+/**
+ * Returns a suggested fix for a given SQLSTATE code
+ * @param {string} code - SQLSTATE error code
+ * @returns {string} Suggested fix message
+ */
+function getSuggestedFix(code) {
+  switch (code) {
+    case ERROR_CODES.SYNTAX_ERROR:
+      return 'Review SQL syntax near the reported position; check quotes and keywords.';
+    case ERROR_CODES.UNDEFINED_COLUMN:
+      return 'Verify column names and use correct table aliases.';
+    case ERROR_CODES.UNDEFINED_TABLE:
+      return 'Ensure the referenced table exists and schema is correct.';
+    case ERROR_CODES.UNDEFINED_FUNCTION:
+      return 'Check function name and argument types; ensure function exists in current schema.';
+    case ERROR_CODES.INVALID_PARAMETER_VALUE:
+      return 'Validate parameter types and formats before sending the query.';
+    case ERROR_CODES.NULL_VALUE_NOT_ALLOWED:
+      return 'Provide non-null values or alter the column to accept NULLs if appropriate.';
+    case ERROR_CODES.PROTOCOL_VIOLATION:
+      return 'Update the client library and ensure it speaks protocol v3 correctly.';
+    default:
+      return 'Enable development mode to see stack traces and check server logs for details.';
+  }
+}
+
+/**
+ * Reports error to an optional tracking service (stdout stub or file logger)
+ * Controlled via env vars: PG_MOCK_ERROR_TRACKING_ENABLED, PG_MOCK_ERROR_TRACKING_PROJECT
+ * @param {Error|PostgresError} error
+ * @param {Object} meta
+ */
+function reportError(error, meta = {}) {
+  try {
+    const enabled = String(process.env.PG_MOCK_ERROR_TRACKING_ENABLED || 'false').toLowerCase();
+    if (!['true', '1', 'yes', 'on'].includes(enabled)) return;
+
+    const payload = {
+      type: error?.name || 'Error',
+      project: process.env.PG_MOCK_ERROR_TRACKING_PROJECT || 'pg-wire-mock',
+      environment: process.env.NODE_ENV || 'production',
+      timestamp: new Date().toISOString(),
+      error: formatErrorForLogging(error),
+      meta,
+    };
+    // Simple stdout-based integration for portability; users can pipe to a collector
+    // Example: PG_MOCK_ERROR_TRACKING_ENABLED=true node server.js > error-stream.ndjson
+    // Downstream systems can ingest lines starting with ERROR_TRACKING\t{json}
+    // Keep one-line JSON for easy ingestion
+    // eslint-disable-next-line no-console
+    console.error(`ERROR_TRACKING\t${JSON.stringify(payload)}`);
+  } catch (_e) {
+    // Never throw from error reporting
+  }
 }
 
 /**
@@ -370,4 +477,7 @@ module.exports = {
   formatErrorForLogging,
   isValidErrorStructure,
   isDevelopmentMode,
+  getErrorDocumentationLink,
+  getSuggestedFix,
+  reportError,
 };

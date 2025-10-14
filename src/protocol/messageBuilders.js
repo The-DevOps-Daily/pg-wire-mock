@@ -308,6 +308,8 @@ function sendErrorResponse(socket, code, message, additionalFields = {}, options
     detail: options.detail,
     hint: options.hint,
     position: options.position,
+    documentation: options.documentationLink,
+    suggestion: options.suggestion,
   });
 }
 

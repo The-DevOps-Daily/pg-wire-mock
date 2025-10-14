@@ -10,6 +10,9 @@ const {
   formatErrorForLogging,
   isValidErrorStructure,
   isDevelopmentMode,
+  getErrorDocumentationLink,
+  getSuggestedFix,
+  reportError,
 } = require('../src/utils/errorHandler');
 
 const { ERROR_CODES, ERROR_SEVERITY } = require('../src/protocol/constants');
@@ -368,6 +371,224 @@ describe('ErrorHandler', () => {
       expect(format.file).toBe('file');
       expect(format.line).toBe('10');
       expect(format.routine).toBe('routine');
+    });
+
+    it('should include documentation link and suggestions', () => {
+      const error = new PostgresError(ERROR_CODES.SYNTAX_ERROR, 'Test error', {
+        documentationLink: 'https://example.com/docs',
+        suggestion: 'Check your syntax',
+      });
+
+      expect(error.documentationLink).toBe('https://example.com/docs');
+      expect(error.suggestion).toBe('Check your syntax');
+    });
+
+    it('should capture stack trace in development mode', () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      const error = new PostgresError(ERROR_CODES.INTERNAL_ERROR, 'Test error');
+      expect(error.stack).toBeDefined();
+
+      process.env.NODE_ENV = originalNodeEnv;
+    });
+
+    it('should format context with stack trace in development mode', () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      const error = new PostgresError(ERROR_CODES.INTERNAL_ERROR, 'Test error');
+      const formatted = error.formatContextWithStack('Existing context');
+
+      expect(formatted).toContain('Existing context');
+      expect(formatted).toContain('Stack trace (development mode)');
+
+      process.env.NODE_ENV = originalNodeEnv;
+    });
+  });
+
+  describe('Enhanced Error Factory', () => {
+    it('should include documentation links in all error types', () => {
+      const syntaxError = ErrorFactory.syntaxError('syntax error');
+      expect(syntaxError.documentationLink).toContain('postgresql.org');
+      expect(syntaxError.suggestion).toBeDefined();
+
+      const internalError = ErrorFactory.internalError('internal error', new Error('orig'));
+      expect(internalError.documentationLink).toContain('postgresql.org');
+      expect(internalError.suggestion).toBeDefined();
+
+      const protocolError = ErrorFactory.protocolViolation('protocol error');
+      expect(protocolError.documentationLink).toContain('postgresql.org');
+      expect(protocolError.suggestion).toBeDefined();
+    });
+
+    it('should provide specific suggestions for each error type', () => {
+      const syntaxError = ErrorFactory.syntaxError('syntax error');
+      expect(syntaxError.suggestion).toContain('syntax');
+
+      expect(getSuggestedFix(ERROR_CODES.UNDEFINED_COLUMN)).toContain('column names');
+      expect(getSuggestedFix(ERROR_CODES.UNDEFINED_TABLE)).toContain('table exists');
+    });
+
+    it('should add query context to internal errors in development mode', () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      const originalError = new Error('Original error message');
+      const error = ErrorFactory.internalError('Wrapped error', originalError);
+
+      expect(error.context).toContain('Original error: Original error message');
+
+      process.env.NODE_ENV = originalNodeEnv;
+    });
+  });
+
+  describe('Enhanced Error Wrapping', () => {
+    it('should preserve query context when wrapping errors', () => {
+      const originalError = ErrorFactory.syntaxError('syntax error');
+      const wrappedError = wrapError(originalError, 'Query context', {
+        internalQuery: 'SELECT * FROM users',
+      });
+
+      expect(wrappedError.context).toContain('Query context');
+      expect(wrappedError.internalQuery).toBe('SELECT * FROM users');
+    });
+
+    it('should wrap generic errors with enhanced information', () => {
+      const originalError = new Error('Generic error');
+      const wrappedError = wrapError(originalError, 'Execution context', {
+        internalQuery: 'UPDATE users SET name = ?',
+      });
+
+      expect(wrappedError).toBeInstanceOf(PostgresError);
+      expect(wrappedError.context).toContain('Execution context');
+      expect(wrappedError.internalQuery).toBe('UPDATE users SET name = ?');
+    });
+  });
+
+  describe('Enhanced Error Logging', () => {
+    it('should include documentation and suggestions in formatted logs', () => {
+      const error = ErrorFactory.syntaxError('syntax error');
+      const formatted = formatErrorForLogging(error);
+
+      expect(formatted.documentation).toContain('postgresql.org');
+      expect(formatted.suggestion).toBeDefined();
+    });
+
+    it('should include stack traces in development mode', () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      const error = new PostgresError(ERROR_CODES.INTERNAL_ERROR, 'Test error');
+      const formatted = formatErrorForLogging(error);
+
+      expect(formatted.stack).toBeDefined();
+
+      process.env.NODE_ENV = originalNodeEnv;
+    });
+
+    it('should format generic errors with documentation links', () => {
+      const error = new Error('Generic error');
+      const formatted = formatErrorForLogging(error);
+
+      expect(formatted.documentation).toContain('postgresql.org');
+      expect(formatted.suggestion).toBeDefined();
+    });
+  });
+
+  describe('Error Documentation and Suggestions', () => {
+    it('should provide appropriate documentation links', () => {
+      const link = getErrorDocumentationLink(ERROR_CODES.SYNTAX_ERROR);
+      expect(link).toContain('postgresql.org');
+      expect(link).toContain('errcodes-appendix');
+    });
+
+    it('should provide specific suggestions for known error codes', () => {
+      expect(getSuggestedFix(ERROR_CODES.SYNTAX_ERROR)).toContain('SQL syntax');
+      expect(getSuggestedFix(ERROR_CODES.UNDEFINED_COLUMN)).toContain('column names');
+      expect(getSuggestedFix(ERROR_CODES.UNDEFINED_TABLE)).toContain('table exists');
+      expect(getSuggestedFix(ERROR_CODES.PROTOCOL_VIOLATION)).toContain('client library');
+      expect(getSuggestedFix('UNKNOWN_CODE')).toContain('development mode');
+    });
+  });
+
+  describe('Error Tracking Integration', () => {
+    const originalConsoleError = console.error;
+    let capturedLogs = [];
+
+    beforeEach(() => {
+      capturedLogs = [];
+      console.error = (...args) => capturedLogs.push(args.join(' '));
+    });
+
+    afterEach(() => {
+      console.error = originalConsoleError;
+      delete process.env.PG_MOCK_ERROR_TRACKING_ENABLED;
+      delete process.env.PG_MOCK_ERROR_TRACKING_PROJECT;
+    });
+
+    it('should not report errors when tracking is disabled', () => {
+      process.env.PG_MOCK_ERROR_TRACKING_ENABLED = 'false';
+      const error = ErrorFactory.syntaxError('test error');
+
+      reportError(error, { query: 'SELECT 1' });
+
+      expect(capturedLogs).toHaveLength(0);
+    });
+
+    it('should report errors when tracking is enabled', () => {
+      process.env.PG_MOCK_ERROR_TRACKING_ENABLED = 'true';
+      process.env.PG_MOCK_ERROR_TRACKING_PROJECT = 'test-project';
+
+      const error = ErrorFactory.syntaxError('test error');
+      reportError(error, { query: 'SELECT 1', clientId: 'test-client' });
+
+      expect(capturedLogs).toHaveLength(1);
+      expect(capturedLogs[0]).toContain('ERROR_TRACKING');
+      expect(capturedLogs[0]).toContain('test-project');
+      expect(capturedLogs[0]).toContain('test error');
+    });
+
+    it('should handle various enabled values', () => {
+      const enabledValues = ['true', '1', 'yes', 'on'];
+
+      enabledValues.forEach(value => {
+        capturedLogs = [];
+        process.env.PG_MOCK_ERROR_TRACKING_ENABLED = value;
+
+        const error = ErrorFactory.syntaxError('test error');
+        reportError(error);
+
+        expect(capturedLogs).toHaveLength(1);
+      });
+    });
+
+    it('should include error metadata in tracking payload', () => {
+      process.env.PG_MOCK_ERROR_TRACKING_ENABLED = 'true';
+
+      const error = ErrorFactory.syntaxError('test error');
+      reportError(error, {
+        query: 'SELECT * FROM users',
+        clientId: 'test-client',
+        duration: 150,
+      });
+
+      const logOutput = capturedLogs[0];
+      expect(logOutput).toContain('test-client');
+      expect(logOutput).toContain('SELECT * FROM users');
+      expect(logOutput).toContain('150');
+    });
+
+    it('should not throw when reporting fails', () => {
+      process.env.PG_MOCK_ERROR_TRACKING_ENABLED = 'true';
+
+      // Create a circular reference to cause JSON.stringify to fail
+      const meta = {};
+      meta.circular = meta;
+
+      expect(() => {
+        reportError(new Error('test'), meta);
+      }).not.toThrow();
     });
   });
 });

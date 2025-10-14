@@ -23,6 +23,12 @@ const DEFAULT_CONFIG = {
   enableLogging: true,
   logLevel: 'info', // error, warn, info, debug
 
+  // Error tracking (optional)
+  errorTracking: {
+    enabled: false,
+    project: 'pg-wire-mock',
+  },
+
   // Query logging settings
   queryLogging: {
     enableDetailedLogging: true, // Enable detailed query logging
@@ -135,6 +141,10 @@ const ENV_MAPPING = {
   PG_MOCK_QUERY_LOG_DIR: { key: 'queryLogging.logDirectory', type: 'string' },
   PG_MOCK_QUERY_MAX_FILE_SIZE: { key: 'queryLogging.maxLogFileSize', type: 'number' },
   PG_MOCK_QUERY_MAX_FILES: { key: 'queryLogging.maxLogFiles', type: 'number' },
+
+  // Error tracking environment variables
+  PG_MOCK_ERROR_TRACKING_ENABLED: { key: 'errorTracking.enabled', type: 'boolean' },
+  PG_MOCK_ERROR_TRACKING_PROJECT: { key: 'errorTracking.project', type: 'string' },
 };
 
 /**
