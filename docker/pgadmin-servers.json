@@ -1,0 +1,25 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "pg-wire-mock (Development)",
+      "Group": "Development",
+      "Host": "pg-wire-mock-dev",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Mock PostgreSQL server for testing"
+    },
+    "2": {
+      "Name": "PostgreSQL Real (Comparison)",
+      "Group": "Development",
+      "Host": "postgres-real",
+      "Port": 5432,
+      "MaintenanceDB": "testdb",
+      "Username": "postgres",
+      "Password": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Real PostgreSQL for comparison testing"
+    }
+  }
+}

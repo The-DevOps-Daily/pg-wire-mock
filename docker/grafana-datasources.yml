@@ -1,0 +1,43 @@
+# Grafana datasources provisioning
+
+apiVersion: 1
+
+datasources:
+  # Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus-dev:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: '15s'
+      httpMethod: 'POST'
+
+  # PostgreSQL datasource (real instance)
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres-real:5432
+    database: testdb
+    user: postgres
+    secureJsonData:
+      password: postgres
+    jsonData:
+      sslmode: 'prefer'
+      postgresVersion: 1600
+      timescaledb: false
+    editable: true
+
+  # Redis datasource
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis-dev:6379
+    jsonData:
+      client: standalone
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
+    editable: true

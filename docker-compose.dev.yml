@@ -1,81 +1,172 @@
-# docker-compose.dev.yml
-# Stable development environment for pg-wire-mock
-# Works on Windows without Prometheus crashing
+# Complete development environment for pg-wire-mock
+# Includes: pg-wire-mock, PostgreSQL, pgAdmin, Prometheus, Grafana, Redis
 
 services:
-  # Main application
+  # pg-wire-mock server with hot reload
   pg-wire-mock:
     build:
       context: .
       dockerfile: docker/Dockerfile.dev
-    container_name: pg-wire-mock
+    container_name: pg-wire-mock-dev
     ports:
-      - "5432:5432"  
+      - "5432:5432"  # PostgreSQL protocol port
+      - "9229:9229"  # Node.js debugger port
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - PORT=5432
+      - HOST=0.0.0.0
+      - ENABLE_METRICS=true
+      - METRICS_PORT=9090
+    volumes:
+      - ./src:/app/src:cached
+      - ./package.json:/app/package.json:ro
+      - node_modules:/app/node_modules
+    command: npm run dev
     restart: unless-stopped
     networks:
-      - monitoring
+      - pg-dev-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(5432, 'localhost').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
-  # PostgreSQL client for testing
-  pg-client:
-    image: postgres:17-alpine
-    container_name: pg-client
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+  # Real PostgreSQL instance for comparison testing
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-real
     ports:
-      - "5433:5432"  
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=testdb
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init-scripts:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     networks:
-      - monitoring
+      - pg-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Postgres Exporter for Prometheus
-  postgres_exporter:
-    image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres_exporter
-    environment:
-      DATA_SOURCE_NAME: "postgresql://postgres:postgres@pg-client:5432/postgres?sslmode=disable"
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-dev
     ports:
-      - "9187:9187"
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./docker/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    restart: unless-stopped
+    networks:
+      - pg-dev-network
     depends_on:
-      - pg-client
-    restart: unless-stopped
-    networks:
-      - monitoring
+      - postgres
+      - pg-wire-mock
 
-  # Prometheus monitoring (stable version)
+  # Prometheus for metrics collection
   prometheus:
     image: prom/prometheus:v2.48.0
-    container_name: prometheus
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
+    container_name: prometheus-dev
     ports:
-      - "9090:9090"
-    depends_on:
-      - postgres_exporter
+      - "9091:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
     restart: unless-stopped
     networks:
-      - monitoring
+      - pg-dev-network
 
-  # Grafana monitoring dashboard
+  # Grafana for visualization
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+    container_name: grafana-dev
     ports:
       - "3000:3000"
-    depends_on:
-      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=redis-datasource
+      - GF_LOG_LEVEL=warn
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./docker/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./docker/dashboards:/var/lib/grafana/dashboards:ro
     restart: unless-stopped
     networks:
-      - monitoring
+      - pg-dev-network
+    depends_on:
+      - prometheus
 
-volumes:
-  prometheus_data:
+  # Redis for caching experiments
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - pg-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander-dev
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    restart: unless-stopped
+    networks:
+      - pg-dev-network
+    depends_on:
+      - redis
 
 networks:
-  monitoring:
+  pg-dev-network:
     driver: bridge
+    name: pg-mock-dev-network
+
+volumes:
+  node_modules:
+    name: pg-mock-node-modules
+  postgres-data:
+    name: pg-mock-postgres-data
+  pgadmin-data:
+    name: pg-mock-pgadmin-data
+  prometheus-data:
+    name: pg-mock-prometheus-data
+  grafana-data:
+    name: pg-mock-grafana-data
+  redis-data:
+    name: pg-mock-redis-data

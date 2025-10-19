@@ -1,0 +1,50 @@
+{
+  "dashboard": {
+    "title": "pg-wire-mock Development Overview",
+    "tags": ["pg-wire-mock", "development"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Server Status",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "up{job=\"pg-wire-mock\"}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Active Connections",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+        "targets": [
+          {
+            "expr": "pg_wire_mock_connections_active",
+            "legendFormat": "Active Connections",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Query Rate",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+        "targets": [
+          {
+            "expr": "rate(pg_wire_mock_queries_total[5m])",
+            "legendFormat": "Queries/sec",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}
