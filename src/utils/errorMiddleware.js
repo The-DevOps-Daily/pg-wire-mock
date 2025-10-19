@@ -31,27 +31,27 @@ class ErrorHandlerMiddleware {
   static wrapHandler(handlerName, handler) {
     return async (query, connState) => {
       const startTime = Date.now();
-      
+
       try {
         const result = await handler(query, connState);
-        
+
         // Log successful execution in debug mode
         if (isDevelopmentMode()) {
           const executionTime = Date.now() - startTime;
           errorLogger.debug(`Handler ${handlerName} completed successfully`, {
             executionTime,
             connectionId: connState?.id,
-            queryType: this.getQueryType(query)
+            queryType: this.getQueryType(query),
           });
         }
-        
+
         return result;
       } catch (error) {
         return this.handleError(error, {
           handlerName,
           query,
           connState,
-          executionTime: Date.now() - startTime
+          executionTime: Date.now() - startTime,
         });
       }
     };
@@ -81,7 +81,7 @@ class ErrorHandlerMiddleware {
     return {
       error: standardizedError,
       success: false,
-      affectedRows: 0
+      affectedRows: 0,
     };
   }
 
@@ -98,7 +98,7 @@ class ErrorHandlerMiddleware {
         ...error.debugInfo,
         handlerName: context.handlerName,
         executionTime: context.executionTime,
-        connectionId: context.connState?.id
+        connectionId: context.connState?.id,
       };
     }
 
@@ -139,14 +139,14 @@ class ErrorHandlerMiddleware {
         normalizedQuery: context.query?.trim()?.toUpperCase(),
         queryType: this.getQueryType(context.query),
         executionTime: context.executionTime,
-        connectionId: context.connState?.id
+        connectionId: context.connState?.id,
       },
       connectionContext: {
         clientAddress: context.connState?.clientAddress,
         connected: context.connState?.connected,
         transactionStatus: context.connState?.transactionStatus,
-        processId: context.connState?.processId
-      }
+        processId: context.connState?.processId,
+      },
     };
 
     return createError(errorCode, errorMessage, options);
@@ -159,7 +159,7 @@ class ErrorHandlerMiddleware {
    */
   static determineErrorCode(error) {
     const errorMessage = error.message?.toLowerCase() || '';
-    
+
     // Map common error patterns to SQLSTATE codes
     if (errorMessage.includes('syntax')) {
       return ERROR_CODES.SYNTAX_ERROR;
@@ -194,7 +194,7 @@ class ErrorHandlerMiddleware {
       if (match && !match[1].includes('node_modules')) {
         return {
           file: match[1].split('/').pop() || match[1].split('\\').pop(),
-          line: match[2]
+          line: match[2],
         };
       }
     }
@@ -209,9 +209,9 @@ class ErrorHandlerMiddleware {
    */
   static getQueryType(query) {
     if (!query || typeof query !== 'string') return 'UNKNOWN';
-    
+
     const normalized = query.trim().toUpperCase();
-    
+
     if (normalized.startsWith('SELECT')) return 'SELECT';
     if (normalized.startsWith('INSERT')) return 'INSERT';
     if (normalized.startsWith('UPDATE')) return 'UPDATE';
@@ -224,7 +224,7 @@ class ErrorHandlerMiddleware {
     if (normalized.startsWith('BEGIN') || normalized.startsWith('START')) return 'BEGIN';
     if (normalized.startsWith('COMMIT')) return 'COMMIT';
     if (normalized.startsWith('ROLLBACK')) return 'ROLLBACK';
-    
+
     return 'OTHER';
   }
 
@@ -240,7 +240,7 @@ class ErrorHandlerMiddleware {
       handlerName: context.handlerName,
       connectionId: context.connState?.id,
       executionTime: context.executionTime,
-      queryType: this.getQueryType(context.query)
+      queryType: this.getQueryType(context.query),
     };
 
     // Include stack trace and debug info in development mode
@@ -292,10 +292,7 @@ class QueryErrorEnhancers {
     if (error.code === ERROR_CODES.UNDEFINED_TABLE) {
       const tableMatch = query.match(/FROM\s+(\w+)/i);
       if (tableMatch && context.availableTables) {
-        const suggestions = ErrorContext.findSimilarObjects(
-          tableMatch[1],
-          context.availableTables
-        );
+        const suggestions = ErrorContext.findSimilarObjects(tableMatch[1], context.availableTables);
         if (suggestions.length > 0) {
           error.hint = `Did you mean: ${suggestions.slice(0, 3).join(', ')}?`;
         }
@@ -316,7 +313,7 @@ class QueryErrorEnhancers {
     if (error.code === ERROR_CODES.NULL_VALUE_NOT_ALLOWED) {
       error.detail = `Column "${error.column}" cannot be null`;
       error.hint = 'Provide a value for this required column or set a default value';
-      
+
       // Add constraint context
       if (context.constraints) {
         const constraint = context.constraints.find(c => c.column === error.column);
@@ -347,9 +344,9 @@ class QueryErrorEnhancers {
       error.detail = `Error in COPY operation at line ${context.currentLine}`;
       error.position = context.currentLine.toString();
     }
-    
+
     error.hint = 'Check data format, column count, and data types';
-    
+
     const tableMatch = query.match(/COPY\s+(\w+)/i);
     if (tableMatch) {
       error.table = tableMatch[1];
@@ -381,5 +378,5 @@ class QueryErrorEnhancers {
 module.exports = {
   ErrorHandlerMiddleware,
   QueryErrorEnhancers,
-  configureErrorMiddleware
+  configureErrorMiddleware,
 };
