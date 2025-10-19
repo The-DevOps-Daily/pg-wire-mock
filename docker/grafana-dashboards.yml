@@ -1,0 +1,15 @@
+# Grafana dashboards provisioning
+
+apiVersion: 1
+
+providers:
+  - name: 'default'
+    orgId: 1
+    folder: 'pg-wire-mock'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
