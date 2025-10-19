@@ -2,7 +2,7 @@
 
 /**
  * Enhanced Error Handling Demo
- * 
+ *
  * This script demonstrates the enhanced error handling capabilities
  * of pg-wire-mock with detailed debugging information and contextual suggestions.
  */
@@ -24,8 +24,8 @@ const basicError = new PostgresError(ERROR_CODES.UNDEFINED_COLUMN, 'column "nam"
   queryContext: {
     originalQuery: 'SELECT nam, email FROM users WHERE active = true',
     queryType: 'SELECT',
-    connectionId: 'conn_abc123'
-  }
+    connectionId: 'conn_abc123',
+  },
 });
 
 console.log('Error Code:', basicError.code);
@@ -75,7 +75,7 @@ const schemaContext = ErrorContext.generateSchemaContext(
   'user', // User typed "user" instead of "users"
   {
     schema: 'public',
-    availableObjects: ['users', 'products', 'orders', 'user_profiles']
+    availableObjects: ['users', 'products', 'orders', 'user_profiles'],
   }
 );
 
@@ -96,7 +96,7 @@ const enhancedSelectError = QueryErrorEnhancers.enhanceSelectError(
   'SELECT nam, email FROM users',
   {
     availableColumns: ['name', 'email', 'created_at', 'updated_at'],
-    availableTables: ['users', 'products', 'orders']
+    availableTables: ['users', 'products', 'orders'],
   }
 );
 
@@ -113,9 +113,7 @@ const enhancedInsertError = QueryErrorEnhancers.enhanceInsertError(
   insertError,
   'INSERT INTO users (name) VALUES ("John Doe")',
   {
-    constraints: [
-      { column: 'email', name: 'users_email_not_null', type: 'not_null' }
-    ]
+    constraints: [{ column: 'email', name: 'users_email_not_null', type: 'not_null' }],
   }
 );
 
@@ -144,11 +142,11 @@ const wrappedHandler = ErrorHandlerMiddleware.wrapHandler('mockSelectHandler', m
 
 // Test with error-causing query
 (async () => {
-  const result = await wrappedHandler(
-    'SELECT * FROM invalid_table', 
-    { id: 'conn_456', clientAddress: '127.0.0.1:12345' }
-  );
-  
+  const result = await wrappedHandler('SELECT * FROM invalid_table', {
+    id: 'conn_456',
+    clientAddress: '127.0.0.1:12345',
+  });
+
   console.log('Middleware Result:');
   console.log('  Success:', result.success);
   console.log('  Error Type:', result.error?.constructor.name);
@@ -169,17 +167,17 @@ process.env.NODE_ENV = 'development';
 const devError = new PostgresError(ERROR_CODES.INTERNAL_ERROR, 'Internal server error', {
   queryContext: {
     originalQuery: 'SELECT * FROM secret_table',
-    sensitiveData: 'password123'
-  }
+    sensitiveData: 'password123',
+  },
 });
 
-// Production mode error  
+// Production mode error
 process.env.NODE_ENV = 'production';
 const prodError = new PostgresError(ERROR_CODES.INTERNAL_ERROR, 'Internal server error', {
   queryContext: {
     originalQuery: 'SELECT * FROM secret_table',
-    sensitiveData: 'password123'
-  }
+    sensitiveData: 'password123',
+  },
 });
 
 console.log('Development Mode:');
@@ -195,7 +193,7 @@ console.log('✅ Enhanced Error Handling Demo Complete!');
 console.log();
 console.log('Key Benefits:');
 console.log('• Detailed error context with suggestions');
-console.log('• Development mode debugging information'); 
+console.log('• Development mode debugging information');
 console.log('• Production safety and security');
 console.log('• PostgreSQL protocol compliance');
 console.log('• Intelligent fuzzy matching for suggestions');

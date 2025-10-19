@@ -3,15 +3,9 @@
  * Tests for comprehensive error handling with detailed debugging information
  */
 
-const {
-  PostgresError,
-  ErrorContext,
-} = require('../src/utils/errorHandler');
+const { PostgresError, ErrorContext } = require('../src/utils/errorHandler');
 
-const {
-  ErrorHandlerMiddleware,
-  QueryErrorEnhancers,
-} = require('../src/utils/errorMiddleware');
+const { ErrorHandlerMiddleware, QueryErrorEnhancers } = require('../src/utils/errorMiddleware');
 
 const { ERROR_CODES, ERROR_SEVERITY } = require('../src/protocol/constants');
 
@@ -26,13 +20,13 @@ describe('Enhanced Error Response System', () => {
   describe('PostgresError Enhanced Features', () => {
     it('should create error with development mode debugging info', () => {
       process.env.NODE_ENV = 'development';
-      
+
       const error = new PostgresError(ERROR_CODES.SYNTAX_ERROR, 'Test error', {
         queryContext: {
           originalQuery: 'SELECT * FROM invalid_table',
           queryType: 'SELECT',
-          connectionId: 'conn_123'
-        }
+          connectionId: 'conn_123',
+        },
       });
 
       expect(error.debugInfo).toBeDefined();
@@ -45,7 +39,7 @@ describe('Enhanced Error Response System', () => {
 
     it('should not include debug info in production mode', () => {
       process.env.NODE_ENV = 'production';
-      
+
       const error = new PostgresError(ERROR_CODES.SYNTAX_ERROR, 'Test error');
 
       expect(error.debugInfo).toBeUndefined();
@@ -54,24 +48,28 @@ describe('Enhanced Error Response System', () => {
 
     it('should parse stack frames correctly', () => {
       process.env.NODE_ENV = 'development';
-      
+
       const error = new PostgresError(ERROR_CODES.SYNTAX_ERROR, 'Test error');
-      const frame = error.parseStackFrame('    at handleSelectQuery (/app/src/handlers/queryHandlers.js:123:45)');
+      const frame = error.parseStackFrame(
+        '    at handleSelectQuery (/app/src/handlers/queryHandlers.js:123:45)'
+      );
 
       expect(frame).toEqual({
         function: 'handleSelectQuery',
         file: '/app/src/handlers/queryHandlers.js',
         line: 123,
         column: 45,
-        isInternal: false
+        isInternal: false,
       });
     });
 
     it('should identify internal stack frames', () => {
       process.env.NODE_ENV = 'development';
-      
+
       const error = new PostgresError(ERROR_CODES.SYNTAX_ERROR, 'Test error');
-      const frame = error.parseStackFrame('    at Module.load (node:internal/modules/cjs/loader.js:123:45)');
+      const frame = error.parseStackFrame(
+        '    at Module.load (node:internal/modules/cjs/loader.js:123:45)'
+      );
 
       expect(frame.isInternal).toBe(true);
     });
@@ -82,7 +80,7 @@ describe('Enhanced Error Response System', () => {
       it('should generate detailed parsing context', () => {
         const query = 'SELECT name, email\nFROM users\nWHERE invalid_syntax';
         const position = 35; // Position of "invalid_syntax"
-        
+
         const context = ErrorContext.generateParsingContext(query, position, 'identifier');
 
         expect(context.detail).toContain('line 3');
@@ -95,7 +93,7 @@ describe('Enhanced Error Response System', () => {
       it('should handle single line queries', () => {
         const query = 'SELECT * FROM users WHERE invalid';
         const position = 25; // Position of "invalid"
-        
+
         const context = ErrorContext.generateParsingContext(query, position);
 
         expect(context.detail).toContain('line 1');
@@ -106,7 +104,11 @@ describe('Enhanced Error Response System', () => {
     describe('Function Context', () => {
       it('should generate function context with suggestions', () => {
         const availableFunctions = ['count', 'concat', 'coalesce', 'current_timestamp'];
-        const context = ErrorContext.generateFunctionContext('concate', ['text', 'text'], availableFunctions);
+        const context = ErrorContext.generateFunctionContext(
+          'concate',
+          ['text', 'text'],
+          availableFunctions
+        );
 
         expect(context.detail).toContain('Function "concate(text, text)" does not exist');
         expect(context.hint).toContain('Did you mean: concat');
@@ -125,9 +127,9 @@ describe('Enhanced Error Response System', () => {
       it('should generate schema context with suggestions', () => {
         const schemaInfo = {
           schema: 'public',
-          availableObjects: ['users', 'products', 'orders']
+          availableObjects: ['users', 'products', 'orders'],
         };
-        
+
         const context = ErrorContext.generateSchemaContext('table', 'user', schemaInfo);
 
         expect(context.detail).toBe('Table "user" does not exist');
@@ -142,12 +144,14 @@ describe('Enhanced Error Response System', () => {
           column: 'email',
           constraint: 'users_email_not_null',
           table: 'users',
-          schema: 'public'
+          schema: 'public',
         };
-        
+
         const context = ErrorContext.generateConstraintContext('not_null', constraintInfo);
 
-        expect(context.detail).toContain('Null value violates not-null constraint on column "email"');
+        expect(context.detail).toContain(
+          'Null value violates not-null constraint on column "email"'
+        );
         expect(context.hint).toContain('Provide a value for this required column');
         expect(context.constraint).toBe('users_email_not_null');
       });
@@ -156,9 +160,9 @@ describe('Enhanced Error Response System', () => {
         const constraintInfo = {
           constraint: 'orders_user_id_fkey',
           table: 'orders',
-          schema: 'public'
+          schema: 'public',
         };
-        
+
         const context = ErrorContext.generateConstraintContext('foreign_key', constraintInfo);
 
         expect(context.detail).toContain('Foreign key constraint "orders_user_id_fkey" violated');
@@ -188,7 +192,7 @@ describe('Enhanced Error Response System', () => {
       it('should wrap handler and catch errors', async () => {
         const mockHandler = jest.fn().mockRejectedValue(new Error('Test error'));
         const wrappedHandler = ErrorHandlerMiddleware.wrapHandler('testHandler', mockHandler);
-        
+
         const result = await wrappedHandler('SELECT * FROM test', { id: 'conn_123' });
 
         expect(result.error).toBeInstanceOf(PostgresError);
@@ -200,7 +204,7 @@ describe('Enhanced Error Response System', () => {
         const mockResult = { success: true, rows: [] };
         const mockHandler = jest.fn().mockResolvedValue(mockResult);
         const wrappedHandler = ErrorHandlerMiddleware.wrapHandler('testHandler', mockHandler);
-        
+
         const result = await wrappedHandler('SELECT * FROM test', { id: 'conn_123' });
 
         expect(result).toBe(mockResult);
@@ -211,7 +215,7 @@ describe('Enhanced Error Response System', () => {
         const originalError = new PostgresError(ERROR_CODES.SYNTAX_ERROR, 'Syntax error');
         const mockHandler = jest.fn().mockRejectedValue(originalError);
         const wrappedHandler = ErrorHandlerMiddleware.wrapHandler('testHandler', mockHandler);
-        
+
         const result = await wrappedHandler('SELECT * FROM test', { id: 'conn_123' });
 
         expect(result.error).toBe(originalError);
@@ -221,30 +225,39 @@ describe('Enhanced Error Response System', () => {
 
     describe('Error Code Determination', () => {
       it('should map common error patterns to SQLSTATE codes', () => {
-        expect(ErrorHandlerMiddleware.determineErrorCode(new Error('syntax error near "SELECT"')))
-          .toBe(ERROR_CODES.SYNTAX_ERROR);
-        
-        expect(ErrorHandlerMiddleware.determineErrorCode(new Error('column "name" does not exist')))
-          .toBe(ERROR_CODES.UNDEFINED_COLUMN);
-        
-        expect(ErrorHandlerMiddleware.determineErrorCode(new Error('relation "users" does not exist')))
-          .toBe(ERROR_CODES.UNDEFINED_TABLE);
-        
-        expect(ErrorHandlerMiddleware.determineErrorCode(new Error('function "invalid" does not exist')))
-          .toBe(ERROR_CODES.UNDEFINED_FUNCTION);
+        expect(
+          ErrorHandlerMiddleware.determineErrorCode(new Error('syntax error near "SELECT"'))
+        ).toBe(ERROR_CODES.SYNTAX_ERROR);
+
+        expect(
+          ErrorHandlerMiddleware.determineErrorCode(new Error('column "name" does not exist'))
+        ).toBe(ERROR_CODES.UNDEFINED_COLUMN);
+
+        expect(
+          ErrorHandlerMiddleware.determineErrorCode(new Error('relation "users" does not exist'))
+        ).toBe(ERROR_CODES.UNDEFINED_TABLE);
+
+        expect(
+          ErrorHandlerMiddleware.determineErrorCode(new Error('function "invalid" does not exist'))
+        ).toBe(ERROR_CODES.UNDEFINED_FUNCTION);
       });
 
       it('should default to internal error for unknown patterns', () => {
-        expect(ErrorHandlerMiddleware.determineErrorCode(new Error('unknown error')))
-          .toBe(ERROR_CODES.INTERNAL_ERROR);
+        expect(ErrorHandlerMiddleware.determineErrorCode(new Error('unknown error'))).toBe(
+          ERROR_CODES.INTERNAL_ERROR
+        );
       });
     });
 
     describe('Query Type Detection', () => {
       it('should detect query types correctly', () => {
         expect(ErrorHandlerMiddleware.getQueryType('SELECT * FROM users')).toBe('SELECT');
-        expect(ErrorHandlerMiddleware.getQueryType('INSERT INTO users (name) VALUES ("test")')).toBe('INSERT');
-        expect(ErrorHandlerMiddleware.getQueryType('UPDATE users SET name = "test"')).toBe('UPDATE');
+        expect(
+          ErrorHandlerMiddleware.getQueryType('INSERT INTO users (name) VALUES ("test")')
+        ).toBe('INSERT');
+        expect(ErrorHandlerMiddleware.getQueryType('UPDATE users SET name = "test"')).toBe(
+          'UPDATE'
+        );
         expect(ErrorHandlerMiddleware.getQueryType('DELETE FROM users')).toBe('DELETE');
         expect(ErrorHandlerMiddleware.getQueryType('EXPLAIN SELECT * FROM users')).toBe('EXPLAIN');
         expect(ErrorHandlerMiddleware.getQueryType('COPY users FROM STDIN')).toBe('COPY');
@@ -256,10 +269,13 @@ describe('Enhanced Error Response System', () => {
   describe('QueryErrorEnhancers', () => {
     describe('SELECT Error Enhancement', () => {
       it('should enhance undefined column errors with suggestions', () => {
-        const error = new PostgresError(ERROR_CODES.UNDEFINED_COLUMN, 'Column "nam" does not exist');
+        const error = new PostgresError(
+          ERROR_CODES.UNDEFINED_COLUMN,
+          'Column "nam" does not exist'
+        );
         const query = 'SELECT nam FROM users';
         const context = {
-          availableColumns: ['name', 'email', 'created_at']
+          availableColumns: ['name', 'email', 'created_at'],
         };
 
         const enhanced = QueryErrorEnhancers.enhanceSelectError(error, query, context);
@@ -272,7 +288,7 @@ describe('Enhanced Error Response System', () => {
         const error = new PostgresError(ERROR_CODES.UNDEFINED_TABLE, 'Table "user" does not exist');
         const query = 'SELECT * FROM user';
         const context = {
-          availableTables: ['users', 'products', 'orders']
+          availableTables: ['users', 'products', 'orders'],
         };
 
         const enhanced = QueryErrorEnhancers.enhanceSelectError(error, query, context);
@@ -287,7 +303,7 @@ describe('Enhanced Error Response System', () => {
         error.column = 'email';
         const query = 'INSERT INTO users (name) VALUES ("test")';
         const context = {
-          constraints: [{ column: 'email', name: 'users_email_not_null' }]
+          constraints: [{ column: 'email', name: 'users_email_not_null' }],
         };
 
         const enhanced = QueryErrorEnhancers.enhanceInsertError(error, query, context);
@@ -304,7 +320,7 @@ describe('Enhanced Error Response System', () => {
         const query = 'COPY users FROM STDIN';
         const context = {
           currentLine: 42,
-          source: 'STDIN'
+          source: 'STDIN',
         };
 
         const enhanced = QueryErrorEnhancers.enhanceCopyError(error, query, context);
@@ -335,7 +351,7 @@ describe('Enhanced Error Response System', () => {
       const error = new PostgresError(ERROR_CODES.SYNTAX_ERROR, 'Test error', {
         detail: 'Detailed information',
         hint: 'Try this instead',
-        position: '10'
+        position: '10',
       });
 
       const protocolFormat = error.toProtocolFormat();
@@ -361,7 +377,7 @@ describe('Enhanced Error Response System', () => {
         constraint: 'not_null_constraint',
         file: 'handler.js',
         line: '42',
-        routine: 'handleSelect'
+        routine: 'handleSelect',
       });
 
       expect(error.severity).toBe(ERROR_SEVERITY.ERROR);
@@ -378,7 +394,7 @@ describe('Enhanced Error Response System', () => {
     it('should include stack traces only in development mode', () => {
       process.env.NODE_ENV = 'development';
       const devError = new PostgresError(ERROR_CODES.INTERNAL_ERROR, 'Dev error');
-      
+
       process.env.NODE_ENV = 'production';
       const prodError = new PostgresError(ERROR_CODES.INTERNAL_ERROR, 'Prod error');
 
@@ -388,7 +404,7 @@ describe('Enhanced Error Response System', () => {
 
     it('should exclude sensitive information in production', () => {
       process.env.NODE_ENV = 'production';
-      
+
       const error = ErrorHandlerMiddleware.convertToPostgresError(
         new Error('Internal system error'),
         { handlerName: 'testHandler', query: 'SELECT * FROM secret_table' }

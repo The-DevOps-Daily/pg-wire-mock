@@ -48,7 +48,7 @@ class PostgresError extends Error {
       nodeVersion: process.version,
       memoryUsage: process.memoryUsage(),
       processId: process.pid,
-      uptime: process.uptime()
+      uptime: process.uptime(),
     };
 
     // Add query context if available
@@ -58,7 +58,7 @@ class PostgresError extends Error {
         normalizedQuery: options.queryContext.normalizedQuery,
         queryType: options.queryContext.queryType,
         executionTime: options.queryContext.executionTime,
-        connectionId: options.queryContext.connectionId
+        connectionId: options.queryContext.connectionId,
       };
     }
 
@@ -68,7 +68,7 @@ class PostgresError extends Error {
         clientAddress: options.connectionContext.clientAddress,
         connected: options.connectionContext.connected,
         transactionStatus: options.connectionContext.transactionStatus,
-        processId: options.connectionContext.processId
+        processId: options.connectionContext.processId,
       };
     }
 
@@ -83,7 +83,7 @@ class PostgresError extends Error {
     const stack = this.stack ? this.stack.split('\n') : [];
     const enhancedStack = {
       frames: [],
-      summary: stack[0] || 'Unknown error location'
+      summary: stack[0] || 'Unknown error location',
     };
 
     // Process each stack frame to add context
@@ -110,7 +110,7 @@ class PostgresError extends Error {
         file: frameMatch[2],
         line: parseInt(frameMatch[3]),
         column: parseInt(frameMatch[4]),
-        isInternal: frameMatch[2].includes('node_modules') || frameMatch[2].includes('internal')
+        isInternal: frameMatch[2].includes('node_modules') || frameMatch[2].includes('internal'),
       };
     }
     return null;
@@ -210,7 +210,9 @@ class ErrorContext {
 
     return {
       detail: `Syntax error at line ${lineNumber}, column ${columnNumber}`,
-      hint: expectedTokens ? `Expected: ${expectedTokens}` : 'Check SQL syntax near the highlighted area',
+      hint: expectedTokens
+        ? `Expected: ${expectedTokens}`
+        : 'Check SQL syntax near the highlighted area',
       position: position.toString(),
       internalQuery: query,
       context: `SQL parsing at line ${lineNumber}`,
@@ -222,8 +224,8 @@ class ErrorContext {
         beforeError: beforeError,
         afterError: afterError,
         lineNumber: lineNumber,
-        columnNumber: columnNumber
-      }
+        columnNumber: columnNumber,
+      },
     };
   }
 
@@ -240,12 +242,13 @@ class ErrorContext {
 
     return {
       detail: `Function "${functionName}${argTypeStr}" does not exist`,
-      hint: suggestions.length > 0
-        ? `Did you mean: ${suggestions.slice(0, 3).join(', ')}?`
-        : 'Check the function name and argument types. Use \\df to list available functions.',
+      hint:
+        suggestions.length > 0
+          ? `Did you mean: ${suggestions.slice(0, 3).join(', ')}?`
+          : 'Check the function name and argument types. Use \\df to list available functions.',
       routine: functionName,
       context: 'Function resolution',
-      dataType: argTypes.join(', ') || 'void'
+      dataType: argTypes.join(', ') || 'void',
     };
   }
 
@@ -258,17 +261,18 @@ class ErrorContext {
    */
   static generateSchemaContext(objectType, objectName, schemaInfo = {}) {
     const suggestions = this.findSimilarObjects(objectName, schemaInfo.availableObjects || []);
-    
+
     return {
       detail: `${objectType.charAt(0).toUpperCase() + objectType.slice(1)} "${objectName}" does not exist`,
-      hint: suggestions.length > 0
-        ? `Did you mean: ${suggestions.slice(0, 3).join(', ')}?`
-        : `Check the ${objectType} name and your search path`,
+      hint:
+        suggestions.length > 0
+          ? `Did you mean: ${suggestions.slice(0, 3).join(', ')}?`
+          : `Check the ${objectType} name and your search path`,
       schema: schemaInfo.schema || 'unknown',
       table: schemaInfo.table,
       column: schemaInfo.column,
       context: `${objectType} resolution`,
-      routine: `resolve_${objectType}`
+      routine: `resolve_${objectType}`,
     };
   }
 
@@ -282,25 +286,25 @@ class ErrorContext {
     const contextMap = {
       not_null: {
         detail: `Null value violates not-null constraint on column "${constraintInfo.column}"`,
-        hint: 'Provide a value for this required column or modify the constraint'
+        hint: 'Provide a value for this required column or modify the constraint',
       },
       unique: {
         detail: `Duplicate value violates unique constraint "${constraintInfo.constraint}"`,
-        hint: 'The value you are trying to insert already exists'
+        hint: 'The value you are trying to insert already exists',
       },
       foreign_key: {
         detail: `Foreign key constraint "${constraintInfo.constraint}" violated`,
-        hint: 'The referenced record does not exist in the parent table'
+        hint: 'The referenced record does not exist in the parent table',
       },
       check: {
         detail: `Check constraint "${constraintInfo.constraint}" violated`,
-        hint: 'The value does not satisfy the constraint condition'
-      }
+        hint: 'The value does not satisfy the constraint condition',
+      },
     };
 
     const context = contextMap[constraintType] || {
       detail: `Constraint "${constraintInfo.constraint}" violated`,
-      hint: 'Check the constraint definition and your data'
+      hint: 'Check the constraint definition and your data',
     };
 
     return {
@@ -310,7 +314,7 @@ class ErrorContext {
       column: constraintInfo.column,
       constraint: constraintInfo.constraint,
       context: `Constraint validation: ${constraintType}`,
-      routine: 'constraint_check'
+      routine: 'constraint_check',
     };
   }
 
@@ -323,7 +327,9 @@ class ErrorContext {
   static findSimilarFunctions(searchName, availableFunctions) {
     return availableFunctions
       .filter(func => this.calculateSimilarity(searchName, func) > 0.6)
-      .sort((a, b) => this.calculateSimilarity(searchName, b) - this.calculateSimilarity(searchName, a))
+      .sort(
+        (a, b) => this.calculateSimilarity(searchName, b) - this.calculateSimilarity(searchName, a)
+      )
       .slice(0, 5);
   }
 
@@ -336,7 +342,9 @@ class ErrorContext {
   static findSimilarObjects(searchName, availableObjects) {
     return availableObjects
       .filter(obj => this.calculateSimilarity(searchName, obj) > 0.5)
-      .sort((a, b) => this.calculateSimilarity(searchName, b) - this.calculateSimilarity(searchName, a))
+      .sort(
+        (a, b) => this.calculateSimilarity(searchName, b) - this.calculateSimilarity(searchName, a)
+      )
       .slice(0, 5);
   }
 
@@ -348,18 +356,18 @@ class ErrorContext {
    */
   static calculateSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
-    
+
     str1 = str1.toLowerCase();
     str2 = str2.toLowerCase();
-    
+
     if (str1 === str2) return 1;
     if (str1.includes(str2) || str2.includes(str1)) return 0.8;
-    
+
     // Simple character-based similarity
     const longer = str1.length > str2.length ? str1 : str2;
     const shorter = str1.length > str2.length ? str2 : str1;
     const editDistance = this.getEditDistance(longer, shorter);
-    
+
     return (longer.length - editDistance) / longer.length;
   }
 
@@ -370,11 +378,13 @@ class ErrorContext {
    * @returns {number} Edit distance
    */
   static getEditDistance(str1, str2) {
-    const matrix = Array(str2.length + 1).fill().map(() => Array(str1.length + 1).fill(0));
-    
+    const matrix = Array(str2.length + 1)
+      .fill()
+      .map(() => Array(str1.length + 1).fill(0));
+
     for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
     for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
-    
+
     for (let j = 1; j <= str2.length; j++) {
       for (let i = 1; i <= str1.length; i++) {
         const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
@@ -385,7 +395,7 @@ class ErrorContext {
         );
       }
     }
-    
+
     return matrix[str2.length][str1.length];
   }
 }
