@@ -32,11 +32,11 @@ jobs:
       - name: Wait for services
         run: sleep 30 
 
-      - name: Validate PostgreSQL client
-        run: docker exec pg-client pg_isready -U postgres
+      - name: Validate PostgreSQL
+        run: docker exec postgres-real pg_isready -U postgres
 
       - name: Validate Prometheus
-        run: curl -f http://localhost:9090/-/ready
+        run: curl -f http://localhost:9091/-/ready
 
       - name: Validate Grafana
         run: curl -f http://localhost:3000/api/health
