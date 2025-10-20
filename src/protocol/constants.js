@@ -397,6 +397,7 @@ const ERROR_CODES = {
   // Class 3B — Savepoint Exception
   SAVEPOINT_EXCEPTION: '3B000',
   INVALID_SAVEPOINT_SPECIFICATION: '3B001',
+  UNDEFINED_SAVEPOINT: '3B001', // Savepoint does not exist
 
   // Class 3D — Invalid Catalog Name
   INVALID_CATALOG_NAME: '3D000',

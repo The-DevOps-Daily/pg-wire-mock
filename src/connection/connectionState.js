@@ -35,6 +35,16 @@ class ConnectionState {
 
     // Transaction state
     this.transactionStatus = TRANSACTION_STATUS.IDLE;
+    this.transactionIsolationLevel = 'READ COMMITTED'; // Default PostgreSQL isolation level
+    this.transactionReadOnly = false;
+    this.transactionDeferrable = false;
+
+    // Savepoint stack for nested transaction support
+    this.savepoints = [];
+
+    // Transaction history for tracking
+    this.transactionStartTime = null;
+    this.transactionDepth = 0; // Track nested BEGIN attempts
 
     // Backend identification for cancellation
     this.backendPid = process.pid;
@@ -148,24 +158,92 @@ class ConnectionState {
   }
 
   /**
-   * Begins a new transaction
+   * Begins a new transaction with optional parameters
+   * @param {Object} options - Transaction options
+   * @param {string} options.isolationLevel - Transaction isolation level
+   * @param {boolean} options.readOnly - Whether transaction is read-only
+   * @param {boolean} options.deferrable - Whether transaction is deferrable
+   * @throws {Error} If already in a transaction
    */
-  beginTransaction() {
+  beginTransaction(options = {}) {
+    if (this.isInTransaction()) {
+      // PostgreSQL doesn't allow nested BEGIN, but we track the depth
+      this.transactionDepth++;
+      console.warn(`WARNING: Already in transaction (depth: ${this.transactionDepth})`);
+      throw new Error('Already in a transaction block');
+    }
+
+    if (this.isInFailedTransaction()) {
+      throw new Error(
+        'Current transaction is aborted, commands ignored until end of transaction block'
+      );
+    }
+
     this.setTransactionStatus(TRANSACTION_STATUS.IN_TRANSACTION);
+    this.transactionStartTime = new Date();
+    this.transactionDepth = 1;
+
+    // Set transaction options
+    if (options.isolationLevel) {
+      this.transactionIsolationLevel = options.isolationLevel;
+    }
+    if (options.readOnly !== undefined) {
+      this.transactionReadOnly = options.readOnly;
+    }
+    if (options.deferrable !== undefined) {
+      this.transactionDeferrable = options.deferrable;
+    }
+
+    console.log(
+      `Transaction started: isolation=${this.transactionIsolationLevel}, ` +
+        `readOnly=${this.transactionReadOnly}`
+    );
   }
 
   /**
    * Commits the current transaction
+   * @throws {Error} If not in a transaction
    */
   commitTransaction() {
+    if (!this.isInTransaction() && !this.isInFailedTransaction()) {
+      throw new Error('No transaction is currently active');
+    }
+
+    // Clear savepoints on commit
+    this.savepoints = [];
+    this.transactionDepth = 0;
+    this.transactionStartTime = null;
+
+    // Reset transaction options to defaults
+    this.transactionIsolationLevel = 'READ COMMITTED';
+    this.transactionReadOnly = false;
+    this.transactionDeferrable = false;
+
     this.setTransactionStatus(TRANSACTION_STATUS.IDLE);
+    console.log('Transaction committed');
   }
 
   /**
    * Rolls back the current transaction
+   * @throws {Error} If not in a transaction
    */
   rollbackTransaction() {
+    if (!this.isInTransaction() && !this.isInFailedTransaction()) {
+      throw new Error('No transaction is currently active');
+    }
+
+    // Clear savepoints on rollback
+    this.savepoints = [];
+    this.transactionDepth = 0;
+    this.transactionStartTime = null;
+
+    // Reset transaction options to defaults
+    this.transactionIsolationLevel = 'READ COMMITTED';
+    this.transactionReadOnly = false;
+    this.transactionDeferrable = false;
+
     this.setTransactionStatus(TRANSACTION_STATUS.IDLE);
+    console.log('Transaction rolled back');
   }
 
   /**
@@ -176,60 +254,137 @@ class ConnectionState {
   }
 
   /**
-   * Sets the connection copy state
-   * @param {Object} copyInfo - COPY operation information
+   * Creates a savepoint within the current transaction
+   * @param {string} name - Savepoint name
+   * @throws {Error} If not in a transaction or savepoint already exists
    */
-  setCopyState(copyInfo) {
-    this.copyState = {
-      ...copyInfo,
-      startedAt: new Date(),
-      bytesTransferred: 0,
-      rowsTransferred: 0,
-    };
-    this.updateActivity();
-    console.log(`Started COPY operation: ${copyInfo.direction} ${copyInfo.tableName || copyInfo.query}`);
-  }
-
-  /**
-   * Gets the current copy state
-   * @returns {Object|null} Copy state or null
-   */
-  getCopyState() {
-    return this.copyState || null;
-  }
-
-  /**
-   * Updates copy transfer statistics
-   * @param {number} bytes - Bytes transferred
-   * @param {number} rows - Rows transferred
-   */
-  updateCopyStats(bytes = 0, rows = 0) {
-    if (this.copyState) {
-      this.copyState.bytesTransferred += bytes;
-      this.copyState.rowsTransferred += rows;
-      this.updateActivity();
+  createSavepoint(name) {
+    if (!this.isInTransaction()) {
+      throw new Error('SAVEPOINT can only be used in transaction blocks');
     }
-  }
 
-  /**
-   * Clears the copy state when operation completes
-   */
-  clearCopyState() {
-    if (this.copyState) {
-      const duration = new Date() - this.copyState.startedAt;
-      console.log(`COPY operation completed: ${this.copyState.rowsTransferred} rows, ` +
-        `${this.copyState.bytesTransferred} bytes in ${duration}ms`);
+    const existingIndex = this.savepoints.findIndex(sp => sp.name === name);
+    if (existingIndex !== -1) {
+      // PostgreSQL allows reusing savepoint names (destroys old one and creates new)
+      this.savepoints.splice(existingIndex, 1);
     }
-    this.copyState = null;
-    this.updateActivity();
+
+    this.savepoints.push({
+      name,
+      createdAt: new Date(),
+      isolationLevel: this.transactionIsolationLevel,
+    });
+
+    console.log(`Savepoint created: ${name} (total: ${this.savepoints.length})`);
   }
 
   /**
-   * Checks if connection is in COPY mode
-   * @returns {boolean} True if in COPY mode
+   * Rolls back to a savepoint
+   * @param {string} name - Savepoint name
+   * @throws {Error} If not in a transaction or savepoint doesn't exist
    */
-  isInCopyMode() {
-    return this.copyState !== null;
+  rollbackToSavepoint(name) {
+    if (!this.isInTransaction() && !this.isInFailedTransaction()) {
+      throw new Error('ROLLBACK TO SAVEPOINT can only be used in transaction blocks');
+    }
+
+    const savepointIndex = this.savepoints.findIndex(sp => sp.name === name);
+    if (savepointIndex === -1) {
+      throw new Error(`Savepoint "${name}" does not exist`);
+    }
+
+    // Remove all savepoints after this one (they're invalidated)
+    this.savepoints.splice(savepointIndex + 1);
+
+    // If in failed state, rolling back to savepoint recovers the transaction
+    if (this.isInFailedTransaction()) {
+      this.setTransactionStatus(TRANSACTION_STATUS.IN_TRANSACTION);
+    }
+
+    console.log(`Rolled back to savepoint: ${name} (remaining: ${this.savepoints.length})`);
+  }
+
+  /**
+   * Releases a savepoint
+   * @param {string} name - Savepoint name
+   * @param {boolean} silent - Don't throw error if savepoint doesn't exist
+   * @throws {Error} If not in a transaction or savepoint doesn't exist
+   */
+  releaseSavepoint(name, silent = false) {
+    if (!this.isInTransaction()) {
+      if (!silent) {
+        throw new Error('RELEASE SAVEPOINT can only be used in transaction blocks');
+      }
+      return;
+    }
+
+    const savepointIndex = this.savepoints.findIndex(sp => sp.name === name);
+    if (savepointIndex === -1) {
+      if (!silent) {
+        throw new Error(`Savepoint "${name}" does not exist`);
+      }
+      return;
+    }
+
+    // Remove this savepoint and all after it
+    this.savepoints.splice(savepointIndex);
+    console.log(`Savepoint released: ${name} (remaining: ${this.savepoints.length})`);
+  }
+
+  /**
+   * Gets all active savepoints
+   * @returns {Array} Array of savepoint names
+   */
+  getSavepoints() {
+    return this.savepoints.map(sp => sp.name);
+  }
+
+  /**
+   * Checks if a savepoint exists
+   * @param {string} name - Savepoint name
+   * @returns {boolean} True if savepoint exists
+   */
+  hasSavepoint(name) {
+    return this.savepoints.some(sp => sp.name === name);
+  }
+
+  /**
+   * Sets the transaction isolation level
+   * @param {string} level - Isolation level
+   * @throws {Error} If invalid isolation level or not in transaction
+   */
+  setTransactionIsolationLevel(level) {
+    const validLevels = ['READ UNCOMMITTED', 'READ COMMITTED', 'REPEATABLE READ', 'SERIALIZABLE'];
+
+    const normalizedLevel = level.toUpperCase();
+    if (!validLevels.includes(normalizedLevel)) {
+      throw new Error(`Invalid isolation level: ${level}`);
+    }
+
+    // Can only set isolation level at start of transaction
+    if (this.isInTransaction() && this.savepoints.length > 0) {
+      throw new Error('SET TRANSACTION ISOLATION LEVEL must be called before any query');
+    }
+
+    this.transactionIsolationLevel = normalizedLevel;
+    console.log(`Transaction isolation level set to: ${normalizedLevel}`);
+  }
+
+  /**
+   * Gets the current transaction isolation level
+   * @returns {string} Current isolation level
+   */
+  getTransactionIsolationLevel() {
+    return this.transactionIsolationLevel;
+  }
+
+  /**
+   * Gets transaction duration in milliseconds
+   * @returns {number|null} Duration in ms or null if no active transaction
+   */
+  getTransactionDuration() {
+    if (!this.transactionStartTime) return null;
+    return Date.now() - this.transactionStartTime.getTime();
   }
 
   /**
@@ -455,6 +610,12 @@ class ConnectionState {
       transactionStatus: this.transactionStatus,
       isInTransaction: this.isInTransaction(),
       isInFailedTransaction: this.isInFailedTransaction(),
+      transactionIsolationLevel: this.transactionIsolationLevel,
+      transactionReadOnly: this.transactionReadOnly,
+      transactionDeferrable: this.transactionDeferrable,
+      transactionDuration: this.getTransactionDuration(),
+      savepoints: this.getSavepoints(),
+      savepointCount: this.savepoints.length,
       backendPid: this.backendPid,
       connectionDuration: this.getConnectionDuration(),
       idleTime: this.getIdleTime(),
@@ -587,6 +748,14 @@ class ConnectionState {
 
       // Reset to idle transaction status
       this.transactionStatus = TRANSACTION_STATUS.IDLE;
+
+      // Clear transaction state
+      this.savepoints = [];
+      this.transactionStartTime = null;
+      this.transactionDepth = 0;
+      this.transactionIsolationLevel = 'READ COMMITTED';
+      this.transactionReadOnly = false;
+      this.transactionDeferrable = false;
 
       // Update activity timestamp
       this.updateActivity();
