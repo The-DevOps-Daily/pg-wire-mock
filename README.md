@@ -15,7 +15,11 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Authentication flow with parameter negotiation
   - **Modern authentication methods** (NEW!) - [See Authentication Documentation](docs/AUTHENTICATION.md)
   - Simple and extended query protocols
-  - Transaction management (BEGIN/COMMIT/ROLLBACK)
+  - **Enhanced transaction management** (UPDATED!) - [See Transaction Documentation](docs/TRANSACTION_SUPPORT.md)
+    - BEGIN/COMMIT/ROLLBACK with options
+    - Savepoints (SAVEPOINT, ROLLBACK TO, RELEASE)
+    - Transaction isolation levels
+    - Read-only and deferrable transactions
   - Prepared statements and portals
   - Error handling with proper SQLSTATE codes
   - **SSL/TLS encryption support** (NEW!) - [See SSL Documentation](docs/SSL_SUPPORT.md)

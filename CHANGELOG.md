@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Enhanced Transaction Handling** - Comprehensive transaction support simulating PostgreSQL behavior
+  - BEGIN/START TRANSACTION with isolation levels (READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE)
+  - Transaction options: READ ONLY, READ WRITE, DEFERRABLE
+  - Savepoint support: SAVEPOINT, ROLLBACK TO SAVEPOINT, RELEASE SAVEPOINT
+  - Proper transaction state management (IDLE, IN_TRANSACTION, IN_FAILED_TRANSACTION)
+  - Automatic transaction failure on query errors with recovery via savepoints
+  - Transaction duration tracking and monitoring
+  - SET TRANSACTION command support
+  - Comprehensive test suite covering all transaction behaviors
+  - Full documentation in [docs/TRANSACTION_SUPPORT.md](docs/TRANSACTION_SUPPORT.md)
+
 - **LISTEN/NOTIFY Asynchronous Notification System** - Complete implementation of PostgreSQL async notifications (#101)
   - LISTEN, UNLISTEN (including UNLISTEN \*) and NOTIFY command handling
   - Channel management and broadcasting system
@@ -18,6 +29,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Payload size and channel/listener limits enforcement
   - Good test suite for broadcasting and cleanup behavior
   - Full documentation in [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)
+
+### Changed
+
+- **Connection State Management** - Enhanced to track transaction state comprehensively
+  - Added transaction isolation level, read-only flag, and deferrable flag tracking
+  - Savepoint stack for nested transaction control
+  - Transaction depth tracking for nested BEGIN detection
+  - Transaction start time and duration calculation
+  - Improved connection reusability checks for pooling
+
+### Fixed
+
+- Transaction state now properly transitions to failed on query errors
+- Transaction control commands properly reject invalid state transitions
+- Savepoint operations validate transaction state before execution
 
 ## [v1.2.0] - 2025-10-11
 

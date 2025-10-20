@@ -12,7 +12,12 @@ const {
 
 const { formatCommandTag } = require('../protocol/utils');
 const { createQueryLogger } = require('../utils/logger');
-const { ErrorFactory, wrapError, formatErrorForLogging } = require('../utils/errorHandler');
+const {
+  ErrorFactory,
+  createError,
+  wrapError,
+  formatErrorForLogging,
+} = require('../utils/errorHandler');
 
 // Create query logger instance (will be configured by server)
 let queryLogger = createQueryLogger();
@@ -206,7 +211,13 @@ function executeQuery(query, socket, connState) {
         routine: errorDetails.routine,
       }
     );
-    connState.transactionStatus = TRANSACTION_STATUS.IN_FAILED_TRANSACTION;
+
+    // Mark transaction as failed if we're in a transaction
+    // (unless it's a transaction control command error)
+    if (connState.isInTransaction() && !isTransactionControlError(errorDetails.code)) {
+      connState.failTransaction();
+    }
+
     return;
   }
 
@@ -281,6 +292,25 @@ function executeQueryString(queryString, socket, connState) {
 }
 
 /**
+ * Checks if an error code is related to transaction control
+ * @param {string} errorCode - SQL state error code
+ * @returns {boolean} True if error is transaction-related
+ */
+function isTransactionControlError(errorCode) {
+  const transactionErrorCodes = [
+    ERROR_CODES.ACTIVE_SQL_TRANSACTION,
+    ERROR_CODES.NO_ACTIVE_SQL_TRANSACTION,
+    ERROR_CODES.IN_FAILED_SQL_TRANSACTION,
+    ERROR_CODES.INVALID_TRANSACTION_STATE,
+    ERROR_CODES.INVALID_TRANSACTION_TERMINATION,
+    ERROR_CODES.SAVEPOINT_EXCEPTION,
+    ERROR_CODES.INVALID_SAVEPOINT_SPECIFICATION,
+    ERROR_CODES.UNDEFINED_SAVEPOINT,
+  ];
+  return transactionErrorCodes.includes(errorCode);
+}
+
+/**
  * Processes a single SQL query and returns result structure
  * @param {string} query - The SQL query to process
  * @param {ConnectionState} connState - Connection state object
@@ -290,6 +320,27 @@ function processQuery(query, connState) {
   const normalizedQuery = query.trim().toUpperCase();
 
   console.log(`Processing query: ${normalizedQuery}`);
+
+  // If in failed transaction, only allow ROLLBACK or COMMIT
+  if (connState.isInFailedTransaction()) {
+    const isAllowed =
+      normalizedQuery.startsWith('ROLLBACK') ||
+      normalizedQuery.startsWith('ABORT') ||
+      normalizedQuery.startsWith('COMMIT') ||
+      normalizedQuery.startsWith('END');
+
+    if (!isAllowed) {
+      return {
+        error: createError(
+          ERROR_CODES.IN_FAILED_SQL_TRANSACTION,
+          'current transaction is aborted, commands ignored until end of transaction block',
+          {
+            hint: 'Use ROLLBACK to abort the current transaction',
+          }
+        ),
+      };
+    }
+  }
 
   try {
     // Route to appropriate handler based on query type
@@ -309,12 +360,16 @@ function processQuery(query, connState) {
       return handleSelectQuery(normalizedQuery, connState);
     } else if (normalizedQuery.startsWith('SHOW')) {
       return handleShowQuery(normalizedQuery, connState);
-    } else if (normalizedQuery.startsWith('BEGIN')) {
-      return handleTransactionQuery('BEGIN', connState);
-    } else if (normalizedQuery.startsWith('COMMIT')) {
-      return handleTransactionQuery('COMMIT', connState);
-    } else if (normalizedQuery.startsWith('ROLLBACK')) {
-      return handleTransactionQuery('ROLLBACK', connState);
+    } else if (normalizedQuery.startsWith('BEGIN') || normalizedQuery.startsWith('START')) {
+      return handleTransactionQuery('BEGIN', connState, normalizedQuery);
+    } else if (normalizedQuery.startsWith('COMMIT') || normalizedQuery.startsWith('END')) {
+      return handleTransactionQuery('COMMIT', connState, normalizedQuery);
+    } else if (normalizedQuery.startsWith('ROLLBACK') || normalizedQuery.startsWith('ABORT')) {
+      return handleTransactionQuery('ROLLBACK', connState, normalizedQuery);
+    } else if (normalizedQuery.startsWith('SAVEPOINT')) {
+      return handleTransactionQuery('SAVEPOINT', connState, normalizedQuery);
+    } else if (normalizedQuery.startsWith('RELEASE')) {
+      return handleTransactionQuery('RELEASE', connState, normalizedQuery);
     } else if (normalizedQuery.startsWith('SET')) {
       return handleSetQuery(normalizedQuery, connState);
     } else if (normalizedQuery.startsWith('INSERT')) {
@@ -767,42 +822,271 @@ function handleShowQuery(query, _connState) {
 }
 
 /**
- * Handles transaction control queries (BEGIN, COMMIT, ROLLBACK)
+ * Handles transaction control queries (BEGIN, COMMIT, ROLLBACK, SAVEPOINT, etc.)
  * @param {string} command - The transaction command
  * @param {ConnectionState} connState - Connection state object
+ * @param {string} fullQuery - The full query string for parsing options
  * @returns {QueryResult} Query result
  */
-function handleTransactionQuery(command, connState) {
+function handleTransactionQuery(command, connState, fullQuery = '') {
   switch (command) {
     case 'BEGIN':
-      connState.transactionStatus = TRANSACTION_STATUS.IN_TRANSACTION;
-      return { command: 'BEGIN', rowCount: 0 };
+    case 'START':
+      return handleBeginTransaction(fullQuery, connState);
 
     case 'COMMIT':
-      connState.transactionStatus = TRANSACTION_STATUS.IDLE;
-      return { command: 'COMMIT', rowCount: 0 };
+    case 'END':
+      return handleCommitTransaction(connState);
 
     case 'ROLLBACK':
-      connState.transactionStatus = TRANSACTION_STATUS.IDLE;
-      return { command: 'ROLLBACK', rowCount: 0 };
+    case 'ABORT':
+      return handleRollbackTransaction(fullQuery, connState);
+
+    case 'SAVEPOINT':
+      return handleSavepoint(fullQuery, connState);
+
+    case 'RELEASE':
+      return handleReleaseSavepoint(fullQuery, connState);
 
     default:
       return {
-        error: {
-          code: ERROR_CODES.SYNTAX_ERROR,
-          message: `${ERROR_MESSAGES.UNKNOWN_TRANSACTION_COMMAND}: ${command}`,
-        },
+        error: ErrorFactory.syntaxError(
+          `${ERROR_MESSAGES.UNKNOWN_TRANSACTION_COMMAND}: ${command}`
+        ),
       };
   }
 }
 
 /**
- * Handles SET queries
- * @param {string} query - The SET query
- * @param {ConnectionState} _connState - Connection state object
+ * Handles BEGIN TRANSACTION with options
+ * @param {string} query - Full BEGIN query
+ * @param {ConnectionState} connState - Connection state object
  * @returns {QueryResult} Query result
  */
-function handleSetQuery(query, _connState) {
+function handleBeginTransaction(query, connState) {
+  const options = parseTransactionOptions(query);
+
+  try {
+    connState.beginTransaction(options);
+    return { command: 'BEGIN', rowCount: 0 };
+  } catch (error) {
+    if (error.message.includes('Already in a transaction')) {
+      return {
+        error: createError(
+          ERROR_CODES.ACTIVE_SQL_TRANSACTION,
+          'there is already a transaction in progress',
+          { hint: 'Use COMMIT or ROLLBACK to end the current transaction' }
+        ),
+      };
+    }
+    return { error: ErrorFactory.internalError(error.message) };
+  }
+}
+
+/**
+ * Handles COMMIT TRANSACTION
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleCommitTransaction(connState) {
+  try {
+    connState.commitTransaction();
+    return { command: 'COMMIT', rowCount: 0 };
+  } catch (error) {
+    if (error.message.includes('No transaction is currently active')) {
+      return {
+        error: createError(
+          ERROR_CODES.NO_ACTIVE_SQL_TRANSACTION,
+          'there is no transaction in progress',
+          {}
+        ),
+      };
+    }
+    return { error: ErrorFactory.internalError(error.message) };
+  }
+}
+
+/**
+ * Handles ROLLBACK TRANSACTION
+ * @param {string} query - Full ROLLBACK query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleRollbackTransaction(query, connState) {
+  // Check if this is ROLLBACK TO SAVEPOINT
+  const savepointMatch = query.match(/ROLLBACK\s+(?:TRANSACTION\s+)?TO\s+(?:SAVEPOINT\s+)?(\w+)/i);
+
+  if (savepointMatch) {
+    const savepointName = savepointMatch[1];
+    try {
+      connState.rollbackToSavepoint(savepointName);
+      return { command: 'ROLLBACK TO SAVEPOINT', rowCount: 0 };
+    } catch (error) {
+      if (error.message.includes('does not exist')) {
+        return {
+          error: createError(
+            ERROR_CODES.UNDEFINED_SAVEPOINT,
+            `savepoint "${savepointName}" does not exist`,
+            {}
+          ),
+        };
+      }
+      if (error.message.includes('can only be used in transaction blocks')) {
+        return {
+          error: createError(
+            ERROR_CODES.NO_ACTIVE_SQL_TRANSACTION,
+            'ROLLBACK TO SAVEPOINT can only be used in transaction blocks',
+            {}
+          ),
+        };
+      }
+      return { error: ErrorFactory.internalError(error.message) };
+    }
+  }
+
+  // Regular ROLLBACK
+  try {
+    connState.rollbackTransaction();
+    return { command: 'ROLLBACK', rowCount: 0 };
+  } catch (error) {
+    if (error.message.includes('No transaction is currently active')) {
+      return {
+        error: createError(
+          ERROR_CODES.NO_ACTIVE_SQL_TRANSACTION,
+          'there is no transaction in progress',
+          {}
+        ),
+      };
+    }
+    return { error: ErrorFactory.internalError(error.message) };
+  }
+} /**
+ * Handles SAVEPOINT command
+ * @param {string} query - Full SAVEPOINT query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleSavepoint(query, connState) {
+  const match = query.match(/SAVEPOINT\s+(\w+)/i);
+
+  if (!match) {
+    return {
+      error: ErrorFactory.syntaxError('SAVEPOINT requires a savepoint name'),
+    };
+  }
+
+  const savepointName = match[1];
+
+  try {
+    connState.createSavepoint(savepointName);
+    return { command: 'SAVEPOINT', rowCount: 0 };
+  } catch (error) {
+    if (error.message.includes('can only be used in transaction blocks')) {
+      return {
+        error: createError(
+          ERROR_CODES.NO_ACTIVE_SQL_TRANSACTION,
+          'SAVEPOINT can only be used in transaction blocks',
+          {}
+        ),
+      };
+    }
+    return { error: ErrorFactory.internalError(error.message) };
+  }
+}
+
+/**
+ * Handles RELEASE SAVEPOINT command
+ * @param {string} query - Full RELEASE query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleReleaseSavepoint(query, connState) {
+  const match = query.match(/RELEASE\s+(?:SAVEPOINT\s+)?(\w+)/i);
+
+  if (!match) {
+    return {
+      error: ErrorFactory.syntaxError('RELEASE SAVEPOINT requires a savepoint name'),
+    };
+  }
+
+  const savepointName = match[1];
+
+  try {
+    connState.releaseSavepoint(savepointName);
+    return { command: 'RELEASE SAVEPOINT', rowCount: 0 };
+  } catch (error) {
+    if (error.message.includes('does not exist')) {
+      return {
+        error: createError(
+          ERROR_CODES.UNDEFINED_SAVEPOINT,
+          `savepoint "${savepointName}" does not exist`,
+          {}
+        ),
+      };
+    }
+    if (error.message.includes('can only be used in transaction blocks')) {
+      return {
+        error: createError(
+          ERROR_CODES.NO_ACTIVE_SQL_TRANSACTION,
+          'RELEASE SAVEPOINT can only be used in transaction blocks',
+          {}
+        ),
+      };
+    }
+    return { error: ErrorFactory.internalError(error.message) };
+  }
+}
+
+/**
+ * Parses transaction options from BEGIN/START TRANSACTION query
+ * @param {string} query - The full query string
+ * @returns {Object} Parsed transaction options
+ */
+function parseTransactionOptions(query) {
+  const options = {};
+
+  // Parse ISOLATION LEVEL
+  const isolationMatch = query.match(
+    /ISOLATION\s+LEVEL\s+(READ\s+UNCOMMITTED|READ\s+COMMITTED|REPEATABLE\s+READ|SERIALIZABLE)/i
+  );
+  if (isolationMatch) {
+    options.isolationLevel = isolationMatch[1].toUpperCase();
+  }
+
+  // Parse READ WRITE / READ ONLY
+  if (/READ\s+ONLY/i.test(query)) {
+    options.readOnly = true;
+  } else if (/READ\s+WRITE/i.test(query)) {
+    options.readOnly = false;
+  }
+
+  // Parse DEFERRABLE / NOT DEFERRABLE
+  if (/NOT\s+DEFERRABLE/i.test(query)) {
+    options.deferrable = false;
+  } else if (/DEFERRABLE/i.test(query)) {
+    options.deferrable = true;
+  }
+
+  return options;
+}
+
+/**
+ * Handles SET queries
+ * @param {string} query - The SET query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleSetQuery(query, connState) {
+  // Handle SET TRANSACTION commands
+  if (/SET\s+TRANSACTION/i.test(query)) {
+    return handleSetTransaction(query, connState);
+  }
+
+  // Handle SET SESSION CHARACTERISTICS AS TRANSACTION
+  if (/SET\s+SESSION\s+CHARACTERISTICS\s+AS\s+TRANSACTION/i.test(query)) {
+    return handleSetTransaction(query, connState);
+  }
+
   // Simple SET command parsing
   const setMatch = query.match(/SET\s+(\w+)\s+(?:=\s*|\s+TO\s+)(.+)/i);
 
@@ -815,11 +1099,47 @@ function handleSetQuery(query, _connState) {
   }
 
   return {
-    error: {
-      code: ERROR_CODES.SYNTAX_ERROR,
-      message: ERROR_MESSAGES.INVALID_SET_SYNTAX,
-    },
+    error: ErrorFactory.syntaxError(ERROR_MESSAGES.INVALID_SET_SYNTAX),
   };
+}
+
+/**
+ * Handles SET TRANSACTION commands
+ * @param {string} query - The SET TRANSACTION query
+ * @param {ConnectionState} connState - Connection state object
+ * @returns {QueryResult} Query result
+ */
+function handleSetTransaction(query, connState) {
+  const options = parseTransactionOptions(query);
+
+  try {
+    // SET TRANSACTION must be first command in transaction
+    if (connState.isInTransaction() && connState.queriesExecuted > 1) {
+      return {
+        error: createError(
+          ERROR_CODES.INVALID_TRANSACTION_STATE,
+          'SET TRANSACTION must be called before any query',
+          { hint: 'Call SET TRANSACTION immediately after BEGIN' }
+        ),
+      };
+    }
+
+    if (options.isolationLevel) {
+      connState.setTransactionIsolationLevel(options.isolationLevel);
+    }
+    if (options.readOnly !== undefined) {
+      connState.transactionReadOnly = options.readOnly;
+    }
+    if (options.deferrable !== undefined) {
+      connState.transactionDeferrable = options.deferrable;
+    }
+
+    return { command: 'SET', rowCount: 0 };
+  } catch (error) {
+    return {
+      error: wrapError(error, 'SET TRANSACTION failed'),
+    };
+  }
 }
 
 /**
@@ -2754,4 +3074,5 @@ module.exports = {
   getQueryType,
   getTypeOIDFromName,
   configureQueryLogger,
+  parseTransactionOptions,
 };
