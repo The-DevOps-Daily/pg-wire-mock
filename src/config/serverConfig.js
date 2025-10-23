@@ -91,6 +91,17 @@ const DEFAULT_CONFIG = {
   // Shutdown settings
   shutdownTimeout: 30000,
   shutdownDrainTimeout: 10000,
+
+  // HTTP monitoring settings
+  http: {
+    enabled: true,
+    port: 8080,
+    host: 'localhost',
+    enableAuth: false,
+    authToken: null,
+    healthCheckTimeout: 5000,
+    customHealthChecks: [],
+  },
 };
 
 /**
@@ -145,6 +156,12 @@ const ENV_MAPPING = {
   // Error tracking environment variables
   PG_MOCK_ERROR_TRACKING_ENABLED: { key: 'errorTracking.enabled', type: 'boolean' },
   PG_MOCK_ERROR_TRACKING_PROJECT: { key: 'errorTracking.project', type: 'string' },
+  PG_MOCK_HTTP_ENABLED: { key: 'http.enabled', type: 'boolean' },
+  PG_MOCK_HTTP_PORT: { key: 'http.port', type: 'number' },
+  PG_MOCK_HTTP_HOST: { key: 'http.host', type: 'string' },
+  PG_MOCK_HTTP_ENABLE_AUTH: { key: 'http.enableAuth', type: 'boolean' },
+  PG_MOCK_HTTP_AUTH_TOKEN: { key: 'http.authToken', type: 'string' },
+  PG_MOCK_HTTP_HEALTHCHECK_TIMEOUT: { key: 'http.healthCheckTimeout', type: 'number' },
 };
 
 /**
@@ -166,13 +183,13 @@ function loadConfig() {
     console.warn(warningMsg);
   }
 
-  const config = { ...DEFAULT_CONFIG };
+  const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 
   // Load from validated environment variables
   for (const [envVar, mapping] of Object.entries(ENV_MAPPING)) {
     const validatedVar = envValidation.validatedVariables[envVar];
     if (validatedVar && validatedVar.isValid) {
-      config[mapping.key] = validatedVar.parsedValue;
+      setNestedValue(config, mapping.key, validatedVar.parsedValue);
     }
   }
 
@@ -199,6 +216,32 @@ function parseConfigValue(value, type) {
     default:
       return value;
   }
+}
+
+/**
+ * Sets a nested value on an object using dot notation keys
+ * @param {Object} target - Target object
+ * @param {string} key - Dot notation key (e.g., "http.port")
+ * @param {any} value - Value to assign
+ */
+function setNestedValue(target, key, value) {
+  if (!key.includes('.')) {
+    target[key] = value;
+    return;
+  }
+
+  const segments = key.split('.');
+  const finalKey = segments.pop();
+  let current = target;
+
+  for (const segment of segments) {
+    if (typeof current[segment] !== 'object' || current[segment] === null) {
+      current[segment] = {};
+    }
+    current = current[segment];
+  }
+
+  current[finalKey] = value;
 }
 
 /**
@@ -260,6 +303,30 @@ function validateConfig(config) {
     }
     if (config.sslMaxVersion && !validTlsVersions.includes(config.sslMaxVersion)) {
       errors.push(`sslMaxVersion must be one of: ${validTlsVersions.join(', ')}`);
+    }
+  }
+
+  if (config.http) {
+    if (
+      config.http.port !== undefined &&
+      (!Number.isInteger(config.http.port) || config.http.port < 1 || config.http.port > 65535)
+    ) {
+      errors.push('http.port must be an integer between 1 and 65535');
+    }
+    if (config.http.host && typeof config.http.host !== 'string') {
+      errors.push('http.host must be a string');
+    }
+    if (
+      config.http.enableAuth &&
+      (!config.http.authToken || typeof config.http.authToken !== 'string')
+    ) {
+      errors.push('http.authToken must be provided when http.enableAuth is true');
+    }
+    if (
+      config.http.healthCheckTimeout !== undefined &&
+      (!Number.isInteger(config.http.healthCheckTimeout) || config.http.healthCheckTimeout < 100)
+    ) {
+      errors.push('http.healthCheckTimeout must be an integer greater than or equal to 100ms');
     }
   }
 
@@ -379,6 +446,48 @@ function getConfigDocumentation() {
       type: 'string',
       default: DEFAULT_CONFIG.sslKeyPath,
       description: 'Path to SSL private key file',
+    },
+    {
+      key: 'http.enabled',
+      env: 'PG_MOCK_HTTP_ENABLED',
+      type: 'boolean',
+      default: true,
+      description: 'Enable HTTP monitoring endpoint',
+    },
+    {
+      key: 'http.port',
+      env: 'PG_MOCK_HTTP_PORT',
+      type: 'number',
+      default: 8080,
+      description: 'HTTP monitoring server port',
+    },
+    {
+      key: 'http.host',
+      env: 'PG_MOCK_HTTP_HOST',
+      type: 'string',
+      default: 'localhost',
+      description: 'HTTP monitoring server host',
+    },
+    {
+      key: 'http.enableAuth',
+      env: 'PG_MOCK_HTTP_ENABLE_AUTH',
+      type: 'boolean',
+      default: false,
+      description: 'Enable authentication for HTTP endpoints',
+    },
+    {
+      key: 'http.authToken',
+      env: 'PG_MOCK_HTTP_AUTH_TOKEN',
+      type: 'string',
+      default: null,
+      description: 'Bearer token for HTTP endpoint authentication',
+    },
+    {
+      key: 'http.healthCheckTimeout',
+      env: 'PG_MOCK_HTTP_HEALTHCHECK_TIMEOUT',
+      type: 'number',
+      default: DEFAULT_CONFIG.http.healthCheckTimeout,
+      description: 'Timeout in ms for health/status checks',
     },
   ];
 }

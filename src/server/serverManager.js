@@ -9,6 +9,7 @@ const fs = require('fs');
 const { ConnectionState } = require('../connection/connectionState');
 const { ConnectionPool } = require('../connection/connectionPool');
 const { NotificationManager } = require('../notification/notificationManager');
+
 const {
   processMessage,
   configureMessageProcessorLogger,
@@ -17,6 +18,7 @@ const {
 const { configureProtocolLogger } = require('../protocol/messageBuilders');
 const { configureQueryLogger } = require('../handlers/queryHandlers');
 const { createLogger } = require('../utils/logger');
+const { HttpServer } = require('./httpServer');
 
 /**
  * Configuration options for the server
@@ -92,6 +94,12 @@ class ServerManager {
       enableLogging: this.config.enableLogging,
       logLevel: this.config.logLevel,
     });
+
+    // Initialize HTTP monitoring server
+    this.httpServer = null;
+    if (this.config.http && this.config.http.enabled) {
+      this.httpServer = new HttpServer(this.config.http, this);
+    }
 
     // Statistics
     this.stats = {
@@ -169,6 +177,19 @@ class ServerManager {
               this.log('info', 'Connection pool initialized successfully');
             } catch (error) {
               this.log('error', `Failed to initialize connection pool: ${error.message}`);
+            }
+          }
+
+          // Start HTTP monitoring server if enabled
+          if (this.httpServer) {
+            try {
+              await this.httpServer.start();
+              this.log(
+                'info',
+                `HTTP monitoring available at http://${this.config.http.host}:${this.config.http.port}`
+              );
+            } catch (error) {
+              this.log('warn', `Failed to start HTTP monitoring server: ${error.message}`);
             }
           }
 
@@ -432,6 +453,16 @@ class ServerManager {
         this.log('info', 'Notification manager cleaned up');
       } catch (error) {
         this.log('error', `Error cleaning up notification manager: ${error.message}`);
+      }
+    }
+
+    // Cleanup HTTP server
+    if (this.httpServer) {
+      try {
+        await this.httpServer.stop();
+        this.log('info', 'HTTP monitoring server cleaned up');
+      } catch (error) {
+        this.log('error', `Error cleaning up HTTP server: ${error.message}`);
       }
     }
 
