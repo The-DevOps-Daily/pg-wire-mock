@@ -57,6 +57,15 @@ describe('Server Configuration', () => {
       scramIterations: 4096,
       username: 'postgres',
       password: 'password',
+      http: {
+        enabled: true,
+        port: 8080,
+        host: 'localhost',
+        enableAuth: false,
+        authToken: null,
+        healthCheckTimeout: 5000,
+        customHealthChecks: [],
+      },
     });
   });
 
@@ -92,6 +101,15 @@ describe('Server Configuration', () => {
       scramIterations: 4096,
       username: 'postgres',
       password: 'password',
+      http: {
+        enabled: true,
+        port: 8080,
+        host: 'localhost',
+        enableAuth: false,
+        authToken: null,
+        healthCheckTimeout: 5000,
+        customHealthChecks: [],
+      },
     });
   });
 
@@ -135,6 +153,15 @@ describe('Server Configuration', () => {
       scramIterations: 4096,
       username: 'postgres',
       password: 'password',
+      http: {
+        enabled: true,
+        port: 8080,
+        host: 'localhost',
+        enableAuth: false,
+        authToken: null,
+        healthCheckTimeout: 5000,
+        customHealthChecks: [],
+      },
     });
   });
 
