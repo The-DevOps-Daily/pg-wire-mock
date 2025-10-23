@@ -15,7 +15,9 @@ try {
   RealPostgreSQLComparator = require('./realPostgreSQLComparator');
 } catch (error) {
   // PostgreSQL comparison module not available
-  console.warn('PostgreSQL comparison module not available. Install "pg" package to enable real PostgreSQL comparison.');
+  console.warn(
+    'PostgreSQL comparison module not available. Install "pg" package to enable real PostgreSQL comparison.'
+  );
 }
 
 /**
@@ -30,14 +32,16 @@ class ProtocolValidationSystem {
       realPostgreSQLConfig: null,
       reportFormat: 'json', // json, html, text
       outputDir: './validation-reports',
-      ...options
+      ...options,
     };
 
     this.validator = new MessageValidator();
     this.tester = new ProtocolTester();
     this.reporter = new ComplianceReporter(this.options);
     this.fuzzer = new ProtocolFuzzer();
-    this.comparator = RealPostgreSQLComparator ? new RealPostgreSQLComparator(this.options.realPostgreSQLConfig) : null;
+    this.comparator = RealPostgreSQLComparator
+      ? new RealPostgreSQLComparator(this.options.realPostgreSQLConfig)
+      : null;
     this.benchmark = new PerformanceBenchmark(this.options);
   }
 
@@ -46,7 +50,7 @@ class ProtocolValidationSystem {
    * @param {Object} config - Validation configuration
    * @returns {Promise<Object>} Validation results
    */
-  async runValidationSuite(config = {}) {
+  async runValidationSuite(_config = {}) {
     const results = {
       timestamp: new Date().toISOString(),
       version: '1.0.0',
@@ -56,8 +60,8 @@ class ProtocolValidationSystem {
         passed: 0,
         failed: 0,
         warnings: 0,
-        successRate: 0
-      }
+        successRate: 0,
+      },
     };
 
     try {
@@ -89,7 +93,11 @@ class ProtocolValidationSystem {
       }
 
       // 6. Real PostgreSQL Comparison (if enabled and available)
-      if (this.options.enableRealPostgreSQLComparison && this.options.realPostgreSQLConfig && this.comparator) {
+      if (
+        this.options.enableRealPostgreSQLComparison &&
+        this.options.realPostgreSQLConfig &&
+        this.comparator
+      ) {
         console.log('Running real PostgreSQL comparison...');
         results.tests.realPostgreSQLComparison = await this.comparator.runComparisonTests();
         this.updateSummary(results, 'realPostgreSQLComparison');
@@ -103,10 +111,11 @@ class ProtocolValidationSystem {
           details: {
             skipped: {
               passed: false,
-              error: 'PostgreSQL comparison module not available. Install "pg" package to enable real PostgreSQL comparison.',
-              warnings: []
-            }
-          }
+              error:
+                'PostgreSQL comparison module not available. Install "pg" package to enable real PostgreSQL comparison.',
+              warnings: [],
+            },
+          },
         };
         this.updateSummary(results, 'realPostgreSQLComparison');
       }
@@ -117,7 +126,6 @@ class ProtocolValidationSystem {
       results.report = report;
 
       return results;
-
     } catch (error) {
       console.error('Validation suite failed:', error);
       results.error = error.message;
@@ -145,7 +153,9 @@ class ProtocolValidationSystem {
         return await this.fuzzer.runFuzzingTests(options);
       case 'realPostgreSQLComparison':
         if (!this.comparator) {
-          throw new Error('PostgreSQL comparison module not available. Install "pg" package to enable real PostgreSQL comparison.');
+          throw new Error(
+            'PostgreSQL comparison module not available. Install "pg" package to enable real PostgreSQL comparison.'
+          );
         }
         return await this.comparator.runComparisonTests(options);
       case 'performance':
@@ -167,10 +177,12 @@ class ProtocolValidationSystem {
       results.summary.passed += testResults.passed || 0;
       results.summary.failed += testResults.failed || 0;
       results.summary.warnings += testResults.warnings || 0;
-      
+
       // Calculate success rate
       if (results.summary.total > 0) {
-        results.summary.successRate = Math.round((results.summary.passed / results.summary.total) * 100);
+        results.summary.successRate = Math.round(
+          (results.summary.passed / results.summary.total) * 100
+        );
       } else {
         results.summary.successRate = 0;
       }
@@ -187,7 +199,7 @@ class ProtocolValidationSystem {
       fuzzingEnabled: this.options.enableFuzzing,
       realPostgreSQLComparisonEnabled: this.options.enableRealPostgreSQLComparison,
       outputDirectory: this.options.outputDir,
-      reportFormat: this.options.reportFormat
+      reportFormat: this.options.reportFormat,
     };
   }
 }
@@ -199,7 +211,5 @@ module.exports = {
   ComplianceReporter,
   ProtocolFuzzer,
   RealPostgreSQLComparator: RealPostgreSQLComparator,
-  PerformanceBenchmark
+  PerformanceBenchmark,
 };
-
-

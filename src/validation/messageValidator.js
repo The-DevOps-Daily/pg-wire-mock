@@ -3,7 +3,7 @@
  * Validates message formats against PostgreSQL specifications
  */
 
-const { MESSAGE_TYPES, DATA_TYPES, ERROR_CODES, AUTH_METHODS } = require('../protocol/constants');
+const { MESSAGE_TYPES, AUTH_METHODS } = require('../protocol/constants');
 
 /**
  * Message format validator class
@@ -25,80 +25,80 @@ class MessageValidator {
         maxLength: 1024 * 1024, // 1MB max query
         requiredFields: ['type', 'length'],
         optionalFields: ['query'],
-        validation: this.validateQueryMessage.bind(this)
+        validation: this.validateQueryMessage.bind(this),
       },
       [MESSAGE_TYPES.PARSE]: {
         minLength: 5,
         maxLength: 1024 * 1024,
         requiredFields: ['type', 'length', 'statementName', 'query'],
         optionalFields: ['parameterCount', 'parameterTypes'],
-        validation: this.validateParseMessage.bind(this)
+        validation: this.validateParseMessage.bind(this),
       },
       [MESSAGE_TYPES.BIND]: {
         minLength: 5,
         maxLength: 1024 * 1024,
         requiredFields: ['type', 'length', 'portalName', 'statementName'],
         optionalFields: ['parameterFormats', 'parameters'],
-        validation: this.validateBindMessage.bind(this)
+        validation: this.validateBindMessage.bind(this),
       },
       [MESSAGE_TYPES.DESCRIBE]: {
         minLength: 6, // type + length + describe type
         maxLength: 1024,
         requiredFields: ['type', 'length', 'describeType', 'name'],
-        validation: this.validateDescribeMessage.bind(this)
+        validation: this.validateDescribeMessage.bind(this),
       },
       [MESSAGE_TYPES.EXECUTE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length', 'portalName'],
         optionalFields: ['rowLimit'],
-        validation: this.validateExecuteMessage.bind(this)
+        validation: this.validateExecuteMessage.bind(this),
       },
       [MESSAGE_TYPES.SYNC]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validateSyncMessage.bind(this)
+        validation: this.validateSyncMessage.bind(this),
       },
       [MESSAGE_TYPES.TERMINATE]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validateTerminateMessage.bind(this)
+        validation: this.validateTerminateMessage.bind(this),
       },
       [MESSAGE_TYPES.PASSWORD_MESSAGE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['password', 'saslData'],
-        validation: this.validatePasswordMessage.bind(this)
+        validation: this.validatePasswordMessage.bind(this),
       },
       [MESSAGE_TYPES.COPY_DATA]: {
         minLength: 5,
         maxLength: 1024 * 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['data'],
-        validation: this.validateCopyDataMessage.bind(this)
+        validation: this.validateCopyDataMessage.bind(this),
       },
       [MESSAGE_TYPES.COPY_DONE]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validateCopyDoneMessage.bind(this)
+        validation: this.validateCopyDoneMessage.bind(this),
       },
       [MESSAGE_TYPES.COPY_FAIL]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['errorMessage'],
-        validation: this.validateCopyFailMessage.bind(this)
+        validation: this.validateCopyFailMessage.bind(this),
       },
       [MESSAGE_TYPES.FUNCTION_CALL]: {
         minLength: 5,
         maxLength: 1024 * 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['functionOID', 'arguments'],
-        validation: this.validateFunctionCallMessage.bind(this)
+        validation: this.validateFunctionCallMessage.bind(this),
       },
 
       // Backend messages
@@ -107,126 +107,126 @@ class MessageValidator {
         maxLength: 1024,
         requiredFields: ['type', 'length', 'authMethod'],
         optionalFields: ['salt', 'serverData', 'mechanisms'],
-        validation: this.validateAuthenticationMessage.bind(this)
+        validation: this.validateAuthenticationMessage.bind(this),
       },
       [MESSAGE_TYPES.BACKEND_KEY_DATA]: {
         minLength: 13, // type + length + pid + secret
         maxLength: 13,
         requiredFields: ['type', 'length', 'pid', 'secret'],
-        validation: this.validateBackendKeyDataMessage.bind(this)
+        validation: this.validateBackendKeyDataMessage.bind(this),
       },
       [MESSAGE_TYPES.PARAMETER_STATUS]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length', 'name', 'value'],
-        validation: this.validateParameterStatusMessage.bind(this)
+        validation: this.validateParameterStatusMessage.bind(this),
       },
       [MESSAGE_TYPES.READY_FOR_QUERY]: {
         minLength: 6, // type + length + status
         maxLength: 6,
         requiredFields: ['type', 'length', 'status'],
-        validation: this.validateReadyForQueryMessage.bind(this)
+        validation: this.validateReadyForQueryMessage.bind(this),
       },
       [MESSAGE_TYPES.ROW_DESCRIPTION]: {
         minLength: 7, // type + length + field count
         maxLength: 1024 * 1024,
         requiredFields: ['type', 'length', 'fieldCount'],
         optionalFields: ['fields'],
-        validation: this.validateRowDescriptionMessage.bind(this)
+        validation: this.validateRowDescriptionMessage.bind(this),
       },
       [MESSAGE_TYPES.DATA_ROW]: {
         minLength: 7, // type + length + field count
         maxLength: 1024 * 1024,
         requiredFields: ['type', 'length', 'fieldCount'],
         optionalFields: ['fields'],
-        validation: this.validateDataRowMessage.bind(this)
+        validation: this.validateDataRowMessage.bind(this),
       },
       [MESSAGE_TYPES.COMMAND_COMPLETE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['tag'],
-        validation: this.validateCommandCompleteMessage.bind(this)
+        validation: this.validateCommandCompleteMessage.bind(this),
       },
       [MESSAGE_TYPES.EMPTY_QUERY_RESPONSE]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validateEmptyQueryResponseMessage.bind(this)
+        validation: this.validateEmptyQueryResponseMessage.bind(this),
       },
       [MESSAGE_TYPES.ERROR_RESPONSE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['errorFields'],
-        validation: this.validateErrorResponseMessage.bind(this)
+        validation: this.validateErrorResponseMessage.bind(this),
       },
       [MESSAGE_TYPES.NOTICE_RESPONSE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['noticeFields'],
-        validation: this.validateNoticeResponseMessage.bind(this)
+        validation: this.validateNoticeResponseMessage.bind(this),
       },
       [MESSAGE_TYPES.NOTIFICATION_RESPONSE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length', 'pid', 'channel'],
         optionalFields: ['payload'],
-        validation: this.validateNotificationResponseMessage.bind(this)
+        validation: this.validateNotificationResponseMessage.bind(this),
       },
       [MESSAGE_TYPES.PARSE_COMPLETE]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validateParseCompleteMessage.bind(this)
+        validation: this.validateParseCompleteMessage.bind(this),
       },
       [MESSAGE_TYPES.BIND_COMPLETE]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validateBindCompleteMessage.bind(this)
+        validation: this.validateBindCompleteMessage.bind(this),
       },
       [MESSAGE_TYPES.PARAMETER_DESCRIPTION]: {
         minLength: 7, // type + length + parameter count
         maxLength: 1024,
         requiredFields: ['type', 'length', 'parameterCount'],
         optionalFields: ['parameterTypes'],
-        validation: this.validateParameterDescriptionMessage.bind(this)
+        validation: this.validateParameterDescriptionMessage.bind(this),
       },
       [MESSAGE_TYPES.NO_DATA]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validateNoDataMessage.bind(this)
+        validation: this.validateNoDataMessage.bind(this),
       },
       [MESSAGE_TYPES.PORTAL_SUSPENDED]: {
         minLength: 5,
         maxLength: 5,
         requiredFields: ['type', 'length'],
-        validation: this.validatePortalSuspendedMessage.bind(this)
+        validation: this.validatePortalSuspendedMessage.bind(this),
       },
       [MESSAGE_TYPES.COPY_IN_RESPONSE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['format', 'columnFormats'],
-        validation: this.validateCopyInResponseMessage.bind(this)
+        validation: this.validateCopyInResponseMessage.bind(this),
       },
       [MESSAGE_TYPES.COPY_OUT_RESPONSE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['format', 'columnFormats'],
-        validation: this.validateCopyOutResponseMessage.bind(this)
+        validation: this.validateCopyOutResponseMessage.bind(this),
       },
       [MESSAGE_TYPES.COPY_BOTH_RESPONSE]: {
         minLength: 5,
         maxLength: 1024,
         requiredFields: ['type', 'length'],
         optionalFields: ['format', 'columnFormats'],
-        validation: this.validateCopyBothResponseMessage.bind(this)
-      }
+        validation: this.validateCopyBothResponseMessage.bind(this),
+      },
     };
   }
 
@@ -241,7 +241,7 @@ class MessageValidator {
       passed: 0,
       failed: 0,
       warnings: 0,
-      details: {}
+      details: {},
     };
 
     for (const [messageType, rules] of Object.entries(this.validationRules)) {
@@ -251,13 +251,13 @@ class MessageValidator {
         validationResult.passed = validationResult.valid;
         results.details[messageType] = validationResult;
         results.total++;
-        
+
         if (validationResult.valid) {
           results.passed++;
         } else {
           results.failed++;
         }
-        
+
         if (validationResult.warnings && validationResult.warnings.length > 0) {
           results.warnings += validationResult.warnings.length;
         }
@@ -266,7 +266,7 @@ class MessageValidator {
           valid: false,
           passed: false,
           error: error.message,
-          warnings: []
+          warnings: [],
         };
         results.total++;
         results.failed++;
@@ -283,20 +283,20 @@ class MessageValidator {
    * @param {Object} options - Validation options
    * @returns {Promise<Object>} Validation result
    */
-  async validateMessageFormat(messageType, rules, options = {}) {
+  async validateMessageFormat(messageType, rules, _options = {}) {
     const result = {
       valid: true,
       errors: [],
       warnings: [],
       messageType,
-      rules
+      rules,
     };
 
     // Test with valid message
     try {
       const validMessage = this.generateValidMessage(messageType);
       const validation = this.validateMessage(validMessage, rules);
-      
+
       if (!validation.valid) {
         result.valid = false;
         result.errors.push(`Valid message failed validation: ${validation.errors.join(', ')}`);
@@ -339,7 +339,7 @@ class MessageValidator {
     const result = {
       valid: true,
       errors: [],
-      warnings: []
+      warnings: [],
     };
 
     // Check minimum length
@@ -436,23 +436,23 @@ class MessageValidator {
     if (rules.minLength > 1) {
       invalidMessages.push({
         buffer: Buffer.alloc(rules.minLength - 1),
-        description: 'Message too short'
+        description: 'Message too short',
       });
     }
 
     // Too long message
     invalidMessages.push({
       buffer: Buffer.alloc(rules.maxLength + 1),
-      description: 'Message too long'
+      description: 'Message too long',
     });
 
     // Invalid message type
     if (rules.minLength >= 1) {
       const invalidTypeBuffer = Buffer.alloc(rules.minLength);
-      invalidTypeBuffer[0] = 0xFF; // Invalid message type
+      invalidTypeBuffer[0] = 0xff; // Invalid message type
       invalidMessages.push({
         buffer: invalidTypeBuffer,
-        description: 'Invalid message type'
+        description: 'Invalid message type',
       });
     }
 
@@ -463,7 +463,7 @@ class MessageValidator {
       lengthMismatchBuffer.writeInt32BE(999, 1); // Wrong length
       invalidMessages.push({
         buffer: lengthMismatchBuffer,
-        description: 'Length mismatch'
+        description: 'Length mismatch',
       });
     }
 
@@ -484,7 +484,7 @@ class MessageValidator {
       edgeCases.push({
         buffer: Buffer.alloc(rules.minLength),
         description: 'Minimum length message',
-        shouldPass: true
+        shouldPass: true,
       });
     }
 
@@ -492,7 +492,7 @@ class MessageValidator {
     edgeCases.push({
       buffer: Buffer.alloc(rules.maxLength),
       description: 'Maximum length message',
-      shouldPass: true
+      shouldPass: true,
     });
 
     return edgeCases;
@@ -584,7 +584,7 @@ class MessageValidator {
   // Specific message validators
   validateQueryMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Query message too short');
@@ -601,7 +601,7 @@ class MessageValidator {
 
   validateParseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Parse message too short');
@@ -610,9 +610,8 @@ class MessageValidator {
 
     // Parse message structure: type + length + statementName + query + paramCount + paramTypes
     let offset = 5;
-    
+
     // Find statement name (null-terminated)
-    const stmtNameStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     if (offset >= buffer.length) {
       result.valid = false;
@@ -622,7 +621,6 @@ class MessageValidator {
     offset++; // Skip null terminator
 
     // Find query (null-terminated)
-    const queryStart = offset;
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     if (offset >= buffer.length) {
       result.valid = false;
@@ -642,7 +640,7 @@ class MessageValidator {
     offset += 2;
 
     // Check parameter types
-    if (offset + (paramCount * 4) > buffer.length) {
+    if (offset + paramCount * 4 > buffer.length) {
       result.valid = false;
       result.errors.push('Insufficient data for parameter types');
       return result;
@@ -653,7 +651,7 @@ class MessageValidator {
 
   validateBindMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Bind message too short');
@@ -662,7 +660,7 @@ class MessageValidator {
 
     // Similar structure validation as Parse
     let offset = 5;
-    
+
     // Portal name
     while (offset < buffer.length && buffer[offset] !== 0) offset++;
     if (offset >= buffer.length) {
@@ -686,7 +684,7 @@ class MessageValidator {
 
   validateDescribeMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 6) {
       result.valid = false;
       result.errors.push('Describe message too short');
@@ -704,7 +702,7 @@ class MessageValidator {
 
   validateExecuteMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Execute message too short');
@@ -725,7 +723,7 @@ class MessageValidator {
 
   validateSyncMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('Sync message must be exactly 5 bytes');
@@ -736,7 +734,7 @@ class MessageValidator {
 
   validateTerminateMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('Terminate message must be exactly 5 bytes');
@@ -747,7 +745,7 @@ class MessageValidator {
 
   validatePasswordMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Password message too short');
@@ -758,7 +756,7 @@ class MessageValidator {
 
   validateCopyDataMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Copy data message too short');
@@ -769,7 +767,7 @@ class MessageValidator {
 
   validateCopyDoneMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('Copy done message must be exactly 5 bytes');
@@ -780,7 +778,7 @@ class MessageValidator {
 
   validateCopyFailMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Copy fail message too short');
@@ -791,7 +789,7 @@ class MessageValidator {
 
   validateFunctionCallMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Function call message too short');
@@ -802,7 +800,7 @@ class MessageValidator {
 
   validateAuthenticationMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 9) {
       result.valid = false;
       result.errors.push('Authentication message too short');
@@ -819,7 +817,7 @@ class MessageValidator {
 
   validateBackendKeyDataMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 13) {
       result.valid = false;
       result.errors.push('Backend key data message must be exactly 13 bytes');
@@ -830,7 +828,7 @@ class MessageValidator {
 
   validateParameterStatusMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Parameter status message too short');
@@ -841,7 +839,7 @@ class MessageValidator {
 
   validateReadyForQueryMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 6) {
       result.valid = false;
       result.errors.push('Ready for query message must be exactly 6 bytes');
@@ -859,7 +857,7 @@ class MessageValidator {
 
   validateRowDescriptionMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 7) {
       result.valid = false;
       result.errors.push('Row description message too short');
@@ -877,7 +875,7 @@ class MessageValidator {
 
   validateDataRowMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 7) {
       result.valid = false;
       result.errors.push('Data row message too short');
@@ -895,7 +893,7 @@ class MessageValidator {
 
   validateCommandCompleteMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Command complete message too short');
@@ -906,7 +904,7 @@ class MessageValidator {
 
   validateEmptyQueryResponseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('Empty query response message must be exactly 5 bytes');
@@ -917,7 +915,7 @@ class MessageValidator {
 
   validateErrorResponseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Error response message too short');
@@ -928,7 +926,7 @@ class MessageValidator {
 
   validateNoticeResponseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Notice response message too short');
@@ -939,7 +937,7 @@ class MessageValidator {
 
   validateNotificationResponseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Notification response message too short');
@@ -950,7 +948,7 @@ class MessageValidator {
 
   validateParseCompleteMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('Parse complete message must be exactly 5 bytes');
@@ -961,7 +959,7 @@ class MessageValidator {
 
   validateBindCompleteMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('Bind complete message must be exactly 5 bytes');
@@ -972,7 +970,7 @@ class MessageValidator {
 
   validateParameterDescriptionMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 7) {
       result.valid = false;
       result.errors.push('Parameter description message too short');
@@ -990,7 +988,7 @@ class MessageValidator {
 
   validateNoDataMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('No data message must be exactly 5 bytes');
@@ -1001,7 +999,7 @@ class MessageValidator {
 
   validatePortalSuspendedMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length !== 5) {
       result.valid = false;
       result.errors.push('Portal suspended message must be exactly 5 bytes');
@@ -1012,7 +1010,7 @@ class MessageValidator {
 
   validateCopyInResponseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Copy in response message too short');
@@ -1023,7 +1021,7 @@ class MessageValidator {
 
   validateCopyOutResponseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Copy out response message too short');
@@ -1034,7 +1032,7 @@ class MessageValidator {
 
   validateCopyBothResponseMessage(buffer) {
     const result = { valid: true, errors: [], warnings: [] };
-    
+
     if (buffer.length < 5) {
       result.valid = false;
       result.errors.push('Copy both response message too short');
@@ -1045,5 +1043,3 @@ class MessageValidator {
 }
 
 module.exports = MessageValidator;
-
-

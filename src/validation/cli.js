@@ -6,7 +6,6 @@
  */
 
 const { ProtocolValidationSystem } = require('./index');
-const fs = require('fs').promises;
 const path = require('path');
 
 /**
@@ -21,7 +20,7 @@ class ValidationCLI {
       reportFormat: 'json',
       outputDir: './validation-reports',
       verbose: false,
-      quiet: false
+      quiet: false,
     };
   }
 
@@ -32,42 +31,42 @@ class ValidationCLI {
    */
   parseArguments(args) {
     const options = { ...this.options };
-    
+
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
-      
+
       switch (arg) {
         case '--help':
         case '-h':
           this.showHelp();
           process.exit(0);
           break;
-          
+
         case '--version':
         case '-v':
           this.showVersion();
           process.exit(0);
           break;
-          
+
         case '--format':
         case '-f':
           options.reportFormat = args[++i];
           break;
-          
+
         case '--output':
         case '-o':
           options.outputDir = args[++i];
           break;
-          
+
         case '--no-fuzzing':
           options.enableFuzzing = false;
           break;
-          
+
         case '--real-postgresql':
           options.enableRealPostgreSQLComparison = true;
           break;
-          
-        case '--postgresql-config':
+
+        case '--postgresql-config': {
           const configPath = args[++i];
           try {
             const configData = require(path.resolve(configPath));
@@ -77,19 +76,20 @@ class ValidationCLI {
             process.exit(1);
           }
           break;
-          
+        }
+
         case '--verbose':
           options.verbose = true;
           break;
-          
+
         case '--quiet':
           options.quiet = true;
           break;
-          
+
         case '--test':
           options.testType = args[++i];
           break;
-          
+
         default:
           if (arg.startsWith('--')) {
             console.error(`Unknown option: ${arg}`);
@@ -99,7 +99,7 @@ class ValidationCLI {
           break;
       }
     }
-    
+
     return options;
   }
 
@@ -180,7 +180,7 @@ EXAMPLES:
         if (!options.quiet) {
           console.log(`Running ${options.testType} tests...`);
         }
-        
+
         const results = await validationSystem.runSpecificTest(options.testType, options);
         // Wrap single test results in the expected format
         const wrappedResults = {
@@ -191,13 +191,13 @@ EXAMPLES:
             passed: results.passed || 0,
             failed: results.failed || 0,
             warnings: results.warnings || 0,
-            successRate: results.total > 0 ? Math.round((results.passed / results.total) * 100) : 0
+            successRate: results.total > 0 ? Math.round((results.passed / results.total) * 100) : 0,
           },
           tests: {
-            [options.testType]: results
-          }
+            [options.testType]: results,
+          },
         };
-        
+
         // Generate report for single test if format is specified
         if (options.reportFormat && options.reportFormat !== 'console') {
           const ComplianceReporter = require('./complianceReporter');
@@ -205,18 +205,17 @@ EXAMPLES:
           const report = await reporter.generateReport(wrappedResults);
           wrappedResults.report = report;
         }
-        
+
         await this.displayResults(wrappedResults, options);
       } else {
         // Run full validation suite
         if (!options.quiet) {
           console.log('Running full validation suite...');
         }
-        
+
         const results = await validationSystem.runValidationSuite(options);
         await this.displayResults(results, options);
       }
-
     } catch (error) {
       console.error(`Validation failed: ${error.message}`);
       if (options.verbose) {
@@ -299,22 +298,22 @@ EXAMPLES:
     if (options.verbose && results.tests) {
       console.log('Detailed Results:');
       console.log('=================');
-      
+
       for (const [category, categoryResults] of Object.entries(results.tests)) {
         console.log(`\n${category.toUpperCase()}:`);
-        
+
         if (categoryResults.details) {
           for (const [testName, testResult] of Object.entries(categoryResults.details)) {
             const status = testResult.passed ? 'PASS' : 'FAIL';
             const statusColor = testResult.passed ? '\x1b[32m' : '\x1b[31m';
             const resetColor = '\x1b[0m';
-            
+
             console.log(`  ${statusColor}${status}${resetColor} ${testName}`);
-            
+
             if (testResult.error) {
               console.log(`    Error: ${testResult.error}`);
             }
-            
+
             if (testResult.warnings && testResult.warnings.length > 0) {
               console.log(`    Warnings: ${testResult.warnings.length}`);
               for (const warning of testResult.warnings) {
@@ -348,5 +347,3 @@ if (require.main === module) {
 }
 
 module.exports = ValidationCLI;
-
-
