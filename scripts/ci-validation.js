@@ -20,14 +20,14 @@ class CIValidation {
       reportFormat: 'json',
       outputDir: './ci-reports',
       verbose: false,
-      quiet: true
+      quiet: true,
     };
-    
+
     this.thresholds = {
       minSuccessRate: 95, // Minimum 95% success rate
       maxCriticalIssues: 0, // No critical issues allowed
       maxWarnings: 10, // Maximum 10 warnings
-      maxFuzzingCrashes: 5 // Maximum 5 fuzzing crashes
+      maxFuzzingCrashes: 5, // Maximum 5 fuzzing crashes
     };
   }
 
@@ -38,16 +38,16 @@ class CIValidation {
   async run() {
     try {
       console.log('🔍 Starting CI Validation...');
-      
+
       const validationSystem = new ProtocolValidationSystem(this.options);
       const results = await validationSystem.runValidationSuite();
-      
+
       // Generate CI report
       await this.generateCIReport(results);
-      
+
       // Check thresholds
       const passed = await this.checkThresholds(results);
-      
+
       if (passed) {
         console.log('✅ CI Validation PASSED');
         return true;
@@ -55,7 +55,6 @@ class CIValidation {
         console.log('❌ CI Validation FAILED');
         return false;
       }
-      
     } catch (error) {
       console.error('💥 CI Validation Error:', error.message);
       return false;
@@ -69,39 +68,53 @@ class CIValidation {
    */
   async checkThresholds(results) {
     const issues = [];
-    
+
     // Check success rate
     if (results.summary) {
       const successRate = (results.summary.passed / results.summary.total) * 100;
       if (successRate < this.thresholds.minSuccessRate) {
-        issues.push(`Success rate ${successRate.toFixed(2)}% below threshold ${this.thresholds.minSuccessRate}%`);
+        issues.push(
+          `Success rate ${successRate.toFixed(2)}% below threshold ${this.thresholds.minSuccessRate}%`
+        );
       }
-      
+
       // Check critical issues
-      if (results.summary.criticalIssues && results.summary.criticalIssues.length > this.thresholds.maxCriticalIssues) {
-        issues.push(`Critical issues ${results.summary.criticalIssues.length} exceed threshold ${this.thresholds.maxCriticalIssues}`);
+      if (
+        results.summary.criticalIssues &&
+        results.summary.criticalIssues.length > this.thresholds.maxCriticalIssues
+      ) {
+        issues.push(
+          `Critical issues ${results.summary.criticalIssues.length} ` +
+            `exceed threshold ${this.thresholds.maxCriticalIssues}`
+        );
       }
-      
+
       // Check warnings
       if (results.summary.warnings > this.thresholds.maxWarnings) {
-        issues.push(`Warnings ${results.summary.warnings} exceed threshold ${this.thresholds.maxWarnings}`);
+        issues.push(
+          `Warnings ${results.summary.warnings} exceed threshold ${this.thresholds.maxWarnings}`
+        );
       }
     }
-    
+
     // Check fuzzing crashes
     if (results.tests && results.tests.fuzzing) {
-      const fuzzingCrashes = results.tests.fuzzing.crashes ? results.tests.fuzzing.crashes.length : 0;
+      const fuzzingCrashes = results.tests.fuzzing.crashes
+        ? results.tests.fuzzing.crashes.length
+        : 0;
       if (fuzzingCrashes > this.thresholds.maxFuzzingCrashes) {
-        issues.push(`Fuzzing crashes ${fuzzingCrashes} exceed threshold ${this.thresholds.maxFuzzingCrashes}`);
+        issues.push(
+          `Fuzzing crashes ${fuzzingCrashes} exceed threshold ${this.thresholds.maxFuzzingCrashes}`
+        );
       }
     }
-    
+
     if (issues.length > 0) {
       console.log('🚨 Threshold violations:');
       issues.forEach(issue => console.log(`  - ${issue}`));
       return false;
     }
-    
+
     return true;
   }
 
@@ -120,22 +133,22 @@ class CIValidation {
         successRate: results.summary ? (results.summary.passed / results.summary.total) * 100 : 0,
         criticalIssues: results.summary?.criticalIssues?.length || 0,
         warnings: results.summary?.warnings || 0,
-        fuzzingCrashes: results.tests?.fuzzing?.crashes?.length || 0
-      }
+        fuzzingCrashes: results.tests?.fuzzing?.crashes?.length || 0,
+      },
     };
-    
+
     // Ensure output directory exists
     await fs.mkdir(this.options.outputDir, { recursive: true });
-    
+
     // Write JSON report
     const jsonPath = path.join(this.options.outputDir, 'ci-validation-report.json');
     await fs.writeFile(jsonPath, JSON.stringify(report, null, 2));
-    
+
     // Write summary for CI systems
     const summaryPath = path.join(this.options.outputDir, 'ci-summary.txt');
     const summary = this.generateSummaryText(report);
     await fs.writeFile(summaryPath, summary);
-    
+
     console.log(`📊 CI Report generated: ${jsonPath}`);
   }
 
@@ -156,7 +169,7 @@ class CIValidation {
     lines.push(`Warnings: ${report.summary.warnings}`);
     lines.push(`Fuzzing Crashes: ${report.summary.fuzzingCrashes}`);
     lines.push('');
-    
+
     if (report.results.summary) {
       lines.push('Test Summary:');
       lines.push(`  Total: ${report.results.summary.total}`);
@@ -164,7 +177,7 @@ class CIValidation {
       lines.push(`  Failed: ${report.results.summary.failed}`);
       lines.push('');
     }
-    
+
     if (report.results.tests) {
       lines.push('Test Categories:');
       for (const [category, categoryResults] of Object.entries(report.results.tests)) {
@@ -172,13 +185,13 @@ class CIValidation {
       }
       lines.push('');
     }
-    
+
     if (!report.summary.passed) {
       lines.push('❌ CI Validation FAILED - Check thresholds above');
     } else {
       lines.push('✅ CI Validation PASSED - All thresholds met');
     }
-    
+
     return lines.join('\n');
   }
 }
@@ -186,12 +199,14 @@ class CIValidation {
 // Run CI validation if this file is executed directly
 if (require.main === module) {
   const ci = new CIValidation();
-  ci.run().then(success => {
-    process.exit(success ? 0 : 1);
-  }).catch(error => {
-    console.error('Fatal error:', error.message);
-    process.exit(1);
-  });
+  ci.run()
+    .then(success => {
+      process.exit(success ? 0 : 1);
+    })
+    .catch(error => {
+      console.error('Fatal error:', error.message);
+      process.exit(1);
+    });
 }
 
 module.exports = CIValidation;

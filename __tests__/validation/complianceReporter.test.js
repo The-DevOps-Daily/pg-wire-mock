@@ -4,7 +4,6 @@
 
 const ComplianceReporter = require('../../src/validation/complianceReporter');
 const fs = require('fs').promises;
-const path = require('path');
 
 describe('Compliance Reporter', () => {
   let reporter;
@@ -12,14 +11,14 @@ describe('Compliance Reporter', () => {
   beforeEach(() => {
     reporter = new ComplianceReporter({
       outputDir: './test-reports',
-      reportFormat: 'json'
+      reportFormat: 'json',
     });
   });
 
   describe('Initialization', () => {
     test('should initialize with default options', () => {
       const defaultReporter = new ComplianceReporter();
-      
+
       expect(defaultReporter.options).toHaveProperty('outputDir', './validation-reports');
       expect(defaultReporter.options).toHaveProperty('reportFormat', 'json');
       expect(defaultReporter.options).toHaveProperty('includeDetails', true);
@@ -29,11 +28,11 @@ describe('Compliance Reporter', () => {
       const options = {
         outputDir: './custom-reports',
         reportFormat: 'html',
-        includeDetails: false
+        includeDetails: false,
       };
-      
+
       const customReporter = new ComplianceReporter(options);
-      
+
       expect(customReporter.options).toHaveProperty('outputDir', './custom-reports');
       expect(customReporter.options).toHaveProperty('reportFormat', 'html');
       expect(customReporter.options).toHaveProperty('includeDetails', false);
@@ -49,26 +48,26 @@ describe('Compliance Reporter', () => {
           total: 10,
           passed: 8,
           failed: 2,
-          warnings: 1
+          warnings: 1,
         },
         tests: {
           messageFormat: {
             total: 5,
             passed: 4,
             failed: 1,
-            warnings: 0
+            warnings: 0,
           },
           compliance: {
             total: 5,
             passed: 4,
             failed: 1,
-            warnings: 1
-          }
-        }
+            warnings: 1,
+          },
+        },
       };
 
       const report = await reporter.generateReport(mockResults);
-      
+
       expect(report).toHaveProperty('timestamp');
       expect(report).toHaveProperty('format', 'json');
       expect(report).toHaveProperty('summary');
@@ -83,25 +82,25 @@ describe('Compliance Reporter', () => {
           total: 10,
           passed: 8,
           failed: 2,
-          warnings: 1
+          warnings: 1,
         },
         tests: {
           messageFormat: {
             total: 5,
             passed: 4,
             failed: 1,
-            warnings: 0
-          }
-        }
+            warnings: 0,
+          },
+        },
       };
 
       const summary = reporter.generateSummary(mockResults);
-      
+
       expect(summary).toHaveProperty('overall');
       expect(summary).toHaveProperty('byCategory');
       expect(summary).toHaveProperty('criticalIssues');
       expect(summary).toHaveProperty('recommendations');
-      
+
       expect(summary.overall.total).toBe(10);
       expect(summary.overall.passed).toBe(8);
       expect(summary.overall.failed).toBe(2);
@@ -112,16 +111,16 @@ describe('Compliance Reporter', () => {
     test('should generate metadata', () => {
       const mockResults = {
         version: '1.0.0',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       const metadata = reporter.generateMetadata(mockResults);
-      
+
       expect(metadata).toHaveProperty('version', '1.0.0');
       expect(metadata).toHaveProperty('timestamp');
       expect(metadata).toHaveProperty('environment');
       expect(metadata).toHaveProperty('configuration');
-      
+
       expect(metadata.environment).toHaveProperty('nodeVersion');
       expect(metadata.environment).toHaveProperty('platform');
       expect(metadata.environment).toHaveProperty('arch');
@@ -134,25 +133,25 @@ describe('Compliance Reporter', () => {
         tests: {
           messageFormat: {
             details: {
-              'test1': {
+              test1: {
                 passed: true,
-                warnings: []
+                warnings: [],
               },
-              'test2': {
+              test2: {
                 passed: false,
-                error: 'Test failed'
+                error: 'Test failed',
               },
-              'test3': {
+              test3: {
                 passed: false,
-                warnings: ['Warning message']
-              }
-            }
-          }
-        }
+                warnings: ['Warning message'],
+              },
+            },
+          },
+        },
       };
 
       const criticalIssues = reporter.identifyCriticalIssues(mockResults);
-      
+
       expect(criticalIssues).toHaveLength(1);
       expect(criticalIssues[0]).toHaveProperty('category', 'messageFormat');
       expect(criticalIssues[0]).toHaveProperty('test', 'test2');
@@ -165,17 +164,17 @@ describe('Compliance Reporter', () => {
         tests: {
           messageFormat: {
             details: {
-              'test1': {
+              test1: {
                 passed: true,
-                warnings: []
-              }
-            }
-          }
-        }
+                warnings: [],
+              },
+            },
+          },
+        },
       };
 
       const criticalIssues = reporter.identifyCriticalIssues(mockResults);
-      
+
       expect(criticalIssues).toHaveLength(0);
     });
   });
@@ -187,12 +186,12 @@ describe('Compliance Reporter', () => {
           total: 10,
           passed: 5,
           failed: 5,
-          warnings: 2
-        }
+          warnings: 2,
+        },
       };
 
       const recommendations = reporter.generateRecommendations(mockResults);
-      
+
       expect(recommendations).toHaveLength(2);
       expect(recommendations[0]).toHaveProperty('type', 'performance');
       expect(recommendations[0]).toHaveProperty('priority', 'high');
@@ -206,20 +205,20 @@ describe('Compliance Reporter', () => {
           total: 10,
           passed: 8,
           failed: 2,
-          warnings: 0
+          warnings: 0,
         },
         tests: {
           messageFormat: {
             total: 5,
             passed: 2,
             failed: 3,
-            warnings: 0
-          }
-        }
+            warnings: 0,
+          },
+        },
       };
 
       const recommendations = reporter.generateRecommendations(mockResults);
-      
+
       expect(recommendations).toHaveLength(1);
       expect(recommendations[0]).toHaveProperty('type', 'category');
       expect(recommendations[0]).toHaveProperty('priority', 'high');
@@ -232,12 +231,12 @@ describe('Compliance Reporter', () => {
           total: 10,
           passed: 10,
           failed: 0,
-          warnings: 0
-        }
+          warnings: 0,
+        },
       };
 
       const recommendations = reporter.generateRecommendations(mockResults);
-      
+
       expect(recommendations).toHaveLength(0);
     });
   });
@@ -247,12 +246,12 @@ describe('Compliance Reporter', () => {
       const mockReport = {
         timestamp: new Date().toISOString(),
         format: 'json',
-        summary: { total: 10, passed: 8, failed: 2, warnings: 0 }
+        summary: { total: 10, passed: 8, failed: 2, warnings: 0 },
       };
       const mockResults = {};
 
       const jsonContent = reporter.generateJSONReport(mockReport, mockResults);
-      
+
       expect(() => JSON.parse(jsonContent)).not.toThrow();
       const parsed = JSON.parse(jsonContent);
       expect(parsed).toHaveProperty('timestamp');
@@ -268,7 +267,7 @@ describe('Compliance Reporter', () => {
           overall: { total: 10, passed: 8, failed: 2, warnings: 0, successRate: '80.00' },
           byCategory: {},
           criticalIssues: [],
-          recommendations: []
+          recommendations: [],
         },
         metadata: {
           version: '1.0.0',
@@ -276,9 +275,9 @@ describe('Compliance Reporter', () => {
           environment: {
             nodeVersion: 'v16.0.0',
             platform: 'linux',
-            arch: 'x64'
-          }
-        }
+            arch: 'x64',
+          },
+        },
       };
       const mockResults = {
         tests: {
@@ -288,15 +287,15 @@ describe('Compliance Reporter', () => {
             failed: 1,
             warnings: 0,
             details: {
-              'test1': { passed: true, warnings: [] },
-              'test2': { passed: false, error: 'Test failed' }
-            }
-          }
-        }
+              test1: { passed: true, warnings: [] },
+              test2: { passed: false, error: 'Test failed' },
+            },
+          },
+        },
       };
 
       const htmlContent = reporter.generateHTMLReport(mockReport, mockResults);
-      
+
       expect(htmlContent).toContain('<!DOCTYPE html>');
       expect(htmlContent).toContain('<title>PostgreSQL Wire Protocol Compliance Report</title>');
       expect(htmlContent).toContain('80.00%');
@@ -310,10 +309,10 @@ describe('Compliance Reporter', () => {
         summary: {
           overall: { total: 10, passed: 8, failed: 2, warnings: 1, successRate: '80.00' },
           byCategory: {
-            messageFormat: { total: 5, passed: 4, failed: 1, warnings: 0, successRate: '80.00' }
+            messageFormat: { total: 5, passed: 4, failed: 1, warnings: 0, successRate: '80.00' },
           },
           criticalIssues: [],
-          recommendations: []
+          recommendations: [],
         },
         metadata: {
           version: '1.0.0',
@@ -321,14 +320,14 @@ describe('Compliance Reporter', () => {
           environment: {
             nodeVersion: 'v16.0.0',
             platform: 'linux',
-            arch: 'x64'
-          }
-        }
+            arch: 'x64',
+          },
+        },
       };
       const mockResults = {};
 
       const textContent = reporter.generateTextReport(mockReport, mockResults);
-      
+
       expect(textContent).toContain('PostgreSQL Wire Protocol Compliance Report');
       expect(textContent).toContain('Total Tests: 10');
       expect(textContent).toContain('Passed: 8');
@@ -341,9 +340,9 @@ describe('Compliance Reporter', () => {
     test('should ensure output directory exists', async () => {
       const testDir = './test-reports-' + Date.now();
       const testReporter = new ComplianceReporter({ outputDir: testDir });
-      
+
       await testReporter.ensureOutputDirectory();
-      
+
       try {
         const stats = await fs.stat(testDir);
         expect(stats.isDirectory()).toBe(true);
@@ -354,25 +353,25 @@ describe('Compliance Reporter', () => {
 
     test('should write report to file', async () => {
       const testDir = './test-reports-' + Date.now();
-      const testReporter = new ComplianceReporter({ 
+      const testReporter = new ComplianceReporter({
         outputDir: testDir,
-        reportFormat: 'json'
+        reportFormat: 'json',
       });
-      
+
       await testReporter.ensureOutputDirectory();
-      
+
       const mockReport = {
         timestamp: new Date().toISOString(),
         format: 'json',
-        summary: { total: 10, passed: 8, failed: 2, warnings: 0 }
+        summary: { total: 10, passed: 8, failed: 2, warnings: 0 },
       };
       const mockResults = {};
-      
+
       const reportPath = await testReporter.writeReport(mockReport, mockResults);
-      
+
       expect(reportPath).toContain(testDir);
       expect(reportPath).toContain('.json');
-      
+
       try {
         const stats = await fs.stat(reportPath);
         expect(stats.isFile()).toBe(true);
@@ -386,7 +385,7 @@ describe('Compliance Reporter', () => {
     test('should handle empty results', () => {
       const mockResults = {};
       const summary = reporter.generateSummary(mockResults);
-      
+
       expect(summary.overall.total).toBe(0);
       expect(summary.overall.passed).toBe(0);
       expect(summary.overall.failed).toBe(0);
@@ -400,13 +399,13 @@ describe('Compliance Reporter', () => {
             total: 5,
             passed: 4,
             failed: 1,
-            warnings: 0
-          }
-        }
+            warnings: 0,
+          },
+        },
       };
-      
+
       const summary = reporter.generateSummary(mockResults);
-      
+
       expect(summary.overall.total).toBe(0);
       expect(summary.byCategory.messageFormat.total).toBe(5);
     });
@@ -417,16 +416,14 @@ describe('Compliance Reporter', () => {
           total: 10,
           passed: 8,
           failed: 2,
-          warnings: 1
-        }
+          warnings: 1,
+        },
       };
-      
+
       const summary = reporter.generateSummary(mockResults);
-      
+
       expect(summary.overall.total).toBe(10);
       expect(Object.keys(summary.byCategory)).toHaveLength(0);
     });
   });
 });
-
-

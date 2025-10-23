@@ -11,7 +11,7 @@ describe('Protocol Validation System', () => {
     validationSystem = new ProtocolValidationSystem({
       enableFuzzing: false,
       enableRealPostgreSQLComparison: false,
-      outputDir: './test-reports'
+      outputDir: './test-reports',
     });
   });
 
@@ -19,7 +19,7 @@ describe('Protocol Validation System', () => {
     test('should initialize with default options', () => {
       const system = new ProtocolValidationSystem();
       const status = system.getStatus();
-      
+
       expect(status.enabled).toBe(true);
       expect(status.fuzzingEnabled).toBe(true);
       expect(status.realPostgreSQLComparisonEnabled).toBe(false);
@@ -29,12 +29,12 @@ describe('Protocol Validation System', () => {
       const options = {
         enableFuzzing: false,
         enableRealPostgreSQLComparison: true,
-        outputDir: './custom-reports'
+        outputDir: './custom-reports',
       };
-      
+
       const system = new ProtocolValidationSystem(options);
       const status = system.getStatus();
-      
+
       expect(status.fuzzingEnabled).toBe(false);
       expect(status.realPostgreSQLComparisonEnabled).toBe(true);
       expect(status.outputDir).toBe('./custom-reports');
@@ -44,12 +44,12 @@ describe('Protocol Validation System', () => {
   describe('Validation Suite', () => {
     test('should run full validation suite', async () => {
       const results = await validationSystem.runValidationSuite();
-      
+
       expect(results).toHaveProperty('timestamp');
       expect(results).toHaveProperty('version');
       expect(results).toHaveProperty('tests');
       expect(results).toHaveProperty('summary');
-      
+
       expect(results.summary).toHaveProperty('total');
       expect(results.summary).toHaveProperty('passed');
       expect(results.summary).toHaveProperty('failed');
@@ -58,7 +58,7 @@ describe('Protocol Validation System', () => {
 
     test('should run specific test type', async () => {
       const results = await validationSystem.runSpecificTest('messageFormat');
-      
+
       expect(results).toHaveProperty('total');
       expect(results).toHaveProperty('passed');
       expect(results).toHaveProperty('failed');
@@ -66,22 +66,23 @@ describe('Protocol Validation System', () => {
     });
 
     test('should handle unknown test type', async () => {
-      await expect(validationSystem.runSpecificTest('unknown')).rejects.toThrow('Unknown test type: unknown');
+      await expect(validationSystem.runSpecificTest('unknown')).rejects.toThrow(
+        'Unknown test type: unknown'
+      );
     });
   });
 
   describe('Error Handling', () => {
     test('should handle validation errors gracefully', async () => {
       // Mock a failing validation
-      const originalRunValidationSuite = validationSystem.runValidationSuite;
-      validationSystem.runValidationSuite = jest.fn().mockRejectedValue(new Error('Validation failed'));
-      
+      validationSystem.runValidationSuite = jest
+        .fn()
+        .mockRejectedValue(new Error('Validation failed'));
+
       const results = await validationSystem.runValidationSuite();
-      
+
       expect(results).toHaveProperty('error');
       expect(results.error).toBe('Validation failed');
     });
   });
 });
-
-

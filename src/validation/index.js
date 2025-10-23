@@ -112,7 +112,8 @@ class ProtocolValidationSystem {
             skipped: {
               passed: false,
               error:
-                'PostgreSQL comparison module not available. Install "pg" package to enable real PostgreSQL comparison.',
+                'PostgreSQL comparison module not available. ' +
+                'Install "pg" package to enable real PostgreSQL comparison.',
               warnings: [],
             },
           },

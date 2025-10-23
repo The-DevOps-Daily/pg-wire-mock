@@ -3,7 +3,7 @@
  * Generates malformed messages for testing robustness
  */
 
-const { MESSAGE_TYPES, AUTH_METHODS, ERROR_CODES } = require('../protocol/constants');
+const { MESSAGE_TYPES, AUTH_METHODS } = require('../protocol/constants');
 
 /**
  * Protocol fuzzer class
@@ -26,27 +26,22 @@ class ProtocolFuzzer {
         'lengthCorruption',
         'typeCorruption',
         'payloadTruncation',
-        'payloadExpansion'
+        'payloadExpansion',
       ],
       boundaryTesting: [
         'minimumLength',
         'maximumLength',
         'zeroLength',
         'negativeLength',
-        'overflowLength'
+        'overflowLength',
       ],
-      encodingIssues: [
-        'invalidUTF8',
-        'nullByteInjection',
-        'unicodeOverflow',
-        'encodingMismatch'
-      ],
+      encodingIssues: ['invalidUTF8', 'nullByteInjection', 'unicodeOverflow', 'encodingMismatch'],
       protocolViolations: [
         'invalidMessageSequence',
         'missingRequiredFields',
         'extraFields',
-        'wrongFieldTypes'
-      ]
+        'wrongFieldTypes',
+      ],
     };
   }
 
@@ -66,7 +61,7 @@ class ProtocolFuzzer {
       },
       nextBool() {
         return this.next() > 0.5;
-      }
+      },
     };
   }
 
@@ -80,7 +75,7 @@ class ProtocolFuzzer {
       iterations: options.iterations || 1000,
       strategies: options.strategies || Object.keys(this.fuzzingStrategies),
       messageTypes: options.messageTypes || Object.values(MESSAGE_TYPES),
-      ...options
+      ...options,
     };
 
     const results = {
@@ -91,7 +86,7 @@ class ProtocolFuzzer {
       strategies: {},
       crashes: [],
       timeouts: [],
-      details: {}
+      details: {},
     };
 
     for (const strategy of config.strategies) {
@@ -101,18 +96,18 @@ class ProtocolFuzzer {
         failed: 0,
         warnings: 0,
         crashes: 0,
-        timeouts: 0
+        timeouts: 0,
       };
 
       const strategyResults = await this.runFuzzingStrategy(strategy, config);
       results.strategies[strategy] = { ...results.strategies[strategy], ...strategyResults };
-      
+
       results.total += strategyResults.total;
       results.passed += strategyResults.passed;
       results.failed += strategyResults.failed;
       results.warnings += strategyResults.warnings;
-      results.crashes.push(...strategyResults.crashes || []);
-      results.timeouts.push(...strategyResults.timeouts || []);
+      results.crashes.push(...(strategyResults.crashes || []));
+      results.timeouts.push(...(strategyResults.timeouts || []));
     }
 
     return results;
@@ -132,58 +127,57 @@ class ProtocolFuzzer {
       warnings: 0,
       crashes: [],
       timeouts: [],
-      details: {}
+      details: {},
     };
 
     const fuzzingMethods = this.fuzzingStrategies[strategy] || [];
-    
+
     for (const method of fuzzingMethods) {
       for (let i = 0; i < config.iterations; i++) {
         try {
           results.total++;
-          
+
           // Generate fuzzed message
           const fuzzedMessage = this.generateFuzzedMessage(strategy, method, config);
-          
+
           // Test the fuzzed message
           const testResult = await this.testFuzzedMessage(fuzzedMessage, strategy, method);
-          
+
           if (testResult.passed) {
             results.passed++;
           } else {
             results.failed++;
           }
-          
+
           if (testResult.warnings && testResult.warnings.length > 0) {
             results.warnings += testResult.warnings.length;
           }
-          
+
           if (testResult.crashed) {
             results.crashes.push({
               strategy,
               method,
               iteration: i,
               message: fuzzedMessage,
-              error: testResult.error
+              error: testResult.error,
             });
           }
-          
+
           if (testResult.timedOut) {
             results.timeouts.push({
               strategy,
               method,
               iteration: i,
-              message: fuzzedMessage
+              message: fuzzedMessage,
             });
           }
-          
         } catch (error) {
           results.failed++;
           results.crashes.push({
             strategy,
             method,
             iteration: i,
-            error: error.message
+            error: error.message,
           });
         }
       }
@@ -202,7 +196,7 @@ class ProtocolFuzzer {
   generateFuzzedMessage(strategy, method, config) {
     const messageType = config.messageTypes[this.random.nextInt(config.messageTypes.length)];
     const baseMessage = this.createBaseMessage(messageType);
-    
+
     switch (strategy) {
       case 'messageCorruption':
         return this.corruptMessage(baseMessage, method);
@@ -224,13 +218,13 @@ class ProtocolFuzzer {
    * @param {string} method - Fuzzing method
    * @returns {Promise<Object>} Test result
    */
-  async testFuzzedMessage(message, strategy, method) {
+  async testFuzzedMessage(message, _strategy, _method) {
     const result = {
       passed: false,
       warnings: [],
       crashed: false,
       timedOut: false,
-      error: null
+      error: null,
     };
 
     try {
@@ -240,12 +234,11 @@ class ProtocolFuzzer {
       });
 
       const testPromise = this.performFuzzingTest(message);
-      
+
       await Promise.race([testPromise, timeout]);
-      
+
       // If we get here, the message was handled without crashing
       result.passed = true;
-      
     } catch (error) {
       if (error.message === 'Test timeout') {
         result.timedOut = true;
@@ -267,22 +260,22 @@ class ProtocolFuzzer {
   async performFuzzingTest(message) {
     // Simulate message processing
     // In a real implementation, this would call the actual message processor
-    
+
     // Basic validation
     if (message.length < 1) {
       throw new Error('Message too short');
     }
-    
+
     if (message.length > 1024 * 1024) {
       throw new Error('Message too long');
     }
-    
+
     // Check message type
     const messageType = String.fromCharCode(message[0]);
     if (!Object.values(MESSAGE_TYPES).includes(messageType)) {
       throw new Error(`Invalid message type: ${messageType}`);
     }
-    
+
     // Check length field
     if (message.length >= 5) {
       const length = message.readInt32BE(1);
@@ -293,7 +286,7 @@ class ProtocolFuzzer {
         throw new Error('Length exceeds message size');
       }
     }
-    
+
     // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, Math.random() * 10));
   }
@@ -328,7 +321,7 @@ class ProtocolFuzzer {
    */
   corruptMessage(message, method) {
     const corrupted = Buffer.from(message);
-    
+
     switch (method) {
       case 'bitFlip':
         return this.flipRandomBits(corrupted);
@@ -359,24 +352,27 @@ class ProtocolFuzzer {
         return Buffer.alloc(1); // Minimum possible message
       case 'maximumLength':
         return Buffer.alloc(1024 * 1024); // Maximum reasonable length
-      case 'zeroLength':
+      case 'zeroLength': {
         const zeroLength = Buffer.from(message);
         if (zeroLength.length >= 5) {
           zeroLength.writeInt32BE(0, 1);
         }
         return zeroLength;
-      case 'negativeLength':
+      }
+      case 'negativeLength': {
         const negativeLength = Buffer.from(message);
         if (negativeLength.length >= 5) {
           negativeLength.writeInt32BE(-1, 1);
         }
         return negativeLength;
-      case 'overflowLength':
+      }
+      case 'overflowLength': {
         const overflowLength = Buffer.from(message);
         if (overflowLength.length >= 5) {
-          overflowLength.writeInt32BE(0x7FFFFFFF, 1);
+          overflowLength.writeInt32BE(0x7fffffff, 1);
         }
         return overflowLength;
+      }
       default:
         return message;
     }
@@ -428,20 +424,20 @@ class ProtocolFuzzer {
   flipRandomBits(buffer) {
     const corrupted = Buffer.from(buffer);
     const bitCount = Math.max(1, Math.floor(this.random.next() * 8));
-    
+
     for (let i = 0; i < bitCount; i++) {
       const byteIndex = this.random.nextInt(corrupted.length);
       const bitIndex = this.random.nextInt(8);
-      corrupted[byteIndex] ^= (1 << bitIndex);
+      corrupted[byteIndex] ^= 1 << bitIndex;
     }
-    
+
     return corrupted;
   }
 
   swapRandomBytes(buffer) {
     const corrupted = Buffer.from(buffer);
     const swapCount = Math.max(1, Math.floor(this.random.next() * 4));
-    
+
     for (let i = 0; i < swapCount; i++) {
       const index1 = this.random.nextInt(corrupted.length);
       const index2 = this.random.nextInt(corrupted.length);
@@ -449,7 +445,7 @@ class ProtocolFuzzer {
       corrupted[index1] = corrupted[index2];
       corrupted[index2] = temp;
     }
-    
+
     return corrupted;
   }
 
@@ -459,15 +455,15 @@ class ProtocolFuzzer {
       const corruptions = [
         () => corrupted.writeInt32BE(0, 1), // Zero length
         () => corrupted.writeInt32BE(-1, 1), // Negative length
-        () => corrupted.writeInt32BE(0x7FFFFFFF, 1), // Max int
+        () => corrupted.writeInt32BE(0x7fffffff, 1), // Max int
         () => corrupted.writeInt32BE(corrupted.length + 1000, 1), // Too long
-        () => corrupted.writeInt32BE(corrupted.length - 10, 1) // Too short
+        () => corrupted.writeInt32BE(corrupted.length - 10, 1), // Too short
       ];
-      
+
       const corruption = corruptions[this.random.nextInt(corruptions.length)];
       corruption();
     }
-    
+
     return corrupted;
   }
 
@@ -481,7 +477,7 @@ class ProtocolFuzzer {
 
   truncatePayload(buffer) {
     if (buffer.length <= 5) return buffer;
-    
+
     const truncated = Buffer.from(buffer);
     const newLength = Math.max(5, Math.floor(this.random.next() * buffer.length));
     return truncated.slice(0, newLength);
@@ -490,56 +486,57 @@ class ProtocolFuzzer {
   expandPayload(buffer) {
     const expanded = Buffer.alloc(buffer.length + 1000);
     buffer.copy(expanded);
-    
+
     // Fill with random data
     for (let i = buffer.length; i < expanded.length; i++) {
       expanded[i] = this.random.nextInt(256);
     }
-    
+
     // Update length field
     if (expanded.length >= 5) {
       expanded.writeInt32BE(expanded.length - 1, 1);
     }
-    
+
     return expanded;
   }
 
   // Boundary testing methods
   introduceInvalidUTF8(buffer) {
     const corrupted = Buffer.from(buffer);
-    const invalidUTF8 = Buffer.from([0xFF, 0xFE, 0xFD]);
-    
+    const invalidUTF8 = Buffer.from([0xff, 0xfe, 0xfd]);
+
     // Insert invalid UTF8 sequences
     for (let i = 0; i < corrupted.length - 3; i += 10) {
       if (this.random.nextBool()) {
         invalidUTF8.copy(corrupted, i);
       }
     }
-    
+
     return corrupted;
   }
 
   injectNullBytes(buffer) {
     const corrupted = Buffer.from(buffer);
-    
+
     // Inject null bytes at random positions
     for (let i = 0; i < corrupted.length; i++) {
-      if (this.random.next() < 0.1) { // 10% chance
+      if (this.random.next() < 0.1) {
+        // 10% chance
         corrupted[i] = 0;
       }
     }
-    
+
     return corrupted;
   }
 
   introduceUnicodeOverflow(buffer) {
     const corrupted = Buffer.from(buffer);
     const unicodeOverflow = Buffer.from('🚀'.repeat(1000), 'utf8');
-    
+
     // Insert unicode overflow at random positions
     const insertPos = this.random.nextInt(Math.max(1, corrupted.length - unicodeOverflow.length));
     unicodeOverflow.copy(corrupted, insertPos);
-    
+
     return corrupted;
   }
 
@@ -573,23 +570,23 @@ class ProtocolFuzzer {
     // Add extra data to the message
     const extra = Buffer.alloc(buffer.length + 100);
     buffer.copy(extra);
-    
+
     // Fill with random data
     for (let i = buffer.length; i < extra.length; i++) {
       extra[i] = this.random.nextInt(256);
     }
-    
+
     // Update length
     if (extra.length >= 5) {
       extra.writeInt32BE(extra.length - 1, 1);
     }
-    
+
     return extra;
   }
 
   changeFieldTypes(buffer) {
     const corrupted = Buffer.from(buffer);
-    
+
     // Change field types by swapping bytes
     for (let i = 0; i < corrupted.length - 1; i += 2) {
       if (this.random.nextBool()) {
@@ -598,7 +595,7 @@ class ProtocolFuzzer {
         corrupted[i + 1] = temp;
       }
     }
-    
+
     return corrupted;
   }
 
@@ -652,5 +649,3 @@ class ProtocolFuzzer {
 }
 
 module.exports = ProtocolFuzzer;
-
-

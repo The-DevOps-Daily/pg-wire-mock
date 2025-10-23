@@ -17,7 +17,7 @@ class ComplianceReporter {
       includeDetails: true,
       includeTimestamps: true,
       includeVersion: true,
-      ...options
+      ...options,
     };
   }
 
@@ -32,8 +32,8 @@ class ComplianceReporter {
       format: this.options.reportFormat,
       summary: this.generateSummary(results),
       // Only include full details for HTML reports to avoid memory issues
-      details: (this.options.includeDetails && this.options.reportFormat === 'html') ? results : null,
-      metadata: this.generateMetadata(results)
+      details: this.options.includeDetails && this.options.reportFormat === 'html' ? results : null,
+      metadata: this.generateMetadata(results),
     };
 
     // Ensure output directory exists
@@ -44,7 +44,7 @@ class ComplianceReporter {
 
     return {
       ...report,
-      path: reportPath
+      path: reportPath,
     };
   }
 
@@ -60,19 +60,20 @@ class ComplianceReporter {
         passed: 0,
         failed: 0,
         warnings: 0,
-        successRate: 0
+        successRate: 0,
       },
       byCategory: {},
       criticalIssues: [],
-      recommendations: []
+      recommendations: [],
     };
 
     // Process overall summary
     if (results.summary) {
       summary.overall = { ...results.summary };
-      summary.overall.successRate = results.summary.total > 0 
-        ? ((results.summary.passed / results.summary.total) * 100).toFixed(2)
-        : 0;
+      summary.overall.successRate =
+        results.summary.total > 0
+          ? ((results.summary.passed / results.summary.total) * 100).toFixed(2)
+          : 0;
     }
 
     // Process category summaries
@@ -83,9 +84,10 @@ class ComplianceReporter {
           passed: categoryResults.passed || 0,
           failed: categoryResults.failed || 0,
           warnings: categoryResults.warnings || 0,
-          successRate: categoryResults.total > 0 
-            ? ((categoryResults.passed / categoryResults.total) * 100).toFixed(2)
-            : 0
+          successRate:
+            categoryResults.total > 0
+              ? ((categoryResults.passed / categoryResults.total) * 100).toFixed(2)
+              : 0,
         };
       }
     }
@@ -112,13 +114,13 @@ class ComplianceReporter {
       environment: {
         nodeVersion: process.version,
         platform: process.platform,
-        arch: process.arch
+        arch: process.arch,
       },
       configuration: {
         includeDetails: this.options.includeDetails,
         reportFormat: this.options.reportFormat,
-        outputDir: this.options.outputDir
-      }
+        outputDir: this.options.outputDir,
+      },
     };
   }
 
@@ -152,7 +154,7 @@ class ComplianceReporter {
                 category,
                 test: testName,
                 issue: testResult.error || 'Test failed',
-                severity: 'critical'
+                severity: 'critical',
               });
             }
           }
@@ -172,15 +174,15 @@ class ComplianceReporter {
     const recommendations = [];
 
     if (results.summary) {
-      const successRate = results.summary.total > 0 
-        ? (results.summary.passed / results.summary.total) * 100
-        : 0;
+      const successRate =
+        results.summary.total > 0 ? (results.summary.passed / results.summary.total) * 100 : 0;
 
       if (successRate < 80) {
         recommendations.push({
           type: 'performance',
           priority: 'high',
-          message: 'Overall success rate is below 80%. Review failed tests and improve implementation.'
+          message:
+            'Overall success rate is below 80%. Review failed tests and improve implementation.',
         });
       }
 
@@ -188,7 +190,7 @@ class ComplianceReporter {
         recommendations.push({
           type: 'quality',
           priority: 'medium',
-          message: `${results.summary.warnings} warnings found. Review and address warnings to improve code quality.`
+          message: `${results.summary.warnings} warnings found. Review and address warnings to improve code quality.`,
         });
       }
     }
@@ -199,7 +201,7 @@ class ComplianceReporter {
           recommendations.push({
             type: 'category',
             priority: 'high',
-            message: `${category} category has ${categoryResults.failed} failed tests. Focus on fixing these issues.`
+            message: `${category} category has ${categoryResults.failed} failed tests. Focus on fixing these issues.`,
           });
         }
       }
@@ -256,9 +258,9 @@ class ComplianceReporter {
         testSummaries: this.generateTestSummaries(results),
         // Include critical issues and recommendations
         criticalIssues: report.summary.criticalIssues,
-        recommendations: report.summary.recommendations
+        recommendations: report.summary.recommendations,
       };
-      
+
       return JSON.stringify(jsonReport, null, 2);
     } catch (error) {
       // If JSON.stringify still fails, create a minimal report
@@ -267,9 +269,9 @@ class ComplianceReporter {
         format: report.format,
         summary: report.summary,
         error: 'Report too large for JSON serialization',
-        message: 'Use HTML or text format for detailed reports'
+        message: 'Use HTML or text format for detailed reports',
       };
-      
+
       return JSON.stringify(minimalReport, null, 2);
     }
   }
@@ -281,7 +283,7 @@ class ComplianceReporter {
    */
   generateTestSummaries(results) {
     const summaries = {};
-    
+
     if (results.tests) {
       for (const [category, categoryResults] of Object.entries(results.tests)) {
         summaries[category] = {
@@ -289,15 +291,16 @@ class ComplianceReporter {
           passed: categoryResults.passed || 0,
           failed: categoryResults.failed || 0,
           warnings: categoryResults.warnings || 0,
-          successRate: categoryResults.total > 0 
-            ? ((categoryResults.passed / categoryResults.total) * 100).toFixed(2)
-            : 0,
+          successRate:
+            categoryResults.total > 0
+              ? ((categoryResults.passed / categoryResults.total) * 100).toFixed(2)
+              : 0,
           // Only include a sample of failed tests to keep JSON manageable
-          failedTests: this.getSampleFailedTests(categoryResults.details, 10)
+          failedTests: this.getSampleFailedTests(categoryResults.details, 10),
         };
       }
     }
-    
+
     return summaries;
   }
 
@@ -309,23 +312,23 @@ class ComplianceReporter {
    */
   getSampleFailedTests(details, maxSamples = 10) {
     if (!details) return [];
-    
+
     const failedTests = [];
     let count = 0;
-    
+
     for (const [testName, testResult] of Object.entries(details)) {
       if (count >= maxSamples) break;
-      
+
       if (!testResult.passed) {
         failedTests.push({
           name: testName,
           error: testResult.error || 'Test failed',
-          warnings: testResult.warnings || []
+          warnings: testResult.warnings || [],
         });
         count++;
       }
     }
-    
+
     return failedTests;
   }
 
@@ -496,7 +499,13 @@ class ComplianceReporter {
         </div>
 
         <div class="summary">
-            <div class="summary-card ${report.summary.overall.successRate >= 90 ? 'success' : report.summary.overall.successRate >= 70 ? 'warning' : 'danger'}">
+            <div class="summary-card ${
+  report.summary.overall.successRate >= 90
+    ? 'success'
+    : report.summary.overall.successRate >= 70
+      ? 'warning'
+      : 'danger'
+}">
                 <h3>${report.summary.overall.successRate}%</h3>
                 <p>Success Rate</p>
             </div>
@@ -520,16 +529,25 @@ class ComplianceReporter {
 
         ${this.generateCategorySections(report, results)}
 
-        ${report.summary.criticalIssues.length > 0 ? this.generateCriticalIssuesSection(report.summary.criticalIssues) : ''}
+        ${
+  report.summary.criticalIssues.length > 0
+    ? this.generateCriticalIssuesSection(report.summary.criticalIssues)
+    : ''
+}
 
-        ${report.summary.recommendations.length > 0 ? this.generateRecommendationsSection(report.summary.recommendations) : ''}
+        ${
+  report.summary.recommendations.length > 0
+    ? this.generateRecommendationsSection(report.summary.recommendations)
+    : ''
+}
 
         <div class="metadata">
             <h4>Report Metadata</h4>
             <p><strong>Version:</strong> ${report.metadata.version}</p>
             <p><strong>Duration:</strong> ${report.metadata.duration || 'N/A'}</p>
             <p><strong>Node Version:</strong> ${report.metadata.environment.nodeVersion}</p>
-            <p><strong>Platform:</strong> ${report.metadata.environment.platform} (${report.metadata.environment.arch})</p>
+            <p><strong>Platform:</strong> ${report.metadata.environment.platform} 
+              (${report.metadata.environment.arch})</p>
         </div>
     </div>
 </body>
@@ -564,7 +582,7 @@ class ComplianceReporter {
           for (const [testName, testResult] of Object.entries(categoryResults.details)) {
             const status = testResult.passed ? 'passed' : 'failed';
             const statusText = testResult.passed ? 'PASSED' : 'FAILED';
-            
+
             html += `
                 <div class="test-item">
                     <span class="test-name">${testName}</span>
@@ -634,9 +652,9 @@ class ComplianceReporter {
    * @param {Object} results - Validation results
    * @returns {string} Text content
    */
-  generateTextReport(report, results) {
+  generateTextReport(report, _results) {
     let text = '';
-    
+
     text += '='.repeat(80) + '\n';
     text += 'PostgreSQL Wire Protocol Compliance Report\n';
     text += '='.repeat(80) + '\n';
@@ -656,7 +674,9 @@ class ComplianceReporter {
     text += 'CATEGORY BREAKDOWN\n';
     text += '-'.repeat(40) + '\n';
     for (const [category, categorySummary] of Object.entries(report.summary.byCategory)) {
-      text += `${category.toUpperCase()}: ${categorySummary.passed}/${categorySummary.total} (${categorySummary.successRate}%)\n`;
+      text +=
+        `${category.toUpperCase()}: ${categorySummary.passed}/` +
+        `${categorySummary.total} (${categorySummary.successRate}%)\n`;
     }
     text += '\n';
 
@@ -707,5 +727,3 @@ class ComplianceReporter {
 }
 
 module.exports = ComplianceReporter;
-
-

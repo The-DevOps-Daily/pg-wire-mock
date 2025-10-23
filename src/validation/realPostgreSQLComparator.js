@@ -15,7 +15,7 @@ class RealPostgreSQLComparator {
       port: 5432,
       database: 'postgres',
       user: 'postgres',
-      password: 'password'
+      password: 'password',
     };
     this.testCases = this.initializeTestCases();
   }
@@ -29,43 +29,43 @@ class RealPostgreSQLComparator {
       {
         name: 'Connection Establishment',
         description: 'Compare connection establishment behavior',
-        test: this.testConnectionEstablishment.bind(this)
+        test: this.testConnectionEstablishment.bind(this),
       },
       {
         name: 'Authentication Flow',
         description: 'Compare authentication flow behavior',
-        test: this.testAuthenticationFlow.bind(this)
+        test: this.testAuthenticationFlow.bind(this),
       },
       {
         name: 'Simple Query Execution',
         description: 'Compare simple query execution',
-        test: this.testSimpleQueryExecution.bind(this)
+        test: this.testSimpleQueryExecution.bind(this),
       },
       {
         name: 'Extended Query Protocol',
         description: 'Compare extended query protocol behavior',
-        test: this.testExtendedQueryProtocol.bind(this)
+        test: this.testExtendedQueryProtocol.bind(this),
       },
       {
         name: 'Error Handling',
         description: 'Compare error handling behavior',
-        test: this.testErrorHandling.bind(this)
+        test: this.testErrorHandling.bind(this),
       },
       {
         name: 'Data Type Handling',
         description: 'Compare data type handling',
-        test: this.testDataTypeHandling.bind(this)
+        test: this.testDataTypeHandling.bind(this),
       },
       {
         name: 'Transaction Management',
         description: 'Compare transaction management behavior',
-        test: this.testTransactionManagement.bind(this)
+        test: this.testTransactionManagement.bind(this),
       },
       {
         name: 'Connection Pooling',
         description: 'Compare connection pooling behavior',
-        test: this.testConnectionPooling.bind(this)
-      }
+        test: this.testConnectionPooling.bind(this),
+      },
     ];
   }
 
@@ -74,7 +74,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Comparison results
    */
-  async runComparisonTests(options = {}) {
+  async runComparisonTests(_options = {}) {
     const results = {
       total: 0,
       passed: 0,
@@ -82,7 +82,7 @@ class RealPostgreSQLComparator {
       warnings: 0,
       details: {},
       realPostgreSQLAvailable: false,
-      connectionError: null
+      connectionError: null,
     };
 
     try {
@@ -96,15 +96,15 @@ class RealPostgreSQLComparator {
       for (const testCase of this.testCases) {
         try {
           results.total++;
-          const testResult = await testCase.test(options);
+          const testResult = await testCase.test(_options);
           results.details[testCase.name] = testResult;
-          
+
           if (testResult.passed) {
             results.passed++;
           } else {
             results.failed++;
           }
-          
+
           if (testResult.warnings && testResult.warnings.length > 0) {
             results.warnings += testResult.warnings.length;
           }
@@ -113,17 +113,16 @@ class RealPostgreSQLComparator {
           results.details[testCase.name] = {
             passed: false,
             error: error.message,
-            warnings: []
+            warnings: [],
           };
         }
       }
-
     } catch (error) {
       results.connectionError = error.message;
       results.details.connection = {
         passed: false,
         error: error.message,
-        warnings: ['Real PostgreSQL not available for comparison']
+        warnings: ['Real PostgreSQL not available for comparison'],
       };
     }
 
@@ -135,29 +134,28 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testConnectionEstablishment(options = {}) {
+  async testConnectionEstablishment(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
       const client = new Client(this.config);
-      
+
       // Test connection
       const startTime = Date.now();
       await client.connect();
       const connectionTime = Date.now() - startTime;
-      
+
       result.details.connectionTime = connectionTime;
       result.details.connected = true;
-      
+
       // Test connection parameters
       const paramQuery = await client.query('SHOW server_version');
       result.details.serverVersion = paramQuery.rows[0].server_version;
-      
+
       const encodingQuery = await client.query('SHOW client_encoding');
       result.details.clientEncoding = encodingQuery.rows[0].client_encoding;
-      
+
       await client.end();
-      
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -171,7 +169,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testAuthenticationFlow(options = {}) {
+  async testAuthenticationFlow(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
@@ -184,7 +182,7 @@ class RealPostgreSQLComparator {
       // Test with incorrect credentials
       const incorrectConfig = { ...this.config, password: 'wrongpassword' };
       const incorrectClient = new Client(incorrectConfig);
-      
+
       try {
         await incorrectClient.connect();
         result.warnings.push('Incorrect credentials should have failed');
@@ -192,7 +190,6 @@ class RealPostgreSQLComparator {
         result.details.incorrectCredentialsHandled = true;
         result.details.authErrorCode = authError.code;
       }
-
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -206,7 +203,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testSimpleQueryExecution(options = {}) {
+  async testSimpleQueryExecution(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
@@ -218,7 +215,7 @@ class RealPostgreSQLComparator {
       result.details.basicQuery = {
         rowCount: basicQuery.rowCount,
         fields: basicQuery.fields.map(f => f.name),
-        rows: basicQuery.rows
+        rows: basicQuery.rows,
       };
 
       // Test query with parameters
@@ -226,7 +223,7 @@ class RealPostgreSQLComparator {
       result.details.parameterizedQuery = {
         rowCount: paramQuery.rowCount,
         fields: paramQuery.fields.map(f => f.name),
-        rows: paramQuery.rows
+        rows: paramQuery.rows,
       };
 
       // Test empty query
@@ -248,7 +245,6 @@ class RealPostgreSQLComparator {
       }
 
       await client.end();
-
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -262,7 +258,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testExtendedQueryProtocol(options = {}) {
+  async testExtendedQueryProtocol(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
@@ -273,13 +269,13 @@ class RealPostgreSQLComparator {
       const prepareQuery = 'SELECT $1 as param1, $2 as param2';
       const prepared = await client.query({
         text: prepareQuery,
-        values: ['test1', 'test2']
+        values: ['test1', 'test2'],
       });
-      
+
       result.details.preparedStatement = {
         rowCount: prepared.rowCount,
         fields: prepared.fields.map(f => f.name),
-        rows: prepared.rows
+        rows: prepared.rows,
       };
 
       // Test multiple executions
@@ -287,14 +283,13 @@ class RealPostgreSQLComparator {
       for (let i = 0; i < 3; i++) {
         const exec = await client.query({
           text: prepareQuery,
-          values: [`test${i}`, `value${i}`]
+          values: [`test${i}`, `value${i}`],
         });
         multipleExecutions.push(exec.rowCount);
       }
       result.details.multipleExecutions = multipleExecutions;
 
       await client.end();
-
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -308,7 +303,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testErrorHandling(options = {}) {
+  async testErrorHandling(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
@@ -323,7 +318,7 @@ class RealPostgreSQLComparator {
         result.details.syntaxError = {
           code: error.code,
           message: error.message,
-          severity: error.severity
+          severity: error.severity,
         };
       }
 
@@ -336,7 +331,7 @@ class RealPostgreSQLComparator {
       } catch (error) {
         result.details.constraintViolation = {
           code: error.code,
-          message: error.message
+          message: error.message,
         };
       } finally {
         try {
@@ -347,7 +342,6 @@ class RealPostgreSQLComparator {
       }
 
       await client.end();
-
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -361,7 +355,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testDataTypeHandling(options = {}) {
+  async testDataTypeHandling(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
@@ -375,7 +369,7 @@ class RealPostgreSQLComparator {
         { name: 'boolean', value: true, sql: 'SELECT $1::BOOLEAN as bool_val' },
         { name: 'numeric', value: 3.14159, sql: 'SELECT $1::NUMERIC as num_val' },
         { name: 'timestamp', value: new Date(), sql: 'SELECT $1::TIMESTAMP as ts_val' },
-        { name: 'json', value: { key: 'value' }, sql: 'SELECT $1::JSON as json_val' }
+        { name: 'json', value: { key: 'value' }, sql: 'SELECT $1::JSON as json_val' },
       ];
 
       for (const dataType of dataTypes) {
@@ -384,18 +378,17 @@ class RealPostgreSQLComparator {
           result.details[dataType.name] = {
             success: true,
             rowCount: query.rowCount,
-            value: query.rows[0]
+            value: query.rows[0],
           };
         } catch (error) {
           result.details[dataType.name] = {
             success: false,
-            error: error.message
+            error: error.message,
           };
         }
       }
 
       await client.end();
-
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -409,7 +402,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testTransactionManagement(options = {}) {
+  async testTransactionManagement(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
@@ -420,7 +413,7 @@ class RealPostgreSQLComparator {
       await client.query('BEGIN');
       const beginQuery = await client.query('SELECT txid_current()');
       result.details.transactionId = beginQuery.rows[0].txid_current;
-      
+
       await client.query('COMMIT');
       result.details.commitSuccess = true;
 
@@ -437,7 +430,6 @@ class RealPostgreSQLComparator {
       result.details.savepointSuccess = true;
 
       await client.end();
-
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -451,7 +443,7 @@ class RealPostgreSQLComparator {
    * @param {Object} options - Test options
    * @returns {Promise<Object>} Test result
    */
-  async testConnectionPooling(options = {}) {
+  async testConnectionPooling(_options = {}) {
     const result = { passed: true, warnings: [], details: {} };
 
     try {
@@ -460,15 +452,13 @@ class RealPostgreSQLComparator {
         ...this.config,
         max: 5,
         min: 1,
-        idleTimeoutMillis: 30000
+        idleTimeoutMillis: 30000,
       });
 
       // Test multiple concurrent connections
       const promises = [];
       for (let i = 0; i < 3; i++) {
-        promises.push(
-          pool.query('SELECT $1 as connection_id', [i])
-        );
+        promises.push(pool.query('SELECT $1 as connection_id', [i]));
       }
 
       const results = await Promise.all(promises);
@@ -476,7 +466,6 @@ class RealPostgreSQLComparator {
       result.details.poolSuccess = true;
 
       await pool.end();
-
     } catch (error) {
       result.passed = false;
       result.details.error = error.message;
@@ -495,18 +484,18 @@ class RealPostgreSQLComparator {
     const comparison = {
       identical: false,
       differences: [],
-      warnings: []
+      warnings: [],
     };
 
     // Compare basic properties
     const propertiesToCompare = ['rowCount', 'fields', 'rows'];
-    
+
     for (const prop of propertiesToCompare) {
       if (mockResult[prop] !== realResult[prop]) {
         comparison.differences.push({
           property: prop,
           mock: mockResult[prop],
-          real: realResult[prop]
+          real: realResult[prop],
         });
       }
     }
@@ -530,40 +519,40 @@ class RealPostgreSQLComparator {
         identical: 0,
         different: 0,
         mockOnly: 0,
-        realOnly: 0
+        realOnly: 0,
       },
-      details: {}
+      details: {},
     };
 
     // Compare each test result
     for (const [testName, mockResult] of Object.entries(mockResults)) {
       const realResult = realResults[testName];
-      
+
       if (!realResult) {
         report.summary.mockOnly++;
         report.details[testName] = {
           status: 'mock_only',
-          mock: mockResult
+          mock: mockResult,
         };
       } else if (!mockResult) {
         report.summary.realOnly++;
         report.details[testName] = {
           status: 'real_only',
-          real: realResult
+          real: realResult,
         };
       } else {
         const comparison = this.compareResults(mockResult, realResult);
         report.summary.totalComparisons++;
-        
+
         if (comparison.identical) {
           report.summary.identical++;
         } else {
           report.summary.different++;
         }
-        
+
         report.details[testName] = {
           status: comparison.identical ? 'identical' : 'different',
-          comparison
+          comparison,
         };
       }
     }
@@ -573,5 +562,3 @@ class RealPostgreSQLComparator {
 }
 
 module.exports = RealPostgreSQLComparator;
-
-

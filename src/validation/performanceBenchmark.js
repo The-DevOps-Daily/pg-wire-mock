@@ -16,16 +16,16 @@ class PerformanceBenchmark {
       outputDir: './benchmark-reports',
       iterations: 10,
       warmupIterations: 3,
-      ...options
+      ...options,
     };
-    
+
     this.metrics = {
       messageFormat: [],
       compliance: [],
       edgeCases: [],
       errorConditions: [],
       fuzzing: [],
-      realPostgreSQLComparison: []
+      realPostgreSQLComparison: [],
     };
   }
 
@@ -36,7 +36,7 @@ class PerformanceBenchmark {
    */
   async runBenchmark(validationSystem) {
     console.log('🚀 Starting Performance Benchmark...');
-    
+
     const results = {
       timestamp: new Date().toISOString(),
       nodeVersion: process.version,
@@ -45,7 +45,7 @@ class PerformanceBenchmark {
       iterations: this.options.iterations,
       warmupIterations: this.options.warmupIterations,
       metrics: {},
-      summary: {}
+      summary: {},
     };
 
     // Warmup runs
@@ -57,10 +57,10 @@ class PerformanceBenchmark {
     // Benchmark each test category
     const testCategories = [
       'messageFormat',
-      'compliance', 
+      'compliance',
       'edgeCases',
       'errorConditions',
-      'fuzzing'
+      'fuzzing',
     ];
 
     for (const category of testCategories) {
@@ -98,7 +98,7 @@ class PerformanceBenchmark {
    */
   async benchmarkCategory(validationSystem, category) {
     const measurements = [];
-    
+
     for (let i = 0; i < this.options.iterations; i++) {
       const measurement = await this.measureExecution(validationSystem, category);
       measurements.push(measurement);
@@ -116,13 +116,13 @@ class PerformanceBenchmark {
   async measureExecution(validationSystem, category) {
     const startTime = performance.now();
     const startMemory = process.memoryUsage();
-    
+
     try {
       const results = await validationSystem.runSpecificTest(category);
-      
+
       const endTime = performance.now();
       const endMemory = process.memoryUsage();
-      
+
       return {
         duration: endTime - startTime,
         memoryDelta: endMemory.heapUsed - startMemory.heapUsed,
@@ -130,7 +130,7 @@ class PerformanceBenchmark {
         success: true,
         testCount: results.total || 0,
         passedCount: results.passed || 0,
-        failedCount: results.failed || 0
+        failedCount: results.failed || 0,
       };
     } catch (error) {
       const endTime = performance.now();
@@ -142,7 +142,7 @@ class PerformanceBenchmark {
         error: error.message,
         testCount: 0,
         passedCount: 0,
-        failedCount: 0
+        failedCount: 0,
       };
     }
   }
@@ -156,16 +156,16 @@ class PerformanceBenchmark {
     const durations = measurements.map(m => m.duration);
     const memoryDeltas = measurements.map(m => m.memoryDelta);
     const peakMemories = measurements.map(m => m.peakMemory);
-    
+
     const successful = measurements.filter(m => m.success);
     const failed = measurements.filter(m => !m.success);
-    
+
     return {
       iterations: measurements.length,
       successful: successful.length,
       failed: failed.length,
       successRate: (successful.length / measurements.length) * 100,
-      
+
       duration: {
         min: Math.min(...durations),
         max: Math.max(...durations),
@@ -173,27 +173,32 @@ class PerformanceBenchmark {
         median: this.calculateMedian(durations),
         p95: this.calculatePercentile(durations, 95),
         p99: this.calculatePercentile(durations, 99),
-        stdDev: this.calculateStandardDeviation(durations)
+        stdDev: this.calculateStandardDeviation(durations),
       },
-      
+
       memory: {
         deltaMin: Math.min(...memoryDeltas),
         deltaMax: Math.max(...memoryDeltas),
         deltaMean: memoryDeltas.reduce((a, b) => a + b, 0) / memoryDeltas.length,
         peakMin: Math.min(...peakMemories),
         peakMax: Math.max(...peakMemories),
-        peakMean: peakMemories.reduce((a, b) => a + b, 0) / peakMemories.length
+        peakMean: peakMemories.reduce((a, b) => a + b, 0) / peakMemories.length,
       },
-      
+
       performance: {
-        testsPerSecond: successful.length > 0 ? 
-          successful.reduce((sum, m) => sum + m.testCount, 0) / 
-          successful.reduce((sum, m) => sum + m.duration, 0) * 1000 : 0,
-        avgTestsPerRun: successful.length > 0 ?
-          successful.reduce((sum, m) => sum + m.testCount, 0) / successful.length : 0
+        testsPerSecond:
+          successful.length > 0
+            ? (successful.reduce((sum, m) => sum + m.testCount, 0) /
+                successful.reduce((sum, m) => sum + m.duration, 0)) *
+              1000
+            : 0,
+        avgTestsPerRun:
+          successful.length > 0
+            ? successful.reduce((sum, m) => sum + m.testCount, 0) / successful.length
+            : 0,
       },
-      
-      errors: failed.map(f => f.error)
+
+      errors: failed.map(f => f.error),
     };
   }
 
@@ -204,26 +209,41 @@ class PerformanceBenchmark {
    */
   calculateSummary(metrics) {
     const categories = Object.keys(metrics);
-    const totalDuration = categories.reduce((sum, cat) => 
-      sum + (metrics[cat].duration?.mean || 0), 0);
-    
-    const totalTests = categories.reduce((sum, cat) => 
-      sum + (metrics[cat].performance?.avgTestsPerRun || 0) * (metrics[cat].successful || 0), 0);
-    
-    const overallSuccessRate = categories.reduce((sum, cat) => 
-      sum + (metrics[cat].successRate || 0), 0) / categories.length;
-    
+    const totalDuration = categories.reduce(
+      (sum, cat) => sum + (metrics[cat].duration?.mean || 0),
+      0
+    );
+
+    const totalTests = categories.reduce(
+      (sum, cat) =>
+        sum + (metrics[cat].performance?.avgTestsPerRun || 0) * (metrics[cat].successful || 0),
+      0
+    );
+
+    const overallSuccessRate =
+      categories.reduce((sum, cat) => sum + (metrics[cat].successRate || 0), 0) / categories.length;
+
     return {
       totalCategories: categories.length,
       totalDuration: totalDuration,
       totalTests: totalTests,
       overallSuccessRate: overallSuccessRate,
-      fastestCategory: categories.reduce((fastest, cat) => 
-        !fastest || (metrics[cat].duration?.mean || Infinity) < (metrics[fastest].duration?.mean || Infinity) ? cat : fastest),
-      slowestCategory: categories.reduce((slowest, cat) => 
-        !slowest || (metrics[cat].duration?.mean || 0) > (metrics[slowest].duration?.mean || 0) ? cat : slowest),
-      mostMemoryIntensive: categories.reduce((most, cat) => 
-        !most || (metrics[cat].memory?.deltaMean || 0) > (metrics[most].memory?.deltaMean || 0) ? cat : most)
+      fastestCategory: categories.reduce((fastest, cat) =>
+        !fastest ||
+        (metrics[cat].duration?.mean || Infinity) < (metrics[fastest].duration?.mean || Infinity)
+          ? cat
+          : fastest
+      ),
+      slowestCategory: categories.reduce((slowest, cat) =>
+        !slowest || (metrics[cat].duration?.mean || 0) > (metrics[slowest].duration?.mean || 0)
+          ? cat
+          : slowest
+      ),
+      mostMemoryIntensive: categories.reduce((most, cat) =>
+        !most || (metrics[cat].memory?.deltaMean || 0) > (metrics[most].memory?.deltaMean || 0)
+          ? cat
+          : most
+      ),
     };
   }
 
@@ -234,22 +254,22 @@ class PerformanceBenchmark {
   async generateReport(results) {
     // Ensure output directory exists
     await fs.mkdir(this.options.outputDir, { recursive: true });
-    
+
     // Generate JSON report
     const jsonPath = path.join(this.options.outputDir, 'performance-benchmark.json');
     await fs.writeFile(jsonPath, JSON.stringify(results, null, 2));
-    
+
     // Generate text report
     const textPath = path.join(this.options.outputDir, 'performance-benchmark.txt');
     const textReport = this.generateTextReport(results);
     await fs.writeFile(textPath, textReport);
-    
+
     // Generate HTML report
     const htmlPath = path.join(this.options.outputDir, 'performance-benchmark.html');
     const htmlReport = this.generateHTMLReport(results);
     await fs.writeFile(htmlPath, htmlReport);
-    
-    console.log(`📊 Benchmark reports generated:`);
+
+    console.log('📊 Benchmark reports generated:');
     console.log(`  JSON: ${jsonPath}`);
     console.log(`  Text: ${textPath}`);
     console.log(`  HTML: ${htmlPath}`);
@@ -262,7 +282,7 @@ class PerformanceBenchmark {
    */
   generateTextReport(results) {
     const lines = [];
-    
+
     lines.push('PostgreSQL Wire Protocol Performance Benchmark');
     lines.push('==============================================');
     lines.push('');
@@ -272,7 +292,7 @@ class PerformanceBenchmark {
     lines.push(`Iterations: ${results.iterations}`);
     lines.push(`Warmup Iterations: ${results.warmupIterations}`);
     lines.push('');
-    
+
     lines.push('Summary:');
     lines.push(`  Total Categories: ${results.summary.totalCategories}`);
     lines.push(`  Total Duration: ${results.summary.totalDuration.toFixed(2)}ms`);
@@ -282,24 +302,27 @@ class PerformanceBenchmark {
     lines.push(`  Slowest Category: ${results.summary.slowestCategory}`);
     lines.push(`  Most Memory Intensive: ${results.summary.mostMemoryIntensive}`);
     lines.push('');
-    
+
     lines.push('Category Details:');
     lines.push('================');
-    
+
     for (const [category, metrics] of Object.entries(results.metrics)) {
       lines.push(`\n${category.toUpperCase()}:`);
       lines.push(`  Success Rate: ${metrics.successRate.toFixed(2)}%`);
-      lines.push(`  Duration: ${metrics.duration.mean.toFixed(2)}ms (min: ${metrics.duration.min.toFixed(2)}ms, max: ${metrics.duration.max.toFixed(2)}ms)`);
+      lines.push(
+        `  Duration: ${metrics.duration.mean.toFixed(2)}ms ` +
+          `(min: ${metrics.duration.min.toFixed(2)}ms, max: ${metrics.duration.max.toFixed(2)}ms)`
+      );
       lines.push(`  Memory Delta: ${(metrics.memory.deltaMean / 1024 / 1024).toFixed(2)}MB`);
       lines.push(`  Peak Memory: ${(metrics.memory.peakMean / 1024 / 1024).toFixed(2)}MB`);
       lines.push(`  Tests/Second: ${metrics.performance.testsPerSecond.toFixed(2)}`);
       lines.push(`  Avg Tests/Run: ${metrics.performance.avgTestsPerRun.toFixed(2)}`);
-      
+
       if (metrics.errors.length > 0) {
         lines.push(`  Errors: ${metrics.errors.length}`);
       }
     }
-    
+
     return lines.join('\n');
   }
 
@@ -335,22 +358,33 @@ class PerformanceBenchmark {
     
     <div class="summary">
         <h2>Summary</h2>
-        <div class="metric">Total Categories: <span class="value">${results.summary.totalCategories}</span></div>
-        <div class="metric">Total Duration: <span class="value">${results.summary.totalDuration.toFixed(2)}ms</span></div>
+        <div class="metric">Total Categories: 
+          <span class="value">${results.summary.totalCategories}</span></div>
+        <div class="metric">Total Duration: 
+          <span class="value">${results.summary.totalDuration.toFixed(2)}ms</span></div>
         <div class="metric">Total Tests: <span class="value">${results.summary.totalTests.toFixed(0)}</span></div>
-        <div class="metric">Success Rate: <span class="value">${results.summary.overallSuccessRate.toFixed(2)}%</span></div>
+        <div class="metric">Success Rate: 
+          <span class="value">${results.summary.overallSuccessRate.toFixed(2)}%</span></div>
     </div>
     
     <h2>Category Performance</h2>
-    ${Object.entries(results.metrics).map(([category, metrics]) => `
+    ${Object.entries(results.metrics)
+    .map(
+      ([category, metrics]) =>
+        `
         <div class="category">
             <h3>${category.toUpperCase()}</h3>
             <div class="metric">Success Rate: <span class="value">${metrics.successRate.toFixed(2)}%</span></div>
-            <div class="metric">Duration: <span class="value">${metrics.duration.mean.toFixed(2)}ms</span></div>
-            <div class="metric">Memory Delta: <span class="value">${(metrics.memory.deltaMean / 1024 / 1024).toFixed(2)}MB</span></div>
-            <div class="metric">Tests/Second: <span class="value">${metrics.performance.testsPerSecond.toFixed(2)}</span></div>
+            <div class="metric">Duration: 
+              <span class="value">${metrics.duration.mean.toFixed(2)}ms</span></div>
+            <div class="metric">Memory Delta: 
+              <span class="value">${(metrics.memory.deltaMean / 1024 / 1024).toFixed(2)}MB</span></div>
+            <div class="metric">Tests/Second: 
+              <span class="value">${metrics.performance.testsPerSecond.toFixed(2)}</span></div>
         </div>
-    `).join('')}
+    `
+    )
+    .join('')}
 </body>
 </html>`;
   }
