@@ -1,0 +1,132 @@
+{
+  "timestamp": "2025-10-20T19:34:13.440Z",
+  "format": "json",
+  "summary": {
+    "overall": {
+      "total": 28,
+      "passed": 22,
+      "failed": 6,
+      "warnings": 56,
+      "successRate": "78.57"
+    },
+    "byCategory": {
+      "messageFormat": {
+        "total": 28,
+        "passed": 22,
+        "failed": 6,
+        "warnings": 56,
+        "successRate": "78.57"
+      }
+    },
+    "criticalIssues": [],
+    "recommendations": [
+      {
+        "type": "performance",
+        "priority": "high",
+        "message": "Overall success rate is below 80%. Review failed tests and improve implementation."
+      },
+      {
+        "type": "quality",
+        "priority": "medium",
+        "message": "56 warnings found. Review and address warnings to improve code quality."
+      },
+      {
+        "type": "category",
+        "priority": "high",
+        "message": "messageFormat category has 6 failed tests. Focus on fixing these issues."
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-20T19:34:13.426Z",
+    "duration": null,
+    "environment": {
+      "nodeVersion": "v22.18.0",
+      "platform": "win32",
+      "arch": "x64"
+    },
+    "configuration": {
+      "includeDetails": true,
+      "reportFormat": "json",
+      "outputDir": "validation-reports"
+    }
+  },
+  "testSummaries": {
+    "messageFormat": {
+      "total": 28,
+      "passed": 22,
+      "failed": 6,
+      "warnings": 56,
+      "successRate": "78.57",
+      "failedTests": [
+        {
+          "name": "P",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "B",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "D",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "K",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "T",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "t",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        }
+      ]
+    }
+  },
+  "criticalIssues": [],
+  "recommendations": [
+    {
+      "type": "performance",
+      "priority": "high",
+      "message": "Overall success rate is below 80%. Review failed tests and improve implementation."
+    },
+    {
+      "type": "quality",
+      "priority": "medium",
+      "message": "56 warnings found. Review and address warnings to improve code quality."
+    },
+    {
+      "type": "category",
+      "priority": "high",
+      "message": "messageFormat category has 6 failed tests. Focus on fixing these issues."
+    }
+  ]
+}

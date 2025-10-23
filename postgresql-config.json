@@ -1,0 +1,11 @@
+{
+  "host": "localhost",
+  "port": 5432,
+  "database": "testdb",
+  "username": "postgres",
+  "password": "postgres",
+  "ssl": false,
+  "connectionTimeout": 5000,
+  "queryTimeout": 30000,
+  "maxConnections": 10
+}

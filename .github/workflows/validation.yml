@@ -1,0 +1,175 @@
+name: Protocol Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run validation daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run linting
+      run: npm run lint
+      
+    - name: Run unit tests
+      run: npm run test:coverage
+      
+    - name: Run protocol validation
+      run: npm run validate:ci
+      
+    - name: Run compliance tests
+      run: npm run validate:compliance
+      
+    - name: Run edge case tests
+      run: npm run validate:edge-cases
+      
+    - name: Run error condition tests
+      run: npm run validate:error-conditions
+      
+    - name: Run fuzzing tests
+      run: npm run validate:fuzzing
+      
+    - name: Upload validation reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: validation-reports-node-${{ matrix.node-version }}
+        path: |
+          ci-reports/
+          validation-reports/
+        retention-days: 30
+        
+    - name: Comment PR with validation results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          try {
+            const reportPath = path.join('ci-reports', 'ci-summary.txt');
+            const summary = fs.readFileSync(reportPath, 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔍 Protocol Validation Results\n\n\`\`\`\n${summary}\n\`\`\``
+            });
+          } catch (error) {
+            console.log('Could not read validation report:', error.message);
+          }
+
+  real-postgresql-comparison:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+        
+    - name: Create PostgreSQL config
+      run: |
+        cat > postgresql-config.json << EOF
+        {
+          "host": "localhost",
+          "port": 5432,
+          "database": "testdb",
+          "username": "postgres",
+          "password": "postgres"
+        }
+        EOF
+        
+    - name: Run real PostgreSQL comparison
+      run: npm run validate:real-pg
+      
+    - name: Upload comparison reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: real-postgresql-comparison
+        path: validation-reports/
+        retention-days: 30
+
+  performance-benchmark:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run performance benchmark
+      run: |
+        echo "Running performance benchmark..."
+        time npm run validate:full
+        
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-benchmark
+        path: validation-reports/
+        retention-days: 90

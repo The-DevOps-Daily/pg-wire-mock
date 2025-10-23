@@ -253,8 +253,7 @@ describe('Full Message Flow Integration Tests', () => {
           } else if (startupComplete && msg.type === MESSAGE_TYPES.EMPTY_QUERY_RESPONSE) {
             // Should receive empty query response ('I' message)
             expect(msg.type).toBe(MESSAGE_TYPES.EMPTY_QUERY_RESPONSE);
-            client.end();
-            done();
+            // Don't call done() here, wait for ReadyForQuery
           } else if (startupComplete && msg.type === MESSAGE_TYPES.READY_FOR_QUERY) {
             // Should get ReadyForQuery after EmptyQueryResponse
             client.end();

@@ -1,0 +1,202 @@
+{
+  "timestamp": "2025-10-23T10:00:23.419Z",
+  "format": "json",
+  "summary": {
+    "overall": {
+      "total": 19058,
+      "passed": 9583,
+      "failed": 9475,
+      "warnings": 56,
+      "successRate": "50.28"
+    },
+    "byCategory": {
+      "messageFormat": {
+        "total": 28,
+        "passed": 22,
+        "failed": 6,
+        "warnings": 56,
+        "successRate": "78.57"
+      },
+      "compliance": {
+        "total": 8,
+        "passed": 8,
+        "failed": 0,
+        "warnings": 0,
+        "successRate": "100.00"
+      },
+      "edgeCases": {
+        "total": 8,
+        "passed": 8,
+        "failed": 0,
+        "warnings": 0,
+        "successRate": "100.00"
+      },
+      "errorConditions": {
+        "total": 14,
+        "passed": 14,
+        "failed": 0,
+        "warnings": 0,
+        "successRate": "100.00"
+      },
+      "fuzzing": {
+        "total": 19000,
+        "passed": 9531,
+        "failed": 9469,
+        "warnings": 0,
+        "successRate": "50.16"
+      }
+    },
+    "criticalIssues": [],
+    "recommendations": [
+      {
+        "type": "performance",
+        "priority": "high",
+        "message": "Overall success rate is below 80%. Review failed tests and improve implementation."
+      },
+      {
+        "type": "quality",
+        "priority": "medium",
+        "message": "56 warnings found. Review and address warnings to improve code quality."
+      },
+      {
+        "type": "category",
+        "priority": "high",
+        "message": "messageFormat category has 6 failed tests. Focus on fixing these issues."
+      },
+      {
+        "type": "category",
+        "priority": "high",
+        "message": "fuzzing category has 9469 failed tests. Focus on fixing these issues."
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-23T09:58:06.622Z",
+    "duration": null,
+    "environment": {
+      "nodeVersion": "v22.18.0",
+      "platform": "win32",
+      "arch": "x64"
+    },
+    "configuration": {
+      "includeDetails": true,
+      "reportFormat": "json",
+      "outputDir": "./validation-reports"
+    }
+  },
+  "testSummaries": {
+    "messageFormat": {
+      "total": 28,
+      "passed": 22,
+      "failed": 6,
+      "warnings": 56,
+      "successRate": "78.57",
+      "failedTests": [
+        {
+          "name": "P",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "B",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "D",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "K",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "T",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "t",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        }
+      ]
+    },
+    "compliance": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "warnings": 0,
+      "successRate": "100.00",
+      "failedTests": []
+    },
+    "edgeCases": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "warnings": 0,
+      "successRate": "100.00",
+      "failedTests": []
+    },
+    "errorConditions": {
+      "total": 14,
+      "passed": 14,
+      "failed": 0,
+      "warnings": 0,
+      "successRate": "100.00",
+      "failedTests": []
+    },
+    "fuzzing": {
+      "total": 19000,
+      "passed": 9531,
+      "failed": 9469,
+      "warnings": 0,
+      "successRate": "50.16",
+      "failedTests": []
+    }
+  },
+  "criticalIssues": [],
+  "recommendations": [
+    {
+      "type": "performance",
+      "priority": "high",
+      "message": "Overall success rate is below 80%. Review failed tests and improve implementation."
+    },
+    {
+      "type": "quality",
+      "priority": "medium",
+      "message": "56 warnings found. Review and address warnings to improve code quality."
+    },
+    {
+      "type": "category",
+      "priority": "high",
+      "message": "messageFormat category has 6 failed tests. Focus on fixing these issues."
+    },
+    {
+      "type": "category",
+      "priority": "high",
+      "message": "fuzzing category has 9469 failed tests. Focus on fixing these issues."
+    }
+  ]
+}
