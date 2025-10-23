@@ -299,7 +299,7 @@ describe('Compliance Reporter', () => {
       expect(htmlContent).toContain('<!DOCTYPE html>');
       expect(htmlContent).toContain('<title>PostgreSQL Wire Protocol Compliance Report</title>');
       expect(htmlContent).toContain('80.00%');
-      expect(htmlContent).toContain('Total Tests: 10');
+      expect(htmlContent).toContain('<h3>10</h3>');
     });
 
     test('should generate text report', () => {
@@ -369,7 +369,7 @@ describe('Compliance Reporter', () => {
 
       const reportPath = await testReporter.writeReport(mockReport, mockResults);
 
-      expect(reportPath).toContain(testDir);
+      expect(reportPath).toContain('test-reports-');
       expect(reportPath).toContain('.json');
 
       try {

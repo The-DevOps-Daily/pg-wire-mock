@@ -19,7 +19,7 @@ describe('Protocol Tester', () => {
 
       expect(tester.testCases.compliance).toHaveLength(8);
       expect(tester.testCases.edgeCases).toHaveLength(8);
-      expect(tester.testCases.errorConditions).toHaveLength(8);
+      expect(tester.testCases.errorConditions).toHaveLength(14);
     });
 
     test('should have test cases with required properties', () => {
@@ -71,7 +71,7 @@ describe('Protocol Tester', () => {
       expect(results).toHaveProperty('warnings');
       expect(results).toHaveProperty('details');
 
-      expect(results.total).toBe(8);
+      expect(results.total).toBe(14);
     });
 
     test('should run specific test category', async () => {

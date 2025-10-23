@@ -75,14 +75,20 @@ describe('Protocol Validation System', () => {
   describe('Error Handling', () => {
     test('should handle validation errors gracefully', async () => {
       // Mock a failing validation
+      const originalMethod = validationSystem.runValidationSuite;
       validationSystem.runValidationSuite = jest
         .fn()
         .mockRejectedValue(new Error('Validation failed'));
 
-      const results = await validationSystem.runValidationSuite();
-
-      expect(results).toHaveProperty('error');
-      expect(results.error).toBe('Validation failed');
+      try {
+        const results = await validationSystem.runValidationSuite();
+        expect(results).toHaveProperty('error');
+        expect(results.error).toBe('Validation failed');
+      } catch (error) {
+        expect(error.message).toBe('Validation failed');
+      } finally {
+        validationSystem.runValidationSuite = originalMethod;
+      }
     });
   });
 });

@@ -52,7 +52,7 @@ describe('Message Validator', () => {
       const result = validator.validateMessage(shortMessage, rules);
 
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(expect.stringContaining('too short'));
+      expect(result.errors).toContainEqual(expect.stringContaining('too short'));
     });
 
     test('should reject message that is too long', () => {
@@ -61,7 +61,7 @@ describe('Message Validator', () => {
       const result = validator.validateMessage(longMessage, rules);
 
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(expect.stringContaining('too long'));
+      expect(result.errors).toContainEqual(expect.stringContaining('too long'));
     });
 
     test('should reject message with invalid type', () => {
@@ -72,7 +72,7 @@ describe('Message Validator', () => {
       const result = validator.validateMessage(invalidMessage, rules);
 
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(expect.stringContaining('Invalid message type'));
+      expect(result.errors).toContainEqual(expect.stringContaining('Invalid message type'));
     });
 
     test('should reject message with length mismatch', () => {
@@ -83,7 +83,7 @@ describe('Message Validator', () => {
       const result = validator.validateMessage(message, rules);
 
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(expect.stringContaining('Length mismatch'));
+      expect(result.errors).toContainEqual(expect.stringContaining('Length mismatch'));
     });
   });
 
@@ -147,7 +147,7 @@ describe('Message Validator', () => {
       const result = validator.validateReadyForQueryMessage(invalidReady);
 
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(expect.stringContaining('Invalid transaction status'));
+      expect(result.errors).toContainEqual(expect.stringContaining('Invalid transaction status'));
     });
   });
 

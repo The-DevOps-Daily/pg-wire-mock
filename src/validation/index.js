@@ -199,7 +199,7 @@ class ProtocolValidationSystem {
       enabled: true,
       fuzzingEnabled: this.options.enableFuzzing,
       realPostgreSQLComparisonEnabled: this.options.enableRealPostgreSQLComparison,
-      outputDirectory: this.options.outputDir,
+      outputDir: this.options.outputDir,
       reportFormat: this.options.reportFormat,
     };
   }
