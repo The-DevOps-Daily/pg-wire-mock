@@ -19,8 +19,8 @@ function formatPrometheusMetrics(stats) {
     const labelStr =
       Object.entries(labels).length > 0
         ? `{${Object.entries(labels)
-            .map(([k, v]) => `${k}="${v}"`)
-            .join(',')}}`
+          .map(([k, v]) => `${k}="${v}"`)
+          .join(',')}}`
         : '';
 
     lines.push(`${name}${labelStr} ${value} ${timestamp}`);
@@ -119,12 +119,13 @@ function formatPrometheusMetrics(stats) {
 /**
  * Formats server statistics into JSON status format
  * @param {Object} serverManager - ServerManager instance
- * @returns {Object} Detailed status object
+ * @returns {Promise<Object>} Detailed status object
  */
-function formatStatusResponse(serverManager) {
+async function formatStatusResponse(serverManager) {
   const stats = serverManager.getStats();
   const config = serverManager.config;
   const address = serverManager.getAddress();
+  const health = await generateHealthStatus(serverManager);
 
   return {
     server: {
@@ -136,10 +137,10 @@ function formatStatusResponse(serverManager) {
       isShuttingDown: serverManager.isServerShuttingDown(),
       address: address
         ? {
-            address: address.address,
-            family: address.family,
-            port: address.port,
-          }
+          address: address.address,
+          family: address.family,
+          port: address.port,
+        }
         : null,
     },
     statistics: {
@@ -162,7 +163,7 @@ function formatStatusResponse(serverManager) {
       logLevel: config.logLevel,
     },
     connectionPool: stats.connectionPool || null,
-    health: generateHealthStatus(serverManager),
+    health,
   };
 }
 
@@ -200,6 +201,7 @@ function formatConnectionsResponse(serverManager) {
 async function generateHealthStatus(serverManager) {
   const checks = [];
   let overallStatus = 'healthy';
+  const timeoutMs = serverManager.config?.http?.healthCheckTimeout || 5000;
 
   // Check 1: Server is running
   const serverRunning = serverManager.isServerRunning();
@@ -221,30 +223,59 @@ async function generateHealthStatus(serverManager) {
 
   // Check 3: Accepting connections (not at max capacity)
   const activeConnections = serverManager.getActiveConnectionCount();
-  const maxConnections = serverManager.config.maxConnections;
+  const maxConnections =
+    typeof serverManager.config.maxConnections === 'number'
+      ? serverManager.config.maxConnections
+      : Number.POSITIVE_INFINITY;
   const acceptingConnections = activeConnections < maxConnections;
+  const capacityLabel = Number.isFinite(maxConnections)
+    ? `${activeConnections}/${maxConnections}`
+    : `${activeConnections}`;
   checks.push({
     name: 'accepting_connections',
     status: acceptingConnections ? 'pass' : 'warn',
     message: acceptingConnections
-      ? `Accepting connections (${activeConnections}/${maxConnections})`
-      : `At max capacity (${activeConnections}/${maxConnections})`,
+      ? `Accepting connections (${capacityLabel})`
+      : `At max capacity (${capacityLabel})`,
   });
 
   // Check 4: Custom health checks
   if (serverManager.config.http && serverManager.config.http.customHealthChecks) {
     for (const customCheck of serverManager.config.http.customHealthChecks) {
-      try {
-        const result = await customCheck.check(serverManager);
+      if (!customCheck || typeof customCheck.check !== 'function') {
         checks.push({
-          name: customCheck.name,
-          status: result.passed ? 'pass' : 'fail',
-          message: result.message || 'Custom check',
+          name: customCheck?.name || 'custom_check',
+          status: 'fail',
+          message: 'Invalid custom health check configuration',
         });
-        if (!result.passed) overallStatus = 'unhealthy';
+        overallStatus = 'unhealthy';
+        continue;
+      }
+
+      try {
+        const checkTimeout =
+          typeof customCheck.timeout === 'number' && customCheck.timeout > 0
+            ? customCheck.timeout
+            : timeoutMs;
+        const checkName = customCheck.name || 'custom_check';
+        const result = await runWithTimeout(
+          Promise.resolve(customCheck.check(serverManager)),
+          checkTimeout,
+          `Custom health check timed out after ${checkTimeout}ms`
+        );
+        const passed =
+          result && Object.prototype.hasOwnProperty.call(result, 'passed')
+            ? Boolean(result.passed)
+            : false;
+        checks.push({
+          name: checkName,
+          status: passed ? 'pass' : 'fail',
+          message: result?.message || (passed ? 'Custom check passed' : 'Custom check failed'),
+        });
+        if (!passed) overallStatus = 'unhealthy';
       } catch (error) {
         checks.push({
-          name: customCheck.name,
+          name: customCheck.name || 'custom_check',
           status: 'fail',
           message: `Error: ${error.message}`,
         });
@@ -258,6 +289,37 @@ async function generateHealthStatus(serverManager) {
     checks: checks,
     timestamp: new Date().toISOString(),
   };
+}
+
+/**
+ * Runs a promise with a timeout
+ * @param {Promise} promise - Promise to execute
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} timeoutMessage - Error message when timeout occurs
+ * @returns {Promise<*>} Promise that resolves or rejects on timeout
+ */
+function runWithTimeout(promise, timeoutMs, timeoutMessage) {
+  const wrappedPromise = Promise.resolve(promise);
+
+  if (!timeoutMs || timeoutMs <= 0) {
+    return wrappedPromise;
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    wrappedPromise
+      .then(result => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch(error => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
 
 module.exports = {
