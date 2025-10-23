@@ -96,6 +96,15 @@ function parseConfig() {
     scramIterations: coreConfig.scramIterations,
     username: coreConfig.username,
     password: coreConfig.password,
+    http: {
+      enabled: coreConfig.http?.enabled ?? true,
+      port: coreConfig.http?.port ?? 8080,
+      host: coreConfig.http?.host ?? 'localhost',
+      enableAuth: coreConfig.http?.enableAuth ?? false,
+      authToken: coreConfig.http?.authToken ?? null,
+      healthCheckTimeout: coreConfig.http?.healthCheckTimeout ?? 5000,
+      customHealthChecks: [...(coreConfig.http?.customHealthChecks || [])],
+    },
   };
 
   // Parse command line arguments
