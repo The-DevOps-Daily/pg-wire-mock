@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Query Result Caching** - Configurable caching layer for improved performance (#enhancement)
+  - In-memory and Redis backend support
+  - TTL-based cache invalidation
+  - Cache hit/miss statistics and monitoring
+  - Cache warming for predictable responses
+  - Memory and Redis backend support with automatic fallback
+  - Cache bypass options for testing and time-based queries
+  - Comprehensive test suite for all caching features
+  - Full documentation in [docs/CACHING.md](docs/CACHING.md)
+
 - **LISTEN/NOTIFY Asynchronous Notification System** - Complete implementation of PostgreSQL async notifications (#101)
   - LISTEN, UNLISTEN (including UNLISTEN \*) and NOTIFY command handling
   - Channel management and broadcasting system
