@@ -38,6 +38,12 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
   - Modular, well-organized codebase
   - Connection management and pooling
   - Configurable logging and monitoring
+  - **Query Result Caching** (NEW!) - [See Caching Guide](docs/CACHING.md)
+    - In-memory and Redis backend support
+    - TTL-based cache invalidation
+    - Cache hit/miss statistics and monitoring
+    - Cache warming for predictable responses
+    - Configurable bypass patterns
   - **Advanced Query Logging & Analysis** (NEW!) - [See Query Logging Guide](docs/QUERY_LOGGING.md)
     - High-precision execution time tracking
     - Parameter logging with automatic sanitization

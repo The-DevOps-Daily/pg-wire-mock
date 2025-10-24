@@ -15,8 +15,9 @@ const {
   SSLState,
 } = require('../protocol/messageProcessors');
 const { configureProtocolLogger } = require('../protocol/messageBuilders');
-const { configureQueryLogger } = require('../handlers/queryHandlers');
+const { configureQueryLogger, configureCacheManager } = require('../handlers/queryHandlers');
 const { createLogger } = require('../utils/logger');
+const { CacheManager, configureCacheLogger } = require('../cache/cacheManager');
 
 /**
  * Configuration options for the server
@@ -92,6 +93,12 @@ class ServerManager {
       enableLogging: this.config.enableLogging,
       logLevel: this.config.logLevel,
     });
+
+    // Initialize cache manager
+    this.cacheManager = null;
+    if (this.config.cache && this.config.cache.enabled) {
+      this.cacheManager = new CacheManager(this.config.cache);
+    }
 
     // Statistics
     this.stats = {
@@ -169,6 +176,18 @@ class ServerManager {
               this.log('info', 'Connection pool initialized successfully');
             } catch (error) {
               this.log('error', `Failed to initialize connection pool: ${error.message}`);
+            }
+          }
+
+          // Initialize cache manager if enabled
+          if (this.cacheManager) {
+            try {
+              await this.cacheManager.initialize();
+              configureCacheManager(this.cacheManager);
+              configureCacheLogger({ enableLogging: this.config.enableLogging, logLevel: this.config.logLevel });
+              this.log('info', `Query cache initialized with ${this.config.cache.backend} backend`);
+            } catch (error) {
+              this.log('error', `Failed to initialize cache: ${error.message}`);
             }
           }
 
@@ -432,6 +451,16 @@ class ServerManager {
         this.log('info', 'Notification manager cleaned up');
       } catch (error) {
         this.log('error', `Error cleaning up notification manager: ${error.message}`);
+      }
+    }
+
+    // Cleanup cache manager
+    if (this.cacheManager) {
+      try {
+        await this.cacheManager.close();
+        this.log('info', 'Cache manager cleaned up');
+      } catch (error) {
+        this.log('error', `Error cleaning up cache manager: ${error.message}`);
       }
     }
 
@@ -965,6 +994,11 @@ class ServerManager {
     // Add connection pool statistics if pooling is enabled
     if (this.connectionPool) {
       stats.connectionPool = this.connectionPool.getStats();
+    }
+
+    // Add cache statistics if caching is enabled
+    if (this.cacheManager) {
+      stats.cache = this.cacheManager.getStats();
     }
 
     return stats;

@@ -17,12 +17,23 @@ const { ErrorFactory, wrapError, formatErrorForLogging } = require('../utils/err
 // Create query logger instance (will be configured by server)
 let queryLogger = createQueryLogger();
 
+// Cache manager instance (will be initialized by server)
+let cacheManager = null;
+
 /**
  * Configures the query logger
  * @param {Object} config - Logger configuration
  */
 function configureQueryLogger(config) {
   queryLogger = createQueryLogger(config);
+}
+
+/**
+ * Configures the cache manager
+ * @param {Object} manager - Cache manager instance
+ */
+function configureCacheManager(manager) {
+  cacheManager = manager;
 }
 
 const {
@@ -140,7 +151,7 @@ const MOCK_SCHEMA = {
  * @param {Socket} socket - Client socket for sending responses
  * @param {ConnectionState} connState - Connection state object
  */
-function executeQuery(query, socket, connState) {
+async function executeQuery(query, socket, connState) {
   // Start detailed query logging session
   const querySession = queryLogger.queryStart(query, {
     connectionId: connState.connectionId,
@@ -150,9 +161,28 @@ function executeQuery(query, socket, connState) {
   });
 
   let results;
+  let fromCache = false;
+
   try {
-    // Process the query and get results
-    results = processQuery(query, connState);
+    // Try to get from cache first
+    if (cacheManager && cacheManager.config.enabled) {
+      const cachedResult = await cacheManager.get(query, []);
+      if (cachedResult) {
+        results = cachedResult;
+        fromCache = true;
+        queryLogger.debug('Query result retrieved from cache');
+      }
+    }
+
+    // Process the query if not in cache
+    if (!results) {
+      results = processQuery(query, connState);
+
+      // Cache the result if caching is enabled and query succeeded
+      if (cacheManager && cacheManager.config.enabled && !results.error) {
+        await cacheManager.set(query, [], results);
+      }
+    }
   } catch (error) {
     // Handle unexpected processing errors
     results = {
@@ -163,7 +193,7 @@ function executeQuery(query, socket, connState) {
   }
 
   // Complete query logging with results
-  queryLogger.queryComplete(querySession, results);
+  queryLogger.queryComplete(querySession, { ...results, fromCache });
 
   // Handle query errors
   if (results.error) {
@@ -254,7 +284,7 @@ function executeQuery(query, socket, connState) {
  * @param {Socket} socket - Client socket for sending responses
  * @param {ConnectionState} connState - Connection state object
  */
-function executeQueryString(queryString, socket, connState) {
+async function executeQueryString(queryString, socket, connState) {
   const { parseQueryStatements } = require('../protocol/utils');
 
   // Parse multiple statements
@@ -270,7 +300,7 @@ function executeQueryString(queryString, socket, connState) {
     if (statement.trim() === '') {
       sendEmptyQueryResponse(socket);
     } else {
-      executeQuery(statement, socket, connState);
+      await executeQuery(statement, socket, connState);
 
       // Stop execution if we're in a failed transaction state
       if (connState.transactionStatus === TRANSACTION_STATUS.IN_FAILED_TRANSACTION) {
@@ -2754,4 +2784,5 @@ module.exports = {
   getQueryType,
   getTypeOIDFromName,
   configureQueryLogger,
+  configureCacheManager,
 };

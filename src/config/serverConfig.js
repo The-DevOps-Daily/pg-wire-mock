@@ -91,6 +91,22 @@ const DEFAULT_CONFIG = {
   // Shutdown settings
   shutdownTimeout: 30000,
   shutdownDrainTimeout: 10000,
+
+  // Cache settings
+  cache: {
+    enabled: false, // Enable query result caching
+    backend: 'memory', // memory or redis
+    ttl: 300000, // Cache TTL in milliseconds (5 minutes default)
+    maxSize: 1000, // Maximum cache entries (for memory backend)
+    cleanupInterval: 60000, // Cleanup interval for expired entries (1 minute)
+    keyPrefix: 'pgmock:', // Cache key prefix
+    warmupQueries: [], // Array of queries to warm up cache on startup
+    bypassPatterns: [], // Patterns to bypass cache (strings or regex)
+    redis: {
+      url: 'redis://localhost:6379',
+      connectTimeout: 5000,
+    },
+  },
 };
 
 /**
@@ -145,6 +161,16 @@ const ENV_MAPPING = {
   // Error tracking environment variables
   PG_MOCK_ERROR_TRACKING_ENABLED: { key: 'errorTracking.enabled', type: 'boolean' },
   PG_MOCK_ERROR_TRACKING_PROJECT: { key: 'errorTracking.project', type: 'string' },
+
+  // Cache environment variables
+  PG_MOCK_CACHE_ENABLED: { key: 'cache.enabled', type: 'boolean' },
+  PG_MOCK_CACHE_BACKEND: { key: 'cache.backend', type: 'string' },
+  PG_MOCK_CACHE_TTL: { key: 'cache.ttl', type: 'number' },
+  PG_MOCK_CACHE_MAX_SIZE: { key: 'cache.maxSize', type: 'number' },
+  PG_MOCK_CACHE_CLEANUP_INTERVAL: { key: 'cache.cleanupInterval', type: 'number' },
+  PG_MOCK_CACHE_KEY_PREFIX: { key: 'cache.keyPrefix', type: 'string' },
+  PG_MOCK_CACHE_REDIS_URL: { key: 'cache.redis.url', type: 'string' },
+  PG_MOCK_CACHE_REDIS_TIMEOUT: { key: 'cache.redis.connectTimeout', type: 'number' },
 };
 
 /**
