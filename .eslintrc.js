@@ -14,7 +14,7 @@ module.exports = {
   },
   rules: {
     'no-console': 'off', // Allow console for this project as it's a CLI tool
-    'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'no-trailing-spaces': 'error',
     semi: ['error', 'always'],
     quotes: ['error', 'single', { avoidEscape: true }],

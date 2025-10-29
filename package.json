@@ -23,6 +23,17 @@
     "format": "prettier --write 'src/**/*.js' 'server.js'",
     "docs": "node -e \"console.log(require('./src/config/serverConfig').getConfigDocumentation())\"",
     "config": "node -e \"const cfg = require('./src/config/serverConfig').loadConfig(); console.log(JSON.stringify(cfg, null, 2))\"",
+    "validate": "node src/validation/cli.js",
+    "validate:full": "node src/validation/cli.js --format html --output ./validation-reports",
+    "validate:compliance": "node src/validation/cli.js --test compliance --verbose",
+    "validate:edge-cases": "node src/validation/cli.js --test edgeCases --verbose",
+    "validate:error-conditions": "node src/validation/cli.js --test errorConditions --verbose",
+    "validate:fuzzing": "node src/validation/cli.js --test fuzzing --verbose",
+    "validate:message-format": "node src/validation/cli.js --test messageFormat --verbose",
+    "validate:ci": "node src/validation/cli.js --format json --output ./ci-reports --quiet",
+    "validate:real-pg": "node src/validation/cli.js --real-postgresql --postgresql-config ./postgresql-config.json",
+    "validate:performance": "node src/validation/cli.js --test performance --verbose",
+    "benchmark": "node scripts/ci-validation.js && node src/validation/cli.js --test performance",
     "prepare": "husky install"
   },
   "keywords": [

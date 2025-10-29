@@ -1,0 +1,167 @@
+{
+  "timestamp": "2025-10-23T17:00:13.446Z",
+  "format": "json",
+  "summary": {
+    "overall": {
+      "total": 58,
+      "passed": 52,
+      "failed": 6,
+      "warnings": 56,
+      "successRate": "89.66"
+    },
+    "byCategory": {
+      "messageFormat": {
+        "total": 28,
+        "passed": 22,
+        "failed": 6,
+        "warnings": 56,
+        "successRate": "78.57"
+      },
+      "compliance": {
+        "total": 8,
+        "passed": 8,
+        "failed": 0,
+        "warnings": 0,
+        "successRate": "100.00"
+      },
+      "edgeCases": {
+        "total": 8,
+        "passed": 8,
+        "failed": 0,
+        "warnings": 0,
+        "successRate": "100.00"
+      },
+      "errorConditions": {
+        "total": 14,
+        "passed": 14,
+        "failed": 0,
+        "warnings": 0,
+        "successRate": "100.00"
+      }
+    },
+    "criticalIssues": [],
+    "recommendations": [
+      {
+        "type": "quality",
+        "priority": "medium",
+        "message": "56 warnings found. Review and address warnings to improve code quality."
+      },
+      {
+        "type": "category",
+        "priority": "high",
+        "message": "messageFormat category has 6 failed tests. Focus on fixing these issues."
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-23T17:00:12.998Z",
+    "duration": null,
+    "environment": {
+      "nodeVersion": "v22.18.0",
+      "platform": "win32",
+      "arch": "x64"
+    },
+    "configuration": {
+      "includeDetails": true,
+      "reportFormat": "json",
+      "outputDir": "./test-reports"
+    }
+  },
+  "testSummaries": {
+    "messageFormat": {
+      "total": 28,
+      "passed": 22,
+      "failed": 6,
+      "warnings": 56,
+      "successRate": "78.57",
+      "failedTests": [
+        {
+          "name": "P",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "B",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "D",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "K",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "T",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        },
+        {
+          "name": "t",
+          "error": "Test failed",
+          "warnings": [
+            "Edge case should have passed: Minimum length message",
+            "Edge case should have passed: Maximum length message"
+          ]
+        }
+      ]
+    },
+    "compliance": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "warnings": 0,
+      "successRate": "100.00",
+      "failedTests": []
+    },
+    "edgeCases": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "warnings": 0,
+      "successRate": "100.00",
+      "failedTests": []
+    },
+    "errorConditions": {
+      "total": 14,
+      "passed": 14,
+      "failed": 0,
+      "warnings": 0,
+      "successRate": "100.00",
+      "failedTests": []
+    }
+  },
+  "criticalIssues": [],
+  "recommendations": [
+    {
+      "type": "quality",
+      "priority": "medium",
+      "message": "56 warnings found. Review and address warnings to improve code quality."
+    },
+    {
+      "type": "category",
+      "priority": "high",
+      "message": "messageFormat category has 6 failed tests. Focus on fixing these issues."
+    }
+  ]
+}
