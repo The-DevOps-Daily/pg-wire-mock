@@ -45,6 +45,7 @@ A comprehensive mock PostgreSQL server that implements the PostgreSQL wire proto
     - File-based logging with automatic rotation
   - Statistics and performance tracking
   - Graceful shutdown handling with connection draining
+  - **HTTP monitoring endpoints** (NEW!) - [See HTTP Monitoring Guide](docs/HTTP_MONITORING.md)
 
 ## 🚀 Quick Start
 
@@ -133,6 +134,38 @@ psql -h localhost -p 5432 -U postgres -W
 
 - `trust`: No authentication required (default)
 - `scram-sha-256`: SCRAM-SHA-256 authentication (RFC 7677) - Modern, secure authentication
+
+### HTTP Monitoring Endpoints (NEW!)
+
+The optional HTTP server exposes operational data for observability and readiness probes. Enable it with environment variables or config (see [`docs/HTTP_MONITORING.md`](docs/HTTP_MONITORING.md)).
+
+- `GET /health` returns aggregated health checks (200 healthy, 503 otherwise)
+- `GET /status` supplies server stats, configuration, and health detail
+- `GET /connections` lists active connections with metadata
+- `GET /metrics` exports Prometheus-format metrics (`Content-Type: text/plain; version=0.0.4`)
+
+Example configuration:
+
+```bash
+export PG_MOCK_HTTP_ENABLED=true
+export PG_MOCK_HTTP_PORT=8081
+export PG_MOCK_HTTP_ENABLE_AUTH=true
+export PG_MOCK_HTTP_AUTH_TOKEN="super-secret-token"
+npm start
+```
+
+Scrape metrics with Prometheus by adding the following job:
+
+```yaml
+scrape_configs:
+  - job_name: 'pg-wire-mock'
+    static_configs:
+      - targets: ['localhost:8081']
+    metrics_path: /metrics
+    scheme: http
+    authorization:
+      credentials: super-secret-token
+```
 
 ### Try Some Queries
 

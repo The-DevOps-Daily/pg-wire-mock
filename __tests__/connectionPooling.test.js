@@ -23,6 +23,9 @@ describe('Connection Pooling', () => {
         enableLogging: false, // Disable logging during tests
       },
       enableLogging: false,
+      http: {
+        enabled: false,
+      },
     });
   });
 
@@ -52,6 +55,9 @@ describe('Connection Pooling', () => {
         port: 5433, // Use different port to avoid conflicts
         enableConnectionPooling: false,
         enableLogging: false,
+        http: {
+          enabled: false,
+        },
       });
 
       try {
@@ -118,6 +124,9 @@ describe('Connection Pooling', () => {
           enableLogging: false,
         },
         enableLogging: false,
+        http: {
+          enabled: false,
+        },
       });
 
       try {
@@ -155,6 +164,9 @@ describe('Connection Pooling', () => {
         port: testPort, // Same port
         enableConnectionPooling: true,
         enableLogging: false,
+        http: {
+          enabled: false,
+        },
       });
 
       await expect(duplicateServer.start()).rejects.toThrow();

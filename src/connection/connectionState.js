@@ -187,7 +187,9 @@ class ConnectionState {
       rowsTransferred: 0,
     };
     this.updateActivity();
-    console.log(`Started COPY operation: ${copyInfo.direction} ${copyInfo.tableName || copyInfo.query}`);
+    console.log(
+      `Started COPY operation: ${copyInfo.direction} ${copyInfo.tableName || copyInfo.query}`
+    );
   }
 
   /**
@@ -217,8 +219,10 @@ class ConnectionState {
   clearCopyState() {
     if (this.copyState) {
       const duration = new Date() - this.copyState.startedAt;
-      console.log(`COPY operation completed: ${this.copyState.rowsTransferred} rows, ` +
-        `${this.copyState.bytesTransferred} bytes in ${duration}ms`);
+      console.log(
+        `COPY operation completed: ${this.copyState.rowsTransferred} rows, ` +
+          `${this.copyState.bytesTransferred} bytes in ${duration}ms`
+      );
     }
     this.copyState = null;
     this.updateActivity();

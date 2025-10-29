@@ -20,6 +20,9 @@ describe('Server Shutdown Behavior', () => {
       shutdownDrainTimeout: 2000,
       enableLogging: false,
       logLevel: 'error',
+      http: {
+        enabled: false,
+      },
     });
   });
 
