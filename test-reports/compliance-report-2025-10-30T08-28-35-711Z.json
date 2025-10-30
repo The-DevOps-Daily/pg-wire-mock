@@ -1,0 +1,98 @@
+{
+  "timestamp": "2025-10-30T08:28:35.600Z",
+  "format": "json",
+  "summary": {
+    "overall": {
+      "total": 10,
+      "passed": 8,
+      "failed": 2,
+      "warnings": 1,
+      "successRate": "80.00"
+    },
+    "byCategory": {
+      "messageFormat": {
+        "total": 5,
+        "passed": 4,
+        "failed": 1,
+        "warnings": 0,
+        "successRate": "80.00"
+      },
+      "compliance": {
+        "total": 5,
+        "passed": 4,
+        "failed": 1,
+        "warnings": 1,
+        "successRate": "80.00"
+      }
+    },
+    "criticalIssues": [],
+    "recommendations": [
+      {
+        "type": "quality",
+        "priority": "medium",
+        "message": "1 warnings found. Review and address warnings to improve code quality."
+      },
+      {
+        "type": "category",
+        "priority": "high",
+        "message": "messageFormat category has 1 failed tests. Focus on fixing these issues."
+      },
+      {
+        "type": "category",
+        "priority": "high",
+        "message": "compliance category has 1 failed tests. Focus on fixing these issues."
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-30T08:28:35.599Z",
+    "duration": null,
+    "environment": {
+      "nodeVersion": "v22.18.0",
+      "platform": "win32",
+      "arch": "x64"
+    },
+    "configuration": {
+      "includeDetails": true,
+      "reportFormat": "json",
+      "outputDir": "./test-reports"
+    }
+  },
+  "testSummaries": {
+    "messageFormat": {
+      "total": 5,
+      "passed": 4,
+      "failed": 1,
+      "warnings": 0,
+      "successRate": "80.00",
+      "failedTests": []
+    },
+    "compliance": {
+      "total": 5,
+      "passed": 4,
+      "failed": 1,
+      "warnings": 1,
+      "successRate": "80.00",
+      "failedTests": []
+    }
+  },
+  "criticalIssues": [],
+  "recommendations": [
+    {
+      "type": "quality",
+      "priority": "medium",
+      "message": "1 warnings found. Review and address warnings to improve code quality."
+    },
+    {
+      "type": "category",
+      "priority": "high",
+      "message": "messageFormat category has 1 failed tests. Focus on fixing these issues."
+    },
+    {
+      "type": "category",
+      "priority": "high",
+      "message": "compliance category has 1 failed tests. Focus on fixing these issues."
+    }
+  ]
+}
