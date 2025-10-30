@@ -14,7 +14,7 @@
     "start:all": "node server.js --host 0.0.0.0 --port 5432",
     "generate-certs": "node scripts/generate-certs.js",
     "generate-certs:force": "node scripts/generate-certs.js --force",
-    "test": "NODE_ENV=test LOG_LEVEL=error jest --silent",
+    "test": "cross-env NODE_ENV=test LOG_LEVEL=error jest --silent",
     "test:verbose": "jest --verbose",
     "test:coverage": "NODE_ENV=test LOG_LEVEL=error jest --coverage --silent",
     "test:watch": "NODE_ENV=test LOG_LEVEL=error jest --watch --silent",
@@ -63,6 +63,7 @@
   "devDependencies": {
     "@commitlint/cli": "^18.0.0",
     "@commitlint/config-conventional": "^18.0.0",
+    "cross-env": "^10.1.0",
     "eslint": "^8.51.0",
     "husky": "^8.0.3",
     "jest": "^29.7.0",
