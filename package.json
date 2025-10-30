@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js --log-level debug",
+   "dev": "cross-env NODE_ENV=development node server.js --log-level debug",
     "start:quiet": "node server.js --quiet",
     "start:port": "node server.js --port 5433",
     "start:all": "node server.js --host 0.0.0.0 --port 5432",
