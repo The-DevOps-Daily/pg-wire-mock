@@ -607,6 +607,9 @@ const ERROR_MESSAGES = {
   OUT_OF_MEMORY: 'out of memory',
   QUERY_TOO_LONG: 'query string is too long',
 
+  // MD5 Authentication errors
+  MD5_AUTH_FAILED: 'password authentication failed',
+
   // SCRAM Authentication errors
   SCRAM_INVALID_PROOF: 'authentication failed',
   SCRAM_INVALID_AUTHORIZATION_MESSAGE: 'invalid SCRAM authorization message',

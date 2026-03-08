@@ -368,6 +368,43 @@ function generateBackendSecret() {
 }
 
 /**
+ * MD5 Authentication Utilities
+ */
+
+/**
+ * Computes MD5 hash of the input data
+ * @param {string|Buffer} data - Data to hash
+ * @returns {string} Hex-encoded MD5 digest
+ */
+function md5(data) {
+  const crypto = require('crypto');
+  return crypto.createHash('md5').update(data).digest('hex');
+}
+
+/**
+ * Generates a random 4-byte salt for MD5 authentication
+ * @returns {Buffer} 4-byte random salt
+ */
+function generateMD5Salt() {
+  const crypto = require('crypto');
+  return crypto.randomBytes(4);
+}
+
+/**
+ * Computes the expected MD5 password hash as PostgreSQL does.
+ * The algorithm is: "md5" + md5(md5(password + username) + salt)
+ * @param {string} username - The username
+ * @param {string} password - The plaintext password
+ * @param {Buffer} salt - 4-byte salt sent by the server
+ * @returns {string} The expected MD5 password string (35 chars: "md5" + 32 hex digits)
+ */
+function computeMD5Password(username, password, salt) {
+  const inner = md5(password + username);
+  const outer = md5(Buffer.concat([Buffer.from(inner, 'utf8'), salt]));
+  return 'md5' + outer;
+}
+
+/**
  * SCRAM-SHA-256 Authentication Utilities
  */
 
@@ -1221,6 +1258,10 @@ module.exports = {
   decodeCustomType,
   isCustomType,
   getTypeName,
+  // MD5 authentication utilities
+  generateMD5Salt,
+  computeMD5Password,
+  md5,
   // SCRAM-SHA-256 utilities
   generateScramNonce,
   pbkdf2ScramSha256,

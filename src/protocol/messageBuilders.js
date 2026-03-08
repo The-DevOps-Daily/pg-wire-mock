@@ -461,6 +461,27 @@ function sendCopyData(socket, data) {
  */
 
 /**
+ * MD5 Authentication Messages
+ */
+
+/**
+ * Sends AuthenticationMD5Password message with a 4-byte random salt
+ * @param {Socket} socket - Client socket
+ * @param {Buffer} salt - 4-byte salt for MD5 password hashing
+ */
+function sendAuthenticationMD5Password(socket, salt) {
+  const { AUTH_METHODS } = require('./constants');
+
+  let payload = Buffer.alloc(4);
+  payload.writeInt32BE(AUTH_METHODS.MD5_PASSWORD, 0);
+  payload = Buffer.concat([payload, salt]);
+
+  const message = createMessage(MESSAGE_TYPES.AUTHENTICATION, payload);
+  socket.write(message);
+  protocolLogger.sent('AuthenticationMD5Password', `salt: ${salt.toString('hex')}`);
+}
+
+/**
  * SCRAM-SHA-256 Authentication Messages
  */
 
@@ -583,6 +604,9 @@ module.exports = {
   sendCopyInResponse,
   sendCopyOutResponse,
   sendCopyData,
+
+  // MD5 Authentication
+  sendAuthenticationMD5Password,
 
   // SCRAM-SHA-256 Authentication
   sendAuthenticationSASL,

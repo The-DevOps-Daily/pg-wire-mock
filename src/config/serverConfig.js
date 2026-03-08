@@ -72,7 +72,7 @@ const DEFAULT_CONFIG = {
 
   // Security settings
   requireAuthentication: true, // Enable authentication by default when auth method is set
-  authMethod: 'trust', // trust, scram-sha-256
+  authMethod: 'trust', // trust, md5, scram-sha-256
   scramIterations: 4096, // SCRAM iteration count
   username: 'postgres', // Mock username for authentication
   password: 'password', // Mock password for authentication
