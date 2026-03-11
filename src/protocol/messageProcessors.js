@@ -17,6 +17,8 @@ const {
 const {
   parseParameters,
   getMessageType,
+  generateMD5Salt,
+  computeMD5Password,
   generateScramNonce,
   generateScramCredentials,
   parseScramClientInitial,
@@ -187,6 +189,7 @@ const {
   sendParseComplete,
   sendBindComplete,
   sendRowDescription,
+  sendAuthenticationMD5Password,
   sendAuthenticationSASL,
   sendAuthenticationSASLContinue,
   sendAuthenticationSASLFinal,
@@ -204,9 +207,8 @@ const { executeQueryString, executeQuery } = require('../handlers/queryHandlers'
  * @returns {number} Bytes processed (0 if need more data)
  */
 function processMessage(buffer, socket, connState, config = null) {
-  // Special handling for SCRAM authentication
-  // During SCRAM, we receive password messages ('p') with SASL data even before authentication is complete
-  if (!connState.authenticated && connState.scramState && buffer.length >= 5) {
+  // During SCRAM or MD5 auth, we receive password messages ('p') before authentication is complete
+  if (!connState.authenticated && (connState.scramState || connState.md5Salt) && buffer.length >= 5) {
     const messageType = String.fromCharCode(buffer[0]);
     if (messageType === 'p') {
       return processRegularMessage(buffer, socket, connState, config);
@@ -451,11 +453,11 @@ function handleStartupPacket(buffer, socket, connState, length, config = {}) {
     return length;
   }
 
-  // Start authentication process - only SCRAM-SHA-256 and trust are supported
   if (authMethod === 'scram-sha-256') {
     startScramAuthentication(socket, connState, config);
+  } else if (authMethod === 'md5') {
+    startMD5Authentication(socket, connState, config);
   } else {
-    // Default to trust authentication for any other method
     connState.authenticate(PROTOCOL_VERSION_3_0);
     sendAuthenticationOK(socket);
     sendParameterStatus(socket, connState);
@@ -867,19 +869,20 @@ function processPasswordMessage(buffer, socket, connState, config = {}) {
 
   // Check if this is a SASL message during SCRAM authentication
   if (connState.scramState === SCRAM_STATES.INITIAL) {
-    // This is SASL initial response
     return processSASLInitialResponse(buffer, socket, connState, config);
   } else if (connState.scramState === SCRAM_STATES.FIRST_SENT) {
-    // This is SASL response
     return processSASLResponse(buffer, socket, connState);
   }
 
-  // Only SCRAM authentication is supported for password messages
-  // If we reach here, it means we received a password message outside of SCRAM flow
+  // Handle MD5 password response
+  if (connState.md5Salt) {
+    return processMD5PasswordResponse(buffer, socket, connState, config);
+  }
+
   sendErrorResponse(
     socket,
     ERROR_CODES.PROTOCOL_VIOLATION,
-    'password authentication not supported, use SCRAM-SHA-256'
+    'unexpected password message received'
   );
   return length + 1;
 }
@@ -1189,6 +1192,58 @@ function processFunctionCall(buffer, socket, _connState) {
  */
 
 /**
+ * Starts MD5 password authentication by sending a random 4-byte salt
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration
+ */
+function startMD5Authentication(socket, connState, _config) {
+  const salt = generateMD5Salt();
+  connState.md5Salt = salt;
+
+  sendAuthenticationMD5Password(socket, salt);
+  protocolLogger.sent('MD5 Authentication Started', `salt: ${salt.toString('hex')}`);
+}
+
+/**
+ * Processes an MD5 password response from the client
+ * Verifies the hash matches: "md5" + md5(md5(password + username) + salt)
+ * @param {Buffer} buffer - Message buffer
+ * @param {Socket} socket - Client socket
+ * @param {ConnectionState} connState - Connection state
+ * @param {Object} config - Server configuration
+ * @returns {number} Bytes processed
+ */
+function processMD5PasswordResponse(buffer, socket, connState, config = {}) {
+  const length = buffer.readInt32BE(1);
+
+  const clientPassword = buffer.slice(5, length + 1).toString('utf8').replace(/\0$/, '');
+
+  const username = connState.getCurrentUser() || config.username || 'postgres';
+  const password = config.password || 'password';
+  const expectedHash = computeMD5Password(username, password, connState.md5Salt);
+
+  if (clientPassword === expectedHash) {
+    connState.md5Salt = null;
+    connState.authenticate(PROTOCOL_VERSION_3_0);
+    sendAuthenticationOK(socket);
+    sendParameterStatus(socket, connState);
+    sendBackendKeyData(socket, connState);
+    sendReadyForQuery(socket, connState);
+  } else {
+    connState.md5Salt = null;
+    sendErrorResponse(
+      socket,
+      ERROR_CODES.INVALID_PASSWORD,
+      'password authentication failed for user "' + username + '"'
+    );
+    socket.end();
+  }
+
+  return length + 1;
+}
+
+/**
  * Starts SCRAM-SHA-256 authentication
  * @param {Socket} socket - Client socket
  * @param {ConnectionState} connState - Connection state
@@ -1424,6 +1479,8 @@ module.exports = {
   SSLState,
   validateSSLCertificates,
   // Authentication functions
+  startMD5Authentication,
+  processMD5PasswordResponse,
   startScramAuthentication,
   processSASLInitialResponse,
   processSASLResponse,

@@ -14,9 +14,28 @@ export PG_MOCK_REQUIRE_AUTHENTICATION=false
 npm start
 ```
 
+### MD5 Password Authentication
+
+Classic PostgreSQL password authentication using MD5 hashing. The server sends a 4-byte random salt, and the client responds with `"md5" + md5(md5(password + username) + salt)`. Widely supported by all PostgreSQL client libraries.
+
+```bash
+export PG_MOCK_AUTH_METHOD=md5
+export PG_MOCK_REQUIRE_AUTHENTICATION=true
+npm start
+```
+
+#### Protocol Flow
+
+1. Client sends startup message
+2. Server responds with `AuthenticationMD5Password` containing a 4-byte salt
+3. Client computes `"md5" + md5(md5(password + username) + salt)` and sends it
+4. Server verifies the hash and sends `AuthenticationOK` or `ErrorResponse`
+
+> **Note:** MD5 is considered less secure than SCRAM-SHA-256. Use SCRAM-SHA-256 for production when possible. MD5 is useful for testing compatibility with older clients or legacy systems.
+
 ### SCRAM-SHA-256 Authentication (Recommended)
 
-Modern, secure authentication method using SCRAM-SHA-256 (RFC 7677). This is the preferred method in PostgreSQL 10+ and the only password-based authentication method supported.
+Modern, secure authentication method using SCRAM-SHA-256 (RFC 7677). This is the preferred method in PostgreSQL 10+ and the most secure password-based authentication method supported.
 
 ```bash
 export PG_MOCK_AUTH_METHOD=scram-sha-256
@@ -29,7 +48,7 @@ npm start
 
 | Environment Variable             | Description                        | Default | Values                   |
 | -------------------------------- | ---------------------------------- | ------- | ------------------------ |
-| `PG_MOCK_AUTH_METHOD`            | Authentication method to use       | `trust` | `trust`, `scram-sha-256` |
+| `PG_MOCK_AUTH_METHOD`            | Authentication method to use       | `trust` | `trust`, `md5`, `scram-sha-256` |
 | `PG_MOCK_REQUIRE_AUTHENTICATION` | Whether authentication is required | `false` | `true`, `false`          |
 | `PG_MOCK_SCRAM_ITERATIONS`       | SCRAM-SHA-256 iteration count      | `4096`  | Any positive integer     |
 
@@ -145,6 +164,12 @@ export PG_MOCK_AUTH_METHOD=trust
 npm start &
 psql -h localhost -p 5432 -U testuser -c "SELECT 'Trust auth works!'"
 
+# Test MD5 authentication
+export PG_MOCK_AUTH_METHOD=md5
+export PG_MOCK_REQUIRE_AUTHENTICATION=true
+npm start &
+PGPASSWORD=password psql -h localhost -p 5432 -U testuser -c "SELECT 'MD5 auth works!'"
+
 # Test SCRAM-SHA-256 authentication
 export PG_MOCK_AUTH_METHOD=scram-sha-256
 export PG_MOCK_REQUIRE_AUTHENTICATION=true
@@ -194,7 +219,7 @@ describe('Authentication Tests', () => {
 
 **"authentication method X not supported"**
 
-- Check that `PG_MOCK_AUTH_METHOD` is set to a supported value (`trust` or `scram-sha-256`)
+- Check that `PG_MOCK_AUTH_METHOD` is set to a supported value (`trust`, `md5`, or `scram-sha-256`)
 - Verify that `PG_MOCK_REQUIRE_AUTHENTICATION=true` when using SCRAM-SHA-256
 
 **"SCRAM authentication failed"**

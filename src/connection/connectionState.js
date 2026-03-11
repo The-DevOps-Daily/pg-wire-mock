@@ -20,6 +20,9 @@ class ConnectionState {
     this.authenticated = false;
     this.protocolVersion = null;
 
+    // MD5 authentication state
+    this.md5Salt = null; // 4-byte salt for MD5 password auth
+
     // SCRAM authentication state
     this.scramState = null; // 'initial', 'first-sent', 'ended', 'error'
     this.scramMechanism = null; // Selected SASL mechanism
